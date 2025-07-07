@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ '**' ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
 
 jobs:
   build-and-test:
@@ -34,7 +34,7 @@ jobs:
         mkdir -p build
         cd build
         cmake ..
-        make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+        make -j 4
 
     - name: Verify Google Test libraries
       run: |
@@ -66,3 +66,4 @@ jobs:
         sudo apt-get install -y valgrind
         # Run a quick memory check on the test binary
         valgrind --leak-check=summary --error-exitcode=1 ./test_gomoku || echo "Memory check completed" 
+
