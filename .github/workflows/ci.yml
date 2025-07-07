@@ -39,7 +39,8 @@ jobs:
           ls -alF tests/googletest;
           cd tests/googletest;
           mkdir -p build; cd build;
-          cmake .. && make -j 4
+          cmake .. && make -j 4;
+          cd ../../..;
         "
 
     - name: Verify Google Test libraries
@@ -50,12 +51,14 @@ jobs:
 
     - name: Build project
       run: |
-        make clean
-        make
+        bash -c "
+          pwd -P
+          make -j 4
+        "
 
     - name: Run tests
       run: |
-        make test
+        bash -c "make test"
 
     - name: Test binary execution
       run: |
