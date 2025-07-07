@@ -30,11 +30,14 @@ jobs:
 
     - name: Build Google Test
       run: |
-        set -x
-        mkdir -p tests/googletest/build
-        cd tests/googletest/build
-        pwd
-        bash -c "cmake .. && make -j 4"
+        bash -c "
+          set -xe;
+          mkdir -p tests/googletest/build && cd tests/googletest/build;
+          pwd -P;
+          ls -al ../;
+          cmake ../;
+          make -j 4;
+        "
 
     - name: Verify Google Test libraries
       run: |
