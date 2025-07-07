@@ -52,7 +52,9 @@ jobs:
     - name: Build project
       run: |
         bash -c "
-          pwd -P
+          pwd -P;
+          ls -alF;
+          find . -name Makefile -type f;
           make -j 4
         "
 
