@@ -83,7 +83,7 @@ int evaluate_position_incremental(int **board, int size, int player, int last_x,
     }
     
     // Only evaluate positions within radius of the last move for speed
-    int eval_radius = 5; // Increased radius for better accuracy
+    int eval_radius = 3; // Increased radius for better accuracy
     int min_x = max(0, last_x - eval_radius);
     int max_x = min(size - 1, last_x + eval_radius);
     int min_y = max(0, last_y - eval_radius);
