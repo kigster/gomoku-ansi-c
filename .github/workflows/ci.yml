@@ -33,9 +33,8 @@ jobs:
         set -x
         mkdir -p tests/googletest/build
         cd tests/googletest/build
-        cmake ..
-        make -j 4
-        ls -alF lib
+        pwd
+        bash -c "cmake .. && make -j 4"
 
     - name: Verify Google Test libraries
       run: |
