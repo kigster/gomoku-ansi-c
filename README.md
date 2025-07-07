@@ -2,197 +2,211 @@
 
 A C implementation of the Gomoku (Five-in-a-Row) game featuring an AI opponent using the MiniMax algorithm with Alpha-Beta pruning.
 
+> [!TIP]
+> Please be advised that while some of the code was produced with the help of Claude-4-MAX, the original evaluation function was written by hand. Also, when we say "playing with AI" we do not mean LLMs, we simply mean you are playing against the computer.
+
+It is exceedingly difficult to win even on Medium setting, which only looks ahead a few moves.
+
+Here is a screenshot of a game I played against the algorithm.
+
+![gameplay](doc/gomoku-game.png)
+
 ## Features
 
 - **Interactive Console Interface**: Unicode-based board display with keyboard controls
 - **AI Opponent**: Intelligent AI using MiniMax algorithm with Alpha-Beta pruning
-- **Pattern Recognition**: Advanced threat detection and evaluation system
+- **Configurable Difficulty**: Easy, Medium, and Hard levels with different search depths
+- **Timeout Support**: Optional move time limits for both human and AI players
+- **Undo Functionality**: Undo the last move pair (human + AI)
 - **Cross-platform**: Works on Linux, macOS, and other Unix-like systems
 - **Comprehensive Testing**: Full test suite using Google Test framework
 
 ## Game Rules
 
-Gomoku is a strategy game where players take turns placing stones on a 19x19 board. The goal is to be the first to get five stones in a row (horizontally, vertically, or diagonally).
+Gomoku is a strategy game where players take turns placing stones on a board. The goal is to be the first to get five stones in a row (horizontally, vertically, or diagonally).
 
-- **Human plays first** (Black stones ✕)
+- **Human plays first** (Black stones ✕) - this is an advantage
 - **AI plays second** (White stones ○)
-- **Win condition**: First to get 5 in a row wins
+- **Win condition**: First to get exactly 5 in a row wins
+- **Overline rule**: Six or more stones in a row do NOT count as a win
 
-## Building and Running
+---
+
+## Getting Started
 
 ### Prerequisites
 
-- GCC compiler
-- Make
-- Git (for downloading Google Test)
+- **GCC compiler** (or any C compiler)
+- **Make** build system
+- **Git** (for downloading Google Test framework)
 
-### Build the Game
+### Building the Game
 
 ```bash
-# Clone or download the project
-cd gomoku-c
+# Clone the repository
+git clone https://github.com/kigster/gomoku-ansi-c.git
+cd gomoku-ansi-c
 
 # Build the game
 make
 
-# Run the game with default difficulty (medium)
-./gomoku
-
-# Run with specific difficulty level
-./gomoku 1    # Easy (fast AI)
-./gomoku 2    # Medium (default)
-./gomoku 3    # Hard (slow but strong AI)
-
-# Show help
-./gomoku --help
-```
-
-### Build and Run Tests
-
-```bash
-# Build and run the test suite
-make test
-
-# Clean build files
+# Clean build files if needed
 make clean
 ```
 
-## Difficulty Levels
+### Running the Game
 
-The game supports three difficulty levels that control the AI's thinking depth:
+```bash
+# Run with default settings (Medium difficulty, 19x19 board)
+./gomoku
 
-| Level | Depth | Performance | Strength |
-|-------|-------|-------------|----------|
-| **1 - Easy** | 2 | Very Fast | Beginner-friendly |
-| **2 - Medium** | 4 | Moderate | Good balance |
-| **3 - Hard** | 7 | Slow | Strong opponent |
+# Run with easy difficulty on a 15x15 board
+./gomoku --level easy --board 15
 
-- **Easy**: AI responds almost instantly, suitable for casual play
-- **Medium**: AI takes 1-5 seconds per move, default setting
-- **Hard**: AI takes 5-30 seconds per move, plays at advanced level
+# Run with custom search depth and timeout
+./gomoku --depth 6 --timeout 30
 
-## Game Controls
+# Show all available options
+./gomoku --help
+```
+
+### Command Line Options
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `-l, --level M` | Difficulty: `easy`, `intermediate`, `hard` | `--level hard` |
+| `-d, --depth N` | Search depth (1-10) for AI algorithm | `--depth 5` |
+| `-t, --timeout T` | Move timeout in seconds (optional) | `--timeout 30` |
+| `-b, --board SIZE` | Board size: 15 or 19 (default: 19) | `--board 15` |
+| `-h, --help` | Show help message | `--help` |
+
+### Game Controls
 
 - **Arrow Keys**: Move cursor around the board
 - **Space/Enter**: Place a stone at cursor position
+- **U**: Undo last move pair (human + AI)
+- **?**: Show detailed game rules and help
 - **ESC/Q**: Quit the game
 
-## Project Structure
+### Difficulty Levels
+
+| Level | Search Depth | Response Time | Best For |
+|-------|--------------|---------------|----------|
+| **Easy** | 2 | < 0.1 seconds | Beginners, casual play |
+| **Intermediate** | 4 | 0.1-0.5 seconds | Default, balanced gameplay |
+| **Hard** | 6 | 0.5-3 seconds | Challenging, advanced play |
+
+---
+
+## Developer Information
+
+### Architecture Overview
+
+The project follows a modular architecture with clear separation of concerns:
 
 ```
-gomoku-c/
-├── src/
-│   ├── gomoku.h          # Header file with function declarations
-│   ├── gomoku.c          # Core game logic and AI evaluation
-│   └── main.c            # Main game loop and user interface
-├── tests/
-│   ├── gomoku_test.cpp   # Comprehensive test suite
-│   └── googletest/       # Google Test framework
-├── Makefile              # Build configuration
-└── README.md             # This file
+src/
+├── main.c      # Simple orchestrator (105 lines)
+├── gomoku.c/.h # Core evaluation functions
+├── board.c/.h  # Board management and coordinate utilities
+├── game.c/.h   # Game logic and state management
+├── ai.c/.h     # AI module with minimax search
+├── ui.c/.h     # User interface and display
+└── cli.c/.h    # Command-line argument parsing
 ```
 
-## AI Implementation
+### AI Algorithm Implementation
 
-The AI uses several advanced techniques:
+#### MiniMax with Alpha-Beta Pruning
+- **Search Algorithm**: MiniMax with alpha-beta pruning for optimal performance
+- **Evaluation Function**: Pattern-based position assessment using threat matrices
+- **Timeout Support**: Configurable time limits with graceful degradation
+- **Smart Move Ordering**: Prioritizes winning moves and threats for better pruning
 
-### MiniMax Algorithm with Alpha-Beta Pruning
-- **Search Depth**: 4 levels (configurable)
-- **Evaluation**: Pattern-based position assessment
-- **Pruning**: Alpha-beta pruning for performance optimization
-- **Smart First Move**: Random placement near human's move for speed and variety
+#### Pattern Recognition System
+The AI recognizes various threat patterns with weighted scoring:
 
-### Pattern Recognition
-The AI recognizes various threat patterns:
-- **Five in a row**: Winning position (100,000 points)
-- **Straight four**: Immediate win threat (50,000 points)
-- **Three in a row**: Strong threat (1,000 points)
-- **Broken patterns**: Partial threats with gaps
-- **Combinations**: Multiple threats create powerful positions
+| Pattern | Score | Description |
+|---------|-------|-------------|
+| **Five in a row** | 1,000,000 | Winning position |
+| **Straight four** | 50,000 | Immediate win threat |
+| **Three in a row** | 1,000 | Strong threat |
+| **Broken patterns** | 100-500 | Partial threats with gaps |
+| **Combinations** | Bonus | Multiple simultaneous threats |
 
-### Search Space Optimization
-The AI uses intelligent move pruning:
-- **Proximity-based search**: Only considers moves within 3 cells of existing stones
-- **Early game optimization**: Focuses on center area when board is empty
-- **First move randomization**: AI's first move is placed randomly 1-2 squares from human's move
-- **Dramatic performance boost**: Reduces search space from 225 to ~20-50 moves per turn
+#### Search Space Optimization
+- **Proximity-based Search**: Only considers moves within 3 cells of existing stones
+- **Early Game Optimization**: Focuses on center area when board is empty
+- **First Move Randomization**: AI's first move placed randomly 1-2 squares from human's move
+- **Performance Boost**: Reduces search space from 361 to ~20-50 moves per turn
 
-### Performance Optimizations
-Advanced optimizations for faster AI thinking:
-- **Move ordering**: Prioritizes winning moves, blocking moves, and center positions for better alpha-beta pruning
-- **Incremental evaluation**: Only evaluates board positions near the last move instead of the entire board
-- **Early termination**: Immediately selects winning moves and stops search for excellent positions
-- **Optimized stone counting**: Eliminates redundant calculations during move generation
-- **Win detection caching**: Faster terminal condition checking with depth-based scoring
-- **Transparent AI thinking**: Visual progress indicators and move count display show AI analysis in real-time
+### Testing Framework
 
-### Threat Analysis
-- **Multi-directional**: Analyzes horizontal, vertical, and diagonal patterns
-- **Combination scoring**: Bonus points for multiple simultaneous threats
-- **Defensive evaluation**: Considers opponent's threats
+The project includes a comprehensive test suite with 20 test cases using Google Test:
 
-## Testing
+```bash
+# Build and run all tests
+make test
 
-The project includes a comprehensive test suite with 16 test cases covering:
+# Test categories covered:
+# - Board creation and coordinate utilities
+# - Move validation and game state management
+# - Win detection in all directions (horizontal, vertical, diagonal)
+# - Pattern recognition and threat analysis
+# - Evaluation function accuracy
+# - MiniMax algorithm functionality
+# - Undo functionality and edge cases
+```
 
-- **Board initialization and management**
-- **Win detection in all directions**
-- **Pattern recognition and threat analysis**
-- **Evaluation function accuracy**
-- **MiniMax algorithm functionality**
-- **Edge cases and corner scenarios**
+#### Test Results
+- ✅ **20/20 tests passing**
+- ✅ Board initialization and management
+- ✅ Win detection in all directions
+- ✅ Pattern recognition and threat analysis
+- ✅ Evaluation functions and AI logic
+- ✅ Game state management and undo functionality
 
-### Test Results
+### Performance Metrics
 
-All tests pass successfully:
-- ✅ Board initialization
-- ✅ Win detection (horizontal, vertical, diagonal)
-- ✅ Pattern recognition
-- ✅ Evaluation functions
-- ✅ MiniMax algorithm
-- ✅ Edge cases
+| Difficulty | Search Depth | Avg Response Time | Positions Evaluated |
+|------------|--------------|------------------|---------------------|
+| Easy       | 2            | < 0.1 seconds    | ~10-25              |
+| Medium     | 4            | 0.1-0.5 seconds  | ~50-200            |
+| Hard       | 6            | 0.5-3 seconds    | ~200-800           |
 
-## Performance
-
-Performance varies by difficulty level:
-
-| Difficulty | Search Depth | Response Time | Positions Evaluated |
-|------------|--------------|---------------|---------------------|
-| Easy       | 2            | < 0.1 seconds | ~10-25              |
-| Medium     | 4            | 0.1-0.5 seconds | ~50-200            |
-| Hard       | 7            | 0.2-2 seconds | ~200-800           |
-
-**Note**: AI's first move is instant (< 0.1 seconds) regardless of difficulty level.
-**Optimization Impact**: 3-5x faster response times with improved move ordering and incremental evaluation.
-
-- **Board size**: 19x19 (361 positions)
-- **Evaluation rate**: ~1000 positions per second (varies by hardware)
-
-## Technical Details
+**Key Optimizations:**
+- **Move Ordering**: 3-5x faster with intelligent priority sorting
+- **Incremental Evaluation**: Only evaluates positions near the last move
+- **Alpha-Beta Pruning**: Reduces effective branching factor significantly
+- **Early Termination**: Immediately selects winning moves
 
 ### Core Functions
 
+#### Game Logic (`game.c`)
+- `init_game()`: Initialize game state and board
+- `make_move()`: Validate and execute player moves
+- `undo_last_moves()`: Undo functionality for move pairs
+- `start_move_timer()` / `end_move_timer()`: Timing system
+
+#### AI Engine (`ai.c`)
+- `find_best_ai_move()`: Main AI move selection with timeout support
+- `minimax_with_timeout()`: MiniMax algorithm with time limits
+- `get_move_priority()`: Move ordering for alpha-beta optimization
+- `is_winning_move()`: Immediate win detection
+
+#### Evaluation System (`gomoku.c`)
 - `evaluate_position()`: Main board evaluation function
 - `calc_score_at()`: Threat analysis for individual positions
-- `has_winner()`: Win condition detection
-- `minimax()`: MiniMax algorithm with alpha-beta pruning
-- `find_best_ai_move()`: AI move selection
+- `has_winner()`: Win condition detection in all directions
+- `populate_threat_matrix()`: Initialize pattern recognition system
 
 ### Algorithm Complexity
 
 - **Time Complexity**: O(b^d) where b is branching factor and d is depth
 - **Space Complexity**: O(d) for recursion stack
-- **Optimization**: Alpha-beta pruning reduces effective branching factor
+- **Optimization**: Alpha-beta pruning reduces effective branching factor from ~30 to ~5-10
 
-## Future Enhancements
-
-Potential improvements:
-- [ ] Opening book for better early game play
-- [ ] Transposition table for move caching
-- [ ] Variable search depth based on game phase
-- [ ] GUI interface
-- [ ] Network multiplayer support
-- [ ] Different difficulty levels
+---
 
 ## License
 
