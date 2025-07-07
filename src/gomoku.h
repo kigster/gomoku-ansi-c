@@ -70,7 +70,8 @@
 #define COLOR_GREEN "\033[32m"
 #define COLOR_CURSOR "\033[1;33;5m"  // Bold blinking yellow
 #define COLOR_BRIGHT_BLUE "\033[96m" // Bright cyan-blue for AI highlight
-#define COLOR_BG_GREY "\033[100m" // Grey background for cursor on occupied cells
+#define COLOR_BG_GREY "\033[0m" // Grey background for cursor on occupied cells
+#define COLOR_BG_BLACK "\033[0;0m" // Grey background for cursor on occupied cells
 #define COLOR_BRIGHT_GREEN "\033[92m" // Bright green for human highlight
 #define COLOR_GREY "\033[7;30m" // Grey for empty cells
 

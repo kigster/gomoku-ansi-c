@@ -209,7 +209,7 @@ void draw_board(game_state_t *game) {
                     printf("%s%s%s", COLOR_CURSOR, UNICODE_CURSOR, COLOR_RESET);
                 } else {
                     // Empty cell without cursor: show normal grid intersection
-                    printf("%s%s%s", COLOR_GREY, UNICODE_EMPTY, COLOR_RESET);
+                    printf("%s%s%s", COLOR_BG_BLACK, UNICODE_EMPTY, COLOR_RESET);
                 }
             } else if (game->board[i][j] == AI_CELL_BLACK) {
                 if (is_cursor_here) {
