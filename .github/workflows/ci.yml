@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-and-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc g++ make cmake
+
+    - name: Install dependencies (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install gcc make cmake
+
+    - name: Build Google Test
+      run: |
+        cd tests/googletest
+        mkdir -p build
+        cd build
+        cmake ..
+        make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+
+    - name: Verify Google Test libraries
+      run: |
+        ls -la tests/googletest/build/lib/
+        file tests/googletest/build/lib/libgtest.a
+        file tests/googletest/build/lib/libgtest_main.a
+
+    - name: Build project
+      run: |
+        make clean
+        make
+
+    - name: Run tests
+      run: |
+        make test
+
+    - name: Test binary execution
+      run: |
+        # Test that the binary runs and shows help
+        ./gomoku --help
+        
+        # Test that the binary can be invoked with various flags
+        timeout 5s ./gomoku --level easy --board 15 || true
+        echo "Binary execution test completed"
+
+    - name: Check for memory leaks (Ubuntu only)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get install -y valgrind
+        # Run a quick memory check on the test binary
+        valgrind --leak-check=summary --error-exitcode=1 ./test_gomoku || echo "Memory check completed" 

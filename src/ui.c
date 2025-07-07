@@ -134,7 +134,11 @@ void draw_game_header(void) {
 void draw_game_history_sidebar(game_state_t *game, int start_row) {
     // Position cursor to the right of the board
     int sidebar_col = game->board_size * 2 + 12; // After board and some spacing
-    
+    if (sidebar_col > 50) {
+        sidebar_col = 50;
+    } else if (sidebar_col < 50) {
+        sidebar_col = 50;
+    }
     // Draw Game History header
     printf("\033[%d;%dH%s%sGame History:%s", start_row, sidebar_col, COLOR_BOLD_BLACK, COLOR_GREEN, COLOR_RESET);
     printf("\033[%d;%dH%sMove Player [Time] (AI positions evaluated)%s", start_row + 1, sidebar_col, COLOR_BOLD_BLACK, COLOR_RESET);
@@ -246,7 +250,7 @@ void draw_status(game_state_t *game) {
     printf("\033[s");
     
     // Box width for the status border
-    const int box_width = 44;
+    const int box_width = 40;
     
     // Top border
     printf("%s┌", COLOR_BOLD_BLACK);
@@ -257,10 +261,10 @@ void draw_status(game_state_t *game) {
     
     // Current Player
     if (game->current_player == AI_CELL_BLACK) {
-        printf("%s│%s %-*s %s│%s%s\n", COLOR_YELLOW, COLOR_RESET, box_width - 4,
+        printf("%s│ %-*s %s│%s%s\n", COLOR_YELLOW, box_width - 4,
                "Current Player : X (Human)", COLOR_BOLD_BLACK, COLOR_RESET, COLOR_YELLOW);
     } else {
-        printf("%s│%s %-*s %s│%s%s\n", COLOR_BLUE, COLOR_RESET, box_width - 4,
+        printf("%s│ %-*s %s│%s%s\n", COLOR_BLUE, box_width - 4,
                "Current Player : O (AI)", COLOR_BOLD_BLACK, COLOR_RESET, COLOR_BLUE);
     }
     
@@ -283,7 +287,7 @@ void draw_status(game_state_t *game) {
     }
     char difficulty_str[32];
     snprintf(difficulty_str, sizeof(difficulty_str),
-             "Difficulty     : %s (search depth %d)", difficulty_name, game->max_depth);
+             "Difficulty     : %s (depth %d)", difficulty_name, game->max_depth);
     printf("%s│%s %-*s %s│%s\n", COLOR_BOLD_BLACK, COLOR_RESET, 
            box_width - 4, difficulty_str, COLOR_BOLD_BLACK, COLOR_RESET);
     
@@ -342,16 +346,16 @@ void draw_status(game_state_t *game) {
         
         switch (game->game_state) {
         case GAME_HUMAN_WIN:
-            printf("%s│%s %-*s %s│%s\n", COLOR_BOLD_BLACK, COLOR_RESET, 
-                   box_width - 4, "🎉 Human wins! ✕", COLOR_BOLD_BLACK, COLOR_RESET);
+            printf("%s│%s %-*s %s│%s\n", COLOR_BOLD_BLACK, COLOR_YELLOW, 
+                   box_width - 4, "Human wins! Great job!", COLOR_BOLD_BLACK, COLOR_RESET);
             break;
         case GAME_AI_WIN:
-            printf("%s│%s %-*s %s│%s\n", COLOR_BOLD_BLACK, COLOR_RESET, 
-                   box_width - 4, "🤖 AI wins! ○", COLOR_BOLD_BLACK, COLOR_RESET);
+            printf("%s│%s %-*s %s│%s\n", COLOR_BOLD_BLACK, COLOR_BLUE, 
+                   box_width - 4, "AI wins! Try again!", COLOR_BOLD_BLACK, COLOR_RESET);
             break;
         case GAME_DRAW:
             printf("%s│%s %-*s %s│%s\n", COLOR_BOLD_BLACK, COLOR_RESET, 
-                   box_width - 4, "🤝 Game is a draw!", COLOR_BOLD_BLACK, COLOR_RESET);
+                   box_width - 4, "The Game is a draw!", COLOR_BOLD_BLACK, COLOR_RESET);
             break;
         }
         
