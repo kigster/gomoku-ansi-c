@@ -35,6 +35,8 @@ jobs:
         cd build
         cmake ..
         make -j 4
+        ls -alF lib
+        cd ../../..
 
     - name: Verify Google Test libraries
       run: |
