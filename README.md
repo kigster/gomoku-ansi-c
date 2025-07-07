@@ -3,13 +3,21 @@
 A C implementation of the Gomoku (Five-in-a-Row) game featuring an AI opponent using the MiniMax algorithm with Alpha-Beta pruning.
 
 > [!TIP]
-> Please be advised that while some of the code was produced with the help of Claude-4-MAX, the original evaluation function was written by hand. Also, when we say "playing with AI" we do not mean LLMs, we simply mean you are playing against the computer.
+> This project was produced in colaboration with Claude-4-MAX, but the the original **evaluation function** was written by the author. Also, when we say "playing with AI" we do not mean LLMs, we simply mean you are playing against the computer.
 
-It is exceedingly difficult to win even on Medium setting, which only looks ahead a few moves.
+It is exceedingly difficult to win even on Medium setting, which only looks ahead a few moves. This game was popular in the former Soviet Union, but it was called "crosses and naughts" (крестики и нолики).
 
-Here is a screenshot of a game I played against the algorithm.
+Here is a screenshot of a game I played against the algorithm. This game is not finished, but you get the idea.
 
-![gameplay](doc/gomoku-game.png)
+<img src="doc/gomoku-game.png" width="700" border="1" style="border-radius: 10px"/>
+
+## Screen Shots
+
+Picture is worth a thousand words, right?
+
+Here is how to compile and run the game:
+
+<img src="doc/gomoku-help.png" width="700" border="1" style="border-radius: 10px"/>
 
 ## Features
 
@@ -96,6 +104,13 @@ make clean
 | **Intermediate** | 4 | 0.1-0.5 seconds | Default, balanced gameplay |
 | **Hard** | 6 | 0.5-3 seconds | Challenging, advanced play |
 
+### Completed Game Screenshot
+
+Here is the game where the AI prevailed, and human lost.
+
+<img src="doc/gomoku-play.png" width="700" border="1" style="border-radius: 10px"/>
+
+
 ---
 
 ## Developer Information
@@ -118,12 +133,14 @@ src/
 ### AI Algorithm Implementation
 
 #### MiniMax with Alpha-Beta Pruning
+
 - **Search Algorithm**: MiniMax with alpha-beta pruning for optimal performance
 - **Evaluation Function**: Pattern-based position assessment using threat matrices
 - **Timeout Support**: Configurable time limits with graceful degradation
 - **Smart Move Ordering**: Prioritizes winning moves and threats for better pruning
 
 #### Pattern Recognition System
+
 The AI recognizes various threat patterns with weighted scoring:
 
 | Pattern | Score | Description |
@@ -135,6 +152,7 @@ The AI recognizes various threat patterns with weighted scoring:
 | **Combinations** | Bonus | Multiple simultaneous threats |
 
 #### Search Space Optimization
+
 - **Proximity-based Search**: Only considers moves within 3 cells of existing stones
 - **Early Game Optimization**: Focuses on center area when board is empty
 - **First Move Randomization**: AI's first move placed randomly 1-2 squares from human's move
@@ -159,6 +177,7 @@ make test
 ```
 
 #### Test Results
+
 - ✅ **20/20 tests passing**
 - ✅ Board initialization and management
 - ✅ Win detection in all directions
@@ -175,6 +194,7 @@ make test
 | Hard       | 6            | 0.5-3 seconds    | ~200-800           |
 
 **Key Optimizations:**
+
 - **Move Ordering**: 3-5x faster with intelligent priority sorting
 - **Incremental Evaluation**: Only evaluates positions near the last move
 - **Alpha-Beta Pruning**: Reduces effective branching factor significantly
@@ -183,18 +203,21 @@ make test
 ### Core Functions
 
 #### Game Logic (`game.c`)
+
 - `init_game()`: Initialize game state and board
 - `make_move()`: Validate and execute player moves
 - `undo_last_moves()`: Undo functionality for move pairs
 - `start_move_timer()` / `end_move_timer()`: Timing system
 
 #### AI Engine (`ai.c`)
+
 - `find_best_ai_move()`: Main AI move selection with timeout support
 - `minimax_with_timeout()`: MiniMax algorithm with time limits
 - `get_move_priority()`: Move ordering for alpha-beta optimization
 - `is_winning_move()`: Immediate win detection
 
 #### Evaluation System (`gomoku.c`)
+
 - `evaluate_position()`: Main board evaluation function
 - `calc_score_at()`: Threat analysis for individual positions
 - `has_winner()`: Win condition detection in all directions
@@ -208,9 +231,9 @@ make test
 
 ---
 
-## License
+## License & Copyright
 
-This project is open source and available under the MIT License.
+This project is © Konstantin Gredeskoul, 2025. It is open source and can be distributed under the MIT License.
 
 ## Contributing
 
@@ -220,4 +243,5 @@ Contributions are welcome! Please feel free to submit issues, feature requests, 
 
 - Pattern recognition algorithms adapted from traditional Gomoku AI techniques
 - Google Test framework for comprehensive testing
-- Unicode characters for enhanced visual display 
+- Unicode characters for enhanced visual display
+- Claude-4-MAX for being a great pair programmer.
