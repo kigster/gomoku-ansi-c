@@ -30,13 +30,12 @@ jobs:
 
     - name: Build Google Test
       run: |
-        cd tests/googletest
-        mkdir -p build
-        cd build
+        set -x
+        mkdir -p tests/googletest/build
+        cd tests/googletest/build
         cmake ..
         make -j 4
         ls -alF lib
-        cd ../../..
 
     - name: Verify Google Test libraries
       run: |
