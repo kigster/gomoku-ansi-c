@@ -2,16 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ '**' ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
 
 jobs:
   build-and-test:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [macos-latest, ubuntu-latest]
         
     steps:
     - name: Checkout code
@@ -30,11 +30,18 @@ jobs:
 
     - name: Build Google Test
       run: |
-        cd tests/googletest
-        mkdir -p build
-        cd build
-        cmake ..
-        make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+        bash -c "
+          set -xe;
+          [[ -d tests/googletest && -f tests/googletest/CMakeLists.txt ]] || {
+            rm -rf tests/googletest;
+            git clone https://github.com/google/googletest.git tests/googletest;
+          };        
+          ls -alF tests/googletest;
+          cd tests/googletest;
+          mkdir -p build; cd build;
+          cmake .. && make -j 4;
+          cd ../../..;
+        "
 
     - name: Verify Google Test libraries
       run: |
@@ -44,12 +51,16 @@ jobs:
 
     - name: Build project
       run: |
-        make clean
-        make
+        bash -c "
+          pwd -P;
+          ls -alF;
+          find . -name Makefile -type f;
+          make -j 4
+        "
 
     - name: Run tests
       run: |
-        make test
+        bash -c "make test"
 
     - name: Test binary execution
       run: |
@@ -66,3 +77,4 @@ jobs:
         sudo apt-get install -y valgrind
         # Run a quick memory check on the test binary
         valgrind --leak-check=summary --error-exitcode=1 ./test_gomoku || echo "Memory check completed" 
+
