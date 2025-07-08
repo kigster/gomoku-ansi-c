@@ -6,7 +6,7 @@
 OS              := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 MAKEFILE_PATH   := $(abspath $(lastword $(MAKEFILE_LIST)))
 CURRENT_DIR     := $(shell ( cd .; pwd -P ) )
-VERSION         := $(shell grep VERSION src/gomoku.h | awk '{print $3}' | tr -d '"')
+VERSION         := $(shell grep VERSION src/gomoku.h | awk '{print $$3}' | tr -d '"')
 TAG             := $(shell echo "v$(VERSION)")
 BRANCH          := $(shell git branch --show)
 
@@ -33,6 +33,10 @@ GTEST_MAIN_LIB   = tests/googletest/build/lib/libgtest_main.a
 help:		## Prints help message auto-generated from the comments.
 		@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[32m%-10s\033[35m %s\033[0\n", $$1, $$2}'
 
+version:        ## Prints the current version and tag
+	        @echo "Version is $(VERSION)"
+		@echo "The tag is $(TAG)"
+
 build: 		$(TARGET) ## Build the Game
  
 rebuild: 	clean build ## Clean and rebuild the game
@@ -57,9 +61,9 @@ clean:  	## Clean up all the intermediate objects
 		rm -f $(TARGET) $(TEST_TARGET) $(OBJECTS) tests/gomoku_test.o
 
 tag:    	## Tag the current git version with the tag equal to the VERSION constant
-		git tag $(VERSION) -f
+		git tag $(TAG) -f
 		git push --tags -f
 
 release:  	tag ## Update current VERSION tag to this SHA, and publish a new Github Release
-		gh release create v$(VERSION) --generate-notes
+		gh release create $(TAG) --generate-notes
 

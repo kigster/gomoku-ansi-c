@@ -9,9 +9,9 @@ A C implementation of the Gomoku (Five-in-a-Row) game featuring an AI opponent u
 
 It is exceedingly difficult to win even on Medium setting, which only looks ahead a few moves. This game was popular in the former Soviet Union, but it was called "crosses and naughts" (крестики и нолики).
 
-Here is a screenshot of a game I played against the algorithm. This game is not finished, but you get the idea.
+Below is the screenshot of the help screen of the game, since it's a CLI/Terminal game.
 
-<img src="doc/gomoku-game.png" width="700" border="1" style="border-radius: 10px"/>
+<img src="doc/gomoku-help.png" width="700" border="1" style="border-radius: 10px"/>
 
 ## Screen Shots
 
@@ -19,7 +19,7 @@ Picture is worth a thousand words, right?
 
 Here is how to compile and run the game:
 
-<img src="doc/gomoku-help.png" width="700" border="1" style="border-radius: 10px"/>
+<img src="doc/gomoku-build.png" width="700" border="1" style="border-radius: 10px"/>
 
 ## Features
 
@@ -108,10 +108,9 @@ make clean
 
 ### Completed Game Screenshot
 
-Here is the game where the AI prevailed, and human lost.
+Here is the game where the human player prevailed:
 
 <img src="doc/gomoku-play.png" width="700" border="1" style="border-radius: 10px"/>
-
 
 ---
 
