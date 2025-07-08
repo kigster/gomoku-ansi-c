@@ -19,8 +19,8 @@
 
 // Board cell values
 #define AI_CELL_EMPTY 0
-#define AI_CELL_BLACK 1
-#define AI_CELL_WHITE -1
+#define AI_CELL_CROSSES 1
+#define AI_CELL_NAUGHTS -1
 
 // Search parameters
 #define SEARCH_RADIUS 4
@@ -63,7 +63,7 @@
 
 // ANSI Color codes
 #define COLOR_RESET "\033[0m"
-#define COLOR_BOLD_BLACK "\033[1;30m"
+#define COLOR_BOLD_CROSSES "\033[1;30m"
 #define COLOR_RED "\033[31m"
 #define COLOR_BLUE "\033[34m"
 #define COLOR_YELLOW "\033[33m"
@@ -71,14 +71,14 @@
 #define COLOR_CURSOR "\033[1;33;5m"  // Bold blinking yellow
 #define COLOR_BRIGHT_BLUE "\033[96m" // Bright cyan-blue for AI highlight
 #define COLOR_BG_GREY "\033[0m" // Grey background for cursor on occupied cells
-#define COLOR_BG_BLACK "\033[0;0m" // Grey background for cursor on occupied cells
+#define COLOR_BG_CROSSES "\033[0;0m" // Grey background for cursor on occupied cells
 #define COLOR_BRIGHT_GREEN "\033[92m" // Bright green for human highlight
 #define COLOR_GREY "\033[7;30m" // Grey for empty cells
 
 // Unicode characters for board display
 #define UNICODE_EMPTY "·"
-#define UNICODE_BLACK "✕"
-#define UNICODE_WHITE "○"
+#define UNICODE_CROSSES "✕"
+#define UNICODE_NAUGHTS "○"
 #define UNICODE_CURSOR "✕"
 #define UNICODE_CORNER_TL "┌─"
 #define UNICODE_CORNER_TR "─┐"
@@ -138,7 +138,7 @@ void display_rules();
  *
  * @param board 2D array representing the game board
  * @param size Size of the board (typically 15 or 19)
- * @param player The player to evaluate for (AI_CELL_BLACK or AI_CELL_WHITE)
+ * @param player The player to evaluate for (AI_CELL_CROSSES or AI_CELL_NAUGHTS)
  * @return Score where positive values favor the player, negative favor opponent
  */
 int evaluate_position(int **board, int size, int player);
@@ -149,7 +149,7 @@ int evaluate_position(int **board, int size, int player);
  *
  * @param board 2D array representing the game board
  * @param size Size of the board (typically 15 or 19)
- * @param player The player to evaluate for (AI_CELL_BLACK or AI_CELL_WHITE)
+ * @param player The player to evaluate for (AI_CELL_CROSSES or AI_CELL_NAUGHTS)
  * @param last_x X coordinate of the last move
  * @param last_y Y coordinate of the last move
  * @return Score where positive values favor the player, negative favor opponent
@@ -162,7 +162,7 @@ int evaluate_position_incremental(int **board, int size, int player, int last_x,
  *
  * @param board 2D array representing the game board
  * @param size Size of the board
- * @param player The player to check for (AI_CELL_BLACK or AI_CELL_WHITE)
+ * @param player The player to check for (AI_CELL_CROSSES or AI_CELL_NAUGHTS)
  * @return 1 if player has won, 0 otherwise
  */
 int has_winner(int **board, int size, int player);
@@ -177,7 +177,7 @@ int has_winner(int **board, int size, int player);
  * @param alpha Alpha value for alpha-beta pruning
  * @param beta Beta value for alpha-beta pruning
  * @param maximizing_player 1 if maximizing player's turn, 0 for minimizing
- * @param ai_player The AI player (AI_CELL_BLACK or AI_CELL_WHITE)
+ * @param ai_player The AI player (AI_CELL_CROSSES or AI_CELL_NAUGHTS)
  * @return Best evaluation score found
  */
 int minimax_example(int **board, int size, int depth, int alpha, int beta,
@@ -227,7 +227,7 @@ int calc_combination_threat(int one, int two);
 /**
  * Returns the opponent of the given player.
  *
- * @param player Current player (AI_CELL_BLACK or AI_CELL_WHITE)
+ * @param player Current player (AI_CELL_CROSSES or AI_CELL_NAUGHTS)
  * @return Opponent player
  */
 int other_player(int player);

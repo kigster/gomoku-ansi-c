@@ -19,8 +19,8 @@
 
 // Cell values
 #define AI_CELL_EMPTY 0
-#define AI_CELL_BLACK 1
-#define AI_CELL_WHITE -1
+#define AI_CELL_CROSSES 1
+#define AI_CELL_NAUGHTS -1
 
 // Return codes
 #define RT_SUCCESS 0

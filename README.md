@@ -35,8 +35,8 @@ Here is how to compile and run the game:
 
 Gomoku is a strategy game where players take turns placing stones on a board. The goal is to be the first to get five stones in a row (horizontally, vertically, or diagonally).
 
-- **Human plays first** (Black stones ✕) - this is an advantage
-- **AI plays second** (White stones ○)
+- **Human plays first** (Crosses stones ✕) - this is an advantage
+- **AI plays second** (Naughts stones ○)
 - **Win condition**: First to get exactly 5 in a row wins
 - **Overline rule**: Six or more stones in a row do NOT count as a win
 

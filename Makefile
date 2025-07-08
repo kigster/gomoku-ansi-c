@@ -1,4 +1,4 @@
-VERSION := "0.1.0"
+VERSION := "0.1.1"
 
 CC = gcc
 CXX = g++
@@ -39,6 +39,6 @@ clean:
 
 tag:
 	git tag $(VERSION) -f
-	git push --tags
+	git push --tags -f
 
 .PHONY: clean test tag

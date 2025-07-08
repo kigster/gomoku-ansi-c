@@ -39,7 +39,7 @@ typedef struct {
     int **board;           // The game board
     int board_size;        // Size of the board
     int cursor_x, cursor_y; // Current cursor position
-    int current_player;    // Current player (AI_CELL_BLACK or AI_CELL_WHITE)
+    int current_player;    // Current player (AI_CELL_CROSSES or AI_CELL_NAUGHTS)
     int game_state;        // Current game state (GAME_RUNNING, etc.)
     int max_depth;         // AI search depth
     int move_timeout;      // Move timeout in seconds (0 = no timeout)

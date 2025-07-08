@@ -32,7 +32,7 @@ game_state_t* init_game(int board_size, int max_depth, int move_timeout) {
     game->board_size = board_size;
     game->cursor_x = board_size / 2;
     game->cursor_y = board_size / 2;
-    game->current_player = AI_CELL_BLACK; // Human plays first
+    game->current_player = AI_CELL_CROSSES; // Human plays first
     game->game_state = GAME_RUNNING;
     game->max_depth = max_depth;
     game->move_timeout = move_timeout;
@@ -70,9 +70,9 @@ void cleanup_game(game_state_t *game) {
 //===============================================================================
 
 void check_game_state(game_state_t *game) {
-    if (has_winner(game->board, game->board_size, AI_CELL_BLACK)) {
+    if (has_winner(game->board, game->board_size, AI_CELL_CROSSES)) {
         game->game_state = GAME_HUMAN_WIN;
-    } else if (has_winner(game->board, game->board_size, AI_CELL_WHITE)) {
+    } else if (has_winner(game->board, game->board_size, AI_CELL_NAUGHTS)) {
         game->game_state = GAME_AI_WIN;
     } else {
         // Check for draw (board full)
@@ -130,7 +130,7 @@ void undo_last_moves(game_state_t *game) {
             game->board[last_move.x][last_move.y] = AI_CELL_EMPTY;
             
             // Subtract time from totals
-            if (last_move.player == AI_CELL_BLACK) {
+            if (last_move.player == AI_CELL_CROSSES) {
                 game->total_human_time -= last_move.time_taken;
             } else {
                 game->total_ai_time -= last_move.time_taken;
@@ -148,7 +148,7 @@ void undo_last_moves(game_state_t *game) {
     game->last_ai_move_y = -1;
     
     // Reset to human turn (since we removed AI move last)
-    game->current_player = AI_CELL_BLACK;
+    game->current_player = AI_CELL_CROSSES;
     
     // Clear AI status message
     strcpy(game->ai_status_message, "");
@@ -200,7 +200,7 @@ void add_move_to_history(game_state_t *game, int x, int y, int player, double ti
         game->move_history_count++;
         
         // Add to total time for each player
-        if (player == AI_CELL_BLACK) {
+        if (player == AI_CELL_CROSSES) {
             game->total_human_time += time_taken;
         } else {
             game->total_ai_time += time_taken;

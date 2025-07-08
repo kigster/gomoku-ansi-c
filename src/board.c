@@ -59,8 +59,8 @@ int is_valid_move(int **board, int x, int y, int size) {
 //===============================================================================
 
 const char* get_coordinate_unicode(int index) {
-    // Convert 0-based index to 1-based display with Unicode black circled characters
-    // Use consistent black circled numbers for all positions 1-19
+    // Convert 0-based index to 1-based display with Unicode crosses circled characters
+    // Use consistent crosses circled numbers for all positions 1-19
     static const char* coords[] = {
         "❶", "❷", "❸", "❹", "❺", "❻", "❼", "❽", "❾", "❿",
         "⓫", "⓬", "⓭", "⓮", "⓯", "⓰", "⓱", "⓲", "⓳"

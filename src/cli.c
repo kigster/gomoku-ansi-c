@@ -47,15 +47,20 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
                     printf("Error: Search depth must be between 1 and 10\n");
                     config.invalid_args = 1;
                 }
+                if (config.max_depth > 4) {
+                    printf("Warning: search depth above 4 is slow (this message will disappear in 3 seconds).\n");
+                    sleep(3);
+                }
+
                 break;
                 
             case 'l':
                 if (strcmp(optarg, "easy") == 0) {
-                    config.max_depth = 2;
+                    config.max_depth = 1;
                 } else if (strcmp(optarg, "intermediate") == 0) {
-                    config.max_depth = 4;
+                    config.max_depth = 3;
                 } else if (strcmp(optarg, "hard") == 0) {
-                    config.max_depth = 6;
+                    config.max_depth = 4;
                 } else {
                     printf("Error: Invalid difficulty level '%s'\n", optarg);
                     printf("Valid options are: easy, intermediate, hard\n\n");
@@ -108,10 +113,10 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
 }
 
 void print_help(const char* program_name) {
-    printf("\n%sNAME%s\n", COLOR_BOLD_BLACK, COLOR_RESET);
+    printf("\n%sNAME%s\n", COLOR_BOLD_CROSSES, COLOR_RESET);
     printf("  %s - an entertaining and engaging five-in-a-row version\n\n", program_name);
     
-    printf("%sFLAGS:%s\n", COLOR_BOLD_BLACK, COLOR_RESET);
+    printf("%sFLAGS:%s\n", COLOR_BOLD_CROSSES, COLOR_RESET);
     printf("  %s-d, --depth N%s      The depth of search in the MiniMax algorithm\n", COLOR_YELLOW, COLOR_RESET);
     printf("  %s-l, --level M%s      Can be \"easy\", \"intermediate\", \"hard\"\n", COLOR_YELLOW, COLOR_RESET);
     printf("  %s-t, --timeout T%s    Timeout in seconds that AI (and human)\n", COLOR_YELLOW, COLOR_RESET);
@@ -121,22 +126,22 @@ void print_help(const char* program_name) {
     printf("  %s-b, --board 15,19%s  Board size. Can be either 19 or 15.\n", COLOR_YELLOW, COLOR_RESET);
     printf("  %s-h, --help%s         Show this help message\n", COLOR_YELLOW, COLOR_RESET);
     
-    printf("\n%sEXAMPLES:%s\n", COLOR_BOLD_BLACK, COLOR_RESET);
+    printf("\n%sEXAMPLES:%s\n", COLOR_BOLD_CROSSES, COLOR_RESET);
     printf("  %s%s --level easy --board 15\n", COLOR_YELLOW, program_name);
     printf("  %s%s -d 4 -t 30 -b 19\n", COLOR_YELLOW, program_name);
     printf("  %s%s --level hard --timeout 60\n", COLOR_YELLOW, program_name);
     
-    printf("\n%sDIFFICULTY LEVELS:%s\n", COLOR_BOLD_BLACK, COLOR_RESET);
-    printf("  %seasy%s         - Search depth 2 (quick moves, good for beginners)\n", COLOR_GREEN, COLOR_RESET);
-    printf("  %sintermediate%s - Search depth 4 (balanced gameplay, default setting)\n", COLOR_GREEN, COLOR_RESET);
-    printf("  %shard%s         - Search depth 6 (advanced AI, challenging for experts)\n", COLOR_GREEN, COLOR_RESET);
+    printf("\n%sDIFFICULTY LEVELS:%s\n", COLOR_BOLD_CROSSES, COLOR_RESET);
+    printf("  %seasy%s         - Search depth 1 (quick moves, good for beginners)\n", COLOR_GREEN, COLOR_RESET);
+    printf("  %sintermediate%s - Search depth 3 (balanced gameplay, default setting)\n", COLOR_GREEN, COLOR_RESET);
+    printf("  %shard%s         - Search depth 4 (advanced AI, challenging for experts)\n", COLOR_GREEN, COLOR_RESET);
     
-    printf("\n%sGAME SYMBOLS:%s\n", COLOR_BOLD_BLACK, COLOR_RESET);
-    printf("  %s%s%s - Human player (black)\n", COLOR_RED, UNICODE_BLACK, COLOR_RESET);
-    printf("  %s%s%s - AI player (white)\n", COLOR_BLUE, UNICODE_WHITE, COLOR_RESET);
+    printf("\n%sGAME SYMBOLS:%s\n", COLOR_BOLD_CROSSES, COLOR_RESET);
+    printf("  %s%s%s - Human player (crosses)\n", COLOR_RED, UNICODE_CROSSES, COLOR_RESET);
+    printf("  %s%s%s - AI player (naughts)\n", COLOR_BLUE, UNICODE_NAUGHTS, COLOR_RESET);
     printf("  %s%s%s - Current cursor (bold blinking yellow on empty cells, grey background on occupied cells)\n", COLOR_CURSOR, UNICODE_CURSOR, COLOR_RESET);
     
-    printf("\n%sCONTROLS IN GAME:%s\n", COLOR_BOLD_BLACK, COLOR_RESET);
+    printf("\n%sCONTROLS IN GAME:%s\n", COLOR_BOLD_CROSSES, COLOR_RESET);
     printf("  Arrow Keys    - Move cursor\n");
     printf("  Space/Enter   - Place stone\n");
     printf("  U             - Undo last move pair\n");

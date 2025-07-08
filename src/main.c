@@ -50,7 +50,7 @@ int main(int argc, char* argv[]) {
         // Refresh display
         refresh_display(game);
         
-        if (game->current_player == AI_CELL_BLACK) {
+        if (game->current_player == AI_CELL_CROSSES) {
             // Human's turn - start timer if this is a new turn
             static int human_timer_started = 0;
             if (!human_timer_started) {
@@ -62,7 +62,7 @@ int main(int argc, char* argv[]) {
             handle_input(game);
             
             // Reset timer flag when move is made
-            if (game->current_player != AI_CELL_BLACK) {
+            if (game->current_player != AI_CELL_CROSSES) {
                 human_timer_started = 0;
             }
         } else {
@@ -84,7 +84,7 @@ int main(int argc, char* argv[]) {
                 }
                 
                 // Make the AI move
-                make_move(game, ai_x, ai_y, AI_CELL_WHITE, ai_move_time, positions_evaluated);
+                make_move(game, ai_x, ai_y, AI_CELL_NAUGHTS, ai_move_time, positions_evaluated);
                 
                 // Track AI's last move for highlighting
                 game->last_ai_move_x = ai_x;
