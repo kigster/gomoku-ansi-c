@@ -15,6 +15,8 @@
 // MOVE EVALUATION AND ORDERING
 //===============================================================================
 
+#define MAX_RADIUS 2
+
 int is_move_interesting(int **board, int x, int y, int stones_on_board, int board_size) {
     // If there are no stones on board, only center area is interesting
     if (stones_on_board == 0) {
@@ -23,8 +25,8 @@ int is_move_interesting(int **board, int x, int y, int stones_on_board, int boar
     }
     
     // Check if within 3 cells of any existing stone
-    for (int i = max(0, x - 3); i <= min(board_size - 1, x + 3); i++) {
-        for (int j = max(0, y - 3); j <= min(board_size - 1, y + 3); j++) {
+    for (int i = max(0, x - MAX_RADIUS); i <= min(board_size - 1, x + MAX_RADIUS); i++) {
+        for (int j = max(0, y - MAX_RADIUS); j <= min(board_size - 1, y + MAX_RADIUS); j++) {
             if (board[i][j] != AI_CELL_EMPTY) {
                 return 1; // Found a stone within 3 cells
             }
@@ -220,7 +222,7 @@ void find_first_ai_move(game_state_t *game, int *best_x, int *best_y) {
     int human_x = -1, human_y = -1;
     for (int i = 0; i < game->board_size && human_x == -1; i++) {
         for (int j = 0; j < game->board_size && human_x == -1; j++) {
-            if (game->board[i][j] == AI_CELL_BLACK) {
+            if (game->board[i][j] == AI_CELL_CROSSES) {
                 human_x = i;
                 human_y = j;
             }
@@ -305,10 +307,10 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
     strcpy(game->ai_status_message, "");
     if (game->move_timeout > 0) {
         printf("%s%s%s It's AI's Turn... Please wait... (timeout: %ds)\n", 
-               COLOR_BLUE, UNICODE_WHITE, COLOR_RESET, game->move_timeout);
+               COLOR_BLUE, "O", COLOR_RESET, game->move_timeout);
     } else {
         printf("%s%s%s It's AI's Turn... Please wait...\n", 
-               COLOR_BLUE, UNICODE_WHITE, COLOR_RESET);
+               COLOR_BLUE, "O", COLOR_RESET);
     }
     fflush(stdout);
 
@@ -327,12 +329,12 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
         for (int j = 0; j < game->board_size; j++) {
             if (game->board[i][j] == AI_CELL_EMPTY && 
                 is_move_interesting(game->board, i, j, stones_on_board, game->board_size)) {
-                if (is_winning_move(game->board, i, j, AI_CELL_WHITE, game->board_size)) {
+                if (is_winning_move(game->board, i, j, AI_CELL_NAUGHTS, game->board_size)) {
                     *best_x = i;
                     *best_y = j;
                     snprintf(game->ai_status_message, sizeof(game->ai_status_message), 
-                             "%s%s%s Found winning move immediately!", 
-                             COLOR_BLUE, UNICODE_WHITE, COLOR_RESET);
+                             "%s%s%s Winning move!", 
+                             COLOR_BLUE, "O", COLOR_RESET);
                     add_ai_history_entry(game, 1); // Only checked 1 move
                     return;
                 }
@@ -350,7 +352,7 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
                 is_move_interesting(game->board, i, j, stones_on_board, game->board_size)) {
                 moves[move_count].x = i;
                 moves[move_count].y = j;
-                moves[move_count].priority = get_move_priority(game->board, i, j, AI_CELL_WHITE, game->board_size);
+                moves[move_count].priority = get_move_priority(game->board, i, j, AI_CELL_NAUGHTS, game->board_size);
                 move_count++;
             }
         }
@@ -377,9 +379,9 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
         int i = moves[m].x;
         int j = moves[m].y;
         
-        game->board[i][j] = AI_CELL_WHITE;
+        game->board[i][j] = AI_CELL_NAUGHTS;
         int score = minimax_with_timeout(game, game->board, game->max_depth - 1, -WIN_SCORE - 1, WIN_SCORE + 1,
-                                        0, AI_CELL_WHITE, i, j);
+                                        0, AI_CELL_NAUGHTS, i, j);
         game->board[i][j] = AI_CELL_EMPTY;
 
         if (score > best_score) {
@@ -390,8 +392,8 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
             // Early termination for very good moves
             if (score >= WIN_SCORE - 1000) {
                 snprintf(game->ai_status_message, sizeof(game->ai_status_message), 
-                         "%s%s%s Found excellent move early! (evaluated %d moves)", 
-                         COLOR_BLUE, UNICODE_WHITE, COLOR_RESET, moves_considered + 1);
+                         "%s%s%s Win after %d moves considered.  ", 
+                         COLOR_BLUE, "O", COLOR_RESET, moves_considered + 1);
                 add_ai_history_entry(game, moves_considered + 1);
                 return; // Exit function early to avoid duplicate history entry
             }
