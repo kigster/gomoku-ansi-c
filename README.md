@@ -7,17 +7,27 @@ A C implementation of the Gomoku (Five-in-a-Row) game featuring an AI opponent u
 > [!TIP]
 > This project was produced in colaboration with Claude-4-MAX, but the the original **evaluation function** was written by the author. Also, when we say "playing with AI" we do not mean LLMs, we simply mean you are playing against the computer.
 
-It is exceedingly difficult to win even on Medium setting, which only looks ahead a few moves. This game was popular in the former Soviet Union, but it was called "crosses and naughts" (крестики и нолики).
 
-Below is the screenshot of the help screen of the game, since it's a CLI/Terminal game.
+### Completed Game Screenshot
 
-<img src="doc/gomoku-help.png" width="700" border="1" style="border-radius: 10px"/>
+Here is the game where the human player prevailed, although it is exceedingly difficult to win even on Medium setting, which only looks ahead a few moves. 
 
-## Screen Shots
+> [!TIP[
+> This game was popular in the former Soviet Union, but it was called "crosses and naughts" (крестики и нолики).
 
-Picture is worth a thousand words, right?
+<img src="doc/gomoku-play.png" width="700" border="1" style="border-radius: 10px"/>
+
+
+## Building the Game for the Impatient
 
 Here is how to compile and run the game:
+
+```bash
+make -j 4
+./gomoku -h
+```
+
+See the following screenshot for an example:
 
 <img src="doc/gomoku-build.png" width="700" border="1" style="border-radius: 10px"/>
 
@@ -64,6 +74,12 @@ make
 make clean
 ```
 
+### Help Screen
+
+Below is the screenshot of the help screen of the game, since it's a CLI/Terminal game.
+
+<img src="doc/gomoku-help.png" width="700" border="1" style="border-radius: 10px"/>
+
 ### Running the Game
 
 ```bash
@@ -106,11 +122,6 @@ make clean
 | **Intermediate** | 4 | 0.1-0.5 seconds | Default, balanced gameplay |
 | **Hard** | 6 | 0.5-3 seconds | Challenging, advanced play |
 
-### Completed Game Screenshot
-
-Here is the game where the human player prevailed:
-
-<img src="doc/gomoku-play.png" width="700" border="1" style="border-radius: 10px"/>
 
 ---
 
