@@ -12,7 +12,7 @@ A C implementation of the Gomoku (Five-in-a-Row) game featuring an AI opponent u
 
 Here is the game where the human player prevailed, although it is exceedingly difficult to win even on Medium setting, which only looks ahead a few moves. 
 
-> [!TIP[
+> [!NOTE]
 > This game was popular in the former Soviet Union, but it was called "crosses and naughts" (крестики и нолики).
 
 <img src="doc/gomoku-play.png" width="700" border="1" style="border-radius: 10px"/>
