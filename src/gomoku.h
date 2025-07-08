@@ -9,6 +9,7 @@
 #define GOMOKU_H
 
 #include <math.h>
+#include "ansi.h"
 
 // Board size is now configurable via command line, default is 19
 #define DEFAULT_BOARD_SIZE 19
@@ -61,35 +62,22 @@
 // GAME CONSTANTS
 //===============================================================================
 
-// ANSI Color codes
-#define COLOR_RESET "\033[0m"
-#define COLOR_BOLD_CROSSES "\033[1;30m"
-#define COLOR_RED "\033[31m"
-#define COLOR_BLUE "\033[34m"
-#define COLOR_YELLOW "\033[33m"
-#define COLOR_GREEN "\033[32m"
-#define COLOR_CURSOR "\033[1;33;5m"  // Bold blinking yellow
-#define COLOR_BRIGHT_BLUE "\033[96m" // Bright cyan-blue for AI highlight
-#define COLOR_BG_GREY "\033[0m" // Grey background for cursor on occupied cells
-#define COLOR_BG_CROSSES "\033[0;0m" // Grey background for cursor on occupied cells
-#define COLOR_BRIGHT_GREEN "\033[92m" // Bright green for human highlight
-#define COLOR_GREY "\033[7;30m" // Grey for empty cells
-
 // Unicode characters for board display
 #define UNICODE_EMPTY "·"
 #define UNICODE_CROSSES "✕"
 #define UNICODE_NAUGHTS "○"
 #define UNICODE_CURSOR "✕"
-#define UNICODE_CORNER_TL "┌─"
-#define UNICODE_CORNER_TR "─┐"
-#define UNICODE_CORNER_BL "└─"
-#define UNICODE_CORNER_BR "─┘"
+#define UNICODE_OCCUPIED "\033[0;33m◼︎"
+#define UNICODE_CORNER_TL "┌"
+#define UNICODE_CORNER_TR "┐"
+#define UNICODE_CORNER_BL "└"
+#define UNICODE_CORNER_BR "┘"
 #define UNICODE_EDGE_H "─"
 #define UNICODE_EDGE_V "│"
-#define UNICODE_T_TOP "─┬─"
-#define UNICODE_T_BOT "─┴─"
-#define UNICODE_T_LEFT "├─"
-#define UNICODE_T_RIGHT "─┤"
+#define UNICODE_T_TOP "┬"
+#define UNICODE_T_BOT "┴"
+#define UNICODE_T_LEFT "├"
+#define UNICODE_T_RIGHT "┤"
 
 // Key codes
 #define KEY_ESC 27
@@ -107,6 +95,45 @@
 #define GAME_AI_WIN 2
 #define GAME_DRAW 3
 #define GAME_QUIT 4
+
+//===============================================================================
+// GAME CONSTANTS
+//===============================================================================
+
+#define GAME_NAME "Gomoku"
+#define GAME_VERSION "0.1.2"
+#define GAME_AUTHOR "Konstantin Gredeskoul"
+#define GAME_LICENSE "MIT License"
+#define GAME_URL "https://github.com/kigster/gomoku-ansi-c"
+#define GAME_DESCRIPTION "Gomoku, also known as Five in a Row"
+#define GAME_COPYRIGHT "© 2025 Konstantin Gredeskoul, MIT License"
+
+#define GAME_RULES_BRIEF \
+" ↑ ↓ ← → (arrows) ───→ to move around, \n" \
+"  Enter or Space   ───→ to make a move, \n" \
+"  U                ───→ to undo last move pair (if --undo is enabled), \n" \
+"  ?                ───→ to show game rules, \n" \
+"  ESC              ───→ to quit game." 
+
+#define GAME_RULES_LONG                                                          \
+  "Gomoku, also known as Five in a Row, is a two-player strategy board game. \n " \
+  "The objective is to get five crosses or naughts in a row, either horizontally,\n " \
+  "vertically, or diagonally. The game is played on a 15x15 grid, or 19x19 \n "   \
+  "grid, with each player taking turns placing their crosses or naughts. The \n " \
+  "first player to get five crosses or naughts in a row wins the game.\n\n " \
+  "In this version you get to always play X which gives you a slight advantage.\n " \
+  "The computer will play O (and will go second). Slightly brigher O denotes the\n " \
+  "computer's last move (you can Undo moves if you enable Undo).\n"
+
+//===============================================================================
+// GAME INTERNAL CONSTANTS
+//===============================================================================
+#define GAME_DEPTH_LEVEL_EASY 1
+#define GAME_DEPTH_LEVEL_MEDIUM 2
+#define GAME_DEPTH_LEVEL_HARD 4
+
+#define GAME_DEPTH_LEVEL_MAX 8
+#define GAME_DEPTH_LEVEL_WARN 5
 
 //===============================================================================
 // MAIN MINIMAX EVALUATION FUNCTIONS

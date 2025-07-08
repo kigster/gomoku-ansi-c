@@ -21,6 +21,8 @@ typedef struct {
     int move_timeout;    // Move timeout in seconds (0 = no timeout)
     int show_help;       // Whether to show help and exit
     int invalid_args;    // Whether invalid arguments were provided
+    int enable_undo;     // Whether to enable undo feature
+    int skip_welcome;    // Whether to skip the welcome screen
 } cli_config_t;
 
 //===============================================================================
