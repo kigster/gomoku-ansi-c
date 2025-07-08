@@ -11,6 +11,7 @@
 #include <termios.h>
 #include "gomoku.h"
 #include "game.h"
+#include "ansi.h"
 
 //===============================================================================
 // INPUT HANDLING

@@ -333,7 +333,7 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
                     *best_x = i;
                     *best_y = j;
                     snprintf(game->ai_status_message, sizeof(game->ai_status_message), 
-                             "%s%s%s Winning move!", 
+                             "%s%s%s It's a checkmate ;-)", 
                              COLOR_BLUE, "O", COLOR_RESET);
                     add_ai_history_entry(game, 1); // Only checked 1 move
                     return;
@@ -392,7 +392,7 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
             // Early termination for very good moves
             if (score >= WIN_SCORE - 1000) {
                 snprintf(game->ai_status_message, sizeof(game->ai_status_message), 
-                         "%s%s%s Win after %d moves considered.  ", 
+                         "%s%s%s Win (%d moves evaluated).", 
                          COLOR_BLUE, "O", COLOR_RESET, moves_considered + 1);
                 add_ai_history_entry(game, moves_considered + 1);
                 return; // Exit function early to avoid duplicate history entry
@@ -411,15 +411,15 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
     
     // Store the completion message if not already set by early termination
     if (strlen(game->ai_status_message) == 0) {
+        double elapsed = get_current_time() - game->search_start_time;
         if (game->search_timed_out) {
-            double elapsed = get_current_time() - game->search_start_time;
             snprintf(game->ai_status_message, sizeof(game->ai_status_message), 
-                     "%sTimeout after %.1fs! (evaluated %d moves)%s", 
-                     COLOR_BLUE, elapsed, moves_considered, COLOR_RESET);
+                     "%.0fs timeout, checked %d moves", 
+                     elapsed, moves_considered);
         } else {
             snprintf(game->ai_status_message, sizeof(game->ai_status_message), 
-                     "%sDone! (evaluated %d moves)%s", 
-                     COLOR_BLUE, moves_considered, COLOR_RESET);
+                     "Done in %.0fs (checked %d moves)", 
+                     elapsed, moves_considered);
         }
     }
     

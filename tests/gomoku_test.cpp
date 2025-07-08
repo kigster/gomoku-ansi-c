@@ -8,6 +8,7 @@ extern "C" {
     #include "board.h"
     #include "game.h"
     #include "ai.h"
+    #include "cli.h"
 }
 
 class GomokuTest : public testing::Test {
@@ -21,8 +22,18 @@ protected:
         board = create_board(BOARD_SIZE);
         ASSERT_NE(board, nullptr);
         
+        // Create a test configuration
+        cli_config_t config = {
+            .board_size = BOARD_SIZE,      // 19x19 board
+            .max_depth = 4,                // AI search depth
+            .move_timeout = 0,             // No timeout
+            .show_help = 0,                // Don't show help
+            .invalid_args = 0,             // Valid arguments
+            .enable_undo = 1               // Enable undo for testing
+        };
+        
         // Create a test game state
-        game = init_game(BOARD_SIZE, 4, 0); // 19x19 board, depth 4, no timeout
+        game = init_game(config);
         ASSERT_NE(game, nullptr);
         
         populate_threat_matrix();

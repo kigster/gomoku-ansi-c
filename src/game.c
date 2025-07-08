@@ -15,27 +15,28 @@
 // GAME INITIALIZATION AND CLEANUP
 //===============================================================================
 
-game_state_t* init_game(int board_size, int max_depth, int move_timeout) {
+game_state_t *init_game(cli_config_t config) {
     game_state_t *game = malloc(sizeof(game_state_t));
     if (!game) {
         return NULL;
     }
     
     // Initialize board
-    game->board = create_board(board_size);
+    game->board = create_board(config.board_size);
     if (!game->board) {
         free(game);
         return NULL;
     }
     
     // Initialize game parameters
-    game->board_size = board_size;
-    game->cursor_x = board_size / 2;
-    game->cursor_y = board_size / 2;
+    game->board_size = config.board_size;
+    game->cursor_x = config.board_size / 2;
+    game->cursor_y = config.board_size / 2;
     game->current_player = AI_CELL_CROSSES; // Human plays first
     game->game_state = GAME_RUNNING;
-    game->max_depth = max_depth;
-    game->move_timeout = move_timeout;
+    game->max_depth = config.max_depth;
+    game->move_timeout = config.move_timeout;
+    game->config = config;
     
     // Initialize history
     game->move_history_count = 0;
@@ -114,7 +115,7 @@ int make_move(game_state_t *game, int x, int y, int player, double time_taken, i
 
 int can_undo(game_state_t *game) {
     // Need at least 2 moves to undo (human + AI)
-    return game->move_history_count >= 2;
+    return game->config.enable_undo && game->move_history_count >= 2;
 }
 
 void undo_last_moves(game_state_t *game) {

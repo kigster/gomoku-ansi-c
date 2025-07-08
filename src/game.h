@@ -10,6 +10,7 @@
 
 #include "gomoku.h"
 #include "board.h"
+#include "cli.h"
 
 //===============================================================================
 // GAME CONSTANTS
@@ -36,6 +37,7 @@ typedef struct {
  * Structure to represent the current game state
  */
 typedef struct {
+    cli_config_t config;   // Configuration
     int **board;           // The game board
     int board_size;        // Size of the board
     int cursor_x, cursor_y; // Current cursor position
@@ -78,7 +80,7 @@ typedef struct {
  * @param move_timeout Timeout for moves in seconds (0 = no timeout)
  * @return Initialized game state, or NULL on failure
  */
-game_state_t* init_game(int board_size, int max_depth, int move_timeout);
+game_state_t* init_game(cli_config_t config);
 
 /**
  * Cleans up and frees game state resources.

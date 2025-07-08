@@ -31,9 +31,15 @@ int main(int argc, char* argv[]) {
         print_help(argv[0]);
         return 1;
     }
+
+    clear_screen();
+
+    if (!config.skip_welcome) {
+        draw_game_header();
+    }
     
     // Initialize game state
-    game_state_t *game = init_game(config.board_size, config.max_depth, config.move_timeout);
+    game_state_t *game = init_game(config);
     if (!game) {
         printf("Error: Failed to initialize game\n");
         return 1;
