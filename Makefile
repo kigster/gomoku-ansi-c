@@ -39,6 +39,6 @@ clean:
 
 tag:
 	git tag $(VERSION) -f
-	git push --tags
+	git push --tags -f
 
 .PHONY: clean test tag
