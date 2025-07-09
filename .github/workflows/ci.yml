@@ -33,6 +33,7 @@ jobs:
         bash -c "
           set -xe;
           [[ -d tests/googletest && -f tests/googletest/CMakeLists.txt ]] || {
+             echo "Something is missing in GoogleTest, updating...";
             rm -rf tests/googletest;
             git clone https://github.com/google/googletest.git tests/googletest;
           };        
@@ -51,16 +52,12 @@ jobs:
 
     - name: Build project
       run: |
-        bash -c "
-          pwd -P;
-          ls -alF;
-          find . -name Makefile -type f;
-          make -j 4
-        "
+        make -j 4 build
+
 
     - name: Run tests
       run: |
-        bash -c "make test"
+        make test
 
     - name: Test binary execution
       run: |
