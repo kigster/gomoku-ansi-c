@@ -1,211 +1,296 @@
-# Gomoku Game - Cursor Context File
+# CLAUDE
 
-## Project Overview
+## The Game
 
-A modular implementation of Gomoku (Five-in-a-Row) in C with AI opponent using minimax algorithm with alpha-beta pruning. Originally refactored from a monolithic 1200+ line main.c file into clean, maintainable modules.
+This is a C implementation of the ancient game called Gomoku (or "Five-in-a-Row" in Europe, or "Крестики и Нолики" in Russian speaking countries)
 
-## Architecture
+The particular version of the game implementation features two opponents, where "naughts", shown as "O" or а Unicode "○", and the other uses "X", on the game board shown as "✕".
 
-### Core Modules
+The "✕" always moves first, and (as research shows) that carriers a slight advantage. The computer moves next with an "○", and that's computed using a MiniMax algorithm with Alpha/Beta Pruning for speed up.
 
-- **`src/main.c`** - Simple orchestrator (105 lines, down from 1200+)
-- **`src/game.c/.h`** - Game state, move history, timing, win detection
-- **`src/ai.c/.h`** - Minimax with alpha-beta pruning, move ordering, timeout support
-- **`src/ui.c/.h`** - Display, keyboard input, screen management, Unicode rendering
-- **`src/board.c/.h`** - Board management, coordinate utilities, boundary checks
-- **`src/cli.c/.h`** - Command-line argument parsing with getopt
-- **`src/gomoku.c/.h`** - Core evaluation functions, threat matrix, pattern recognition
+## Why does this exist?
 
-### Key Data Structures
+The computer algorithm is an exploration and an example of combining a famous MiniMax algorithm with Alpha/Beta Pruning with a better-than-average heuristic function used for the evaluation function.
 
-```c
-typedef struct {
-    int board_size;           // 15x15 or 19x19
-    int max_depth;           // AI search depth (2/4/6)
-    int move_timeout;        // Move timeout in seconds
-    bool show_help;          // CLI help flag
-} cli_config_t;
+## The Artifacts Provided for AI
 
-typedef struct {
-    int **board;             // 2D board array
-    int current_player;      // AI_CELL_CROSSES (human) or AI_CELL_NAUGHTS (AI)
-    game_state_enum game_state; // GAME_RUNNING, GAME_WON, GAME_QUIT
-    move_t *move_history;    // Move history for undo
-    char **ai_history;       // AI analysis history
-    // ... timing, display, and state fields
-} game_state_t;
-```
+We are allowed to use the following external resources to optimize our implementation and make it competitive — feel free to import, cache, and store with the project any conclusions you might arrive from these papers.
 
-## Build System & Dependencies
+- https://arxiv.org/pdf/2111.01016
+- https://cdn.aaai.org/Symposia/Fall/1993/FS-93-02/FS93-02-001.pdf
+- https://personalpages.manchester.ac.uk/staff/stefan.guettel/py/Coursework_2022_new.pdf
 
-### Requirements
+We are looking, of course, at any advantage compared to our existing algorithm.
 
-- **C Compiler**: GCC or Clang with C99 support
-- **Make**: Standard build system
-- **Google Test**: C++ testing framework (auto-downloaded in CI)
-- **Platform**: macOS/Linux (cross-platform compatible)
+## The MiniMax Algorithm with Alpha/Beta Pruning
 
-### Build Commands
+A quick recap of the algorithm:
 
-```bash
-make            # Build the game
-make test       # Run unit tests
-make clean      # Clean build artifacts
-make run        # Build and run with default settings
-```
+### 1. The Evaluation Function
 
-### CLI Options
+The evaluation function (also called a heuristic function) is a critical component that estimates the "goodness" of a game position from a particular player's perspective.
 
-```bash
-./gomoku --level easy|medium|hard    # Set difficulty (depth 2/4/6)
-./gomoku --depth N                   # Custom search depth
-./gomoku --timeout N                 # Move timeout in seconds
-./gomoku --board 15|19               # Board size
-./gomoku --help                      # Show help
-```
+- Inputs: The evaluation function takes a game state (board position) as input. This represents the current configuration of the game at any given node in the search tree.
 
-## AI Algorithm Details
+- Output: It returns a numerical score that represents how favorable that position is for the maximizing player.
 
-### Minimax Implementation
+The convention is typically:
 
-- **Algorithm**: Minimax with alpha-beta pruning
-- **Evaluation**: Pattern-based scoring with threat detection
-- **Move Ordering**: Strategic positions first for better pruning
-- **Timeout Support**: Graceful degradation when time limit reached
-- **Threat Matrix**: Pre-computed evaluation patterns
+- Positive values = good for the maximizing player
+- Negative values = good for the minimizing player
+- Zero = neutral position
+- Extreme values (like +∞/-∞) = winning/losing positions
 
-### Performance Targets
+For example, in chess, the evaluation might consider piece values, positional factors, king safety, etc., and output something like +2.5 (favoring white) or -1.8 (favoring black).
 
-- **Easy (depth 2)**: <0.1 seconds
-- **Medium (depth 4)**: 0.1-0.5 seconds  
-- **Hard (depth 6)**: 0.5-3 seconds
+### 2. How Alpha-Beta Pruning Uses Evaluation Results
 
-### Key Evaluation Patterns
+Alpha-beta pruning uses two key values that get updated as the algorithm explores the tree:
 
-- Five in a row: 1,000,000 points
-- Open four: 10,000 points
-- Four with one end blocked: 1,000 points
-- Open three: 1,000 points
-- Pattern recognition for threats and opportunities
+- **Alpha (α)**: The best score the maximizing player can guarantee so far
+- **Beta (β)**: The best score the minimizing player can guarantee so far
 
-## Testing Framework
+The pruning logic works as follows:
 
-### Test Structure
+- At maximizing nodes: If the current evaluation is ≥ beta, we can stop exploring siblings because the minimizing player (who controls the parent node) will never choose this path—they already have a better option.
+- At minimizing nodes: If the current evaluation is ≤ alpha, we can stop exploring siblings because the maximizing player (who controls the parent node) will never choose this path—they already have a better option.
 
-- **Framework**: Google Test (C++)
-- **Location**: `tests/gomoku_test.cpp`
-- **Coverage**: 20 comprehensive tests
-- **CI Integration**: GitHub Actions on macOS and Ubuntu
+Why this works: The key insight is that if we find a move that's "too good" for the current player, the opponent (who made the previous move) would never have allowed us to reach this position in the first place, since they have better alternatives available to them.
 
-### Key Test Categories
+This pruning can dramatically reduce the search space while guaranteeing the same result as the full minimax search.
 
-- Board initialization and boundary checking
-- Win condition detection (horizontal, vertical, diagonal)
-- AI move evaluation and minimax correctness
-- Game state management and move history
-- Input validation and error handling
+## The Tests
 
-### Running Tests
+The code uses the [GoogleTest library](https://github.com/google/googletest), and executes a test run on [CI (using Github Actions)](https://github.com/kigster/gomoku-ansi-c/actions). It's important that the tests pass before each pull request merge, and that we add the tests to any new features or functionality.
+
+## Diving into Details
+
+### What This Game is Today: Features
+
+This is a ASCII-text only game where we are able to position cursor at specific locations and control the screen that way.
+
+We can also auto-detect screen width and screen height using ANSII escape codes and
+
+- **Interactive Console Interface**: Unicode-based board display with keyboard controls
+- **AI Opponent**: Intelligent AI using MiniMax algorithm with Alpha-Beta pruning
+- **Configurable Difficulty**: Easy, Medium, and Hard levels with different search depths
+- **Timeout Support**: Optional move time limits for both human and AI players
+- **Undo Functionality**: Undo the last move pair (human + AI)
+- **Cross-platform**: Works on Linux, macOS, and other Unix-like systems
+- **Comprehensive Testing**: Full test suite using Google Test framework
+
+### Game Rules
+
+Gomoku is a strategy game where players take turns placing stones on a board. The goal is to be the first to get five stones in a row (horizontally, vertically, or diagonally).
+
+- **Human plays first** (Crosses stones ✕) - this is an advantage
+- **AI plays second** (Naughts stones ○)
+- **Win condition**: First to get exactly 5 in a row wins
+- **Overline rule**: Six or more stones in a row do NOT count as a win
+
+---
+
+### Getting Started
+
+#### Prerequisites
+
+- **GCC compiler** (or any C compiler)
+- **Make** build system
+- **Git** (for downloading Google Test framework)
+
+#### Building the Game
 
 ```bash
-make test                    # Local testing
-# CI automatically runs on push to any branch
-# PR testing only on main branch
+# Clone the repository
+git clone https://github.com/kigster/gomoku-ansi-c.git
+cd gomoku-ansi-c
+
+# Build the game
+make
+
+# Clean build files if needed
+make clean
 ```
 
-## User Interface
+### Help Screen
 
-### Display Features
+Below is the screenshot of the help screen of the game, since it's a CLI/Terminal game.
 
-- **Unicode Rendering**: Clean visual board representation
-- **Color Support**: Different colors for human/AI pieces
-- **Real-time Updates**: Move timer, position evaluation
-- **Move History**: Visual history panel with timestamps
-- **Status Messages**: Game state, AI analysis, help text
+<img src="doc/gomoku-help.png" width="700" border="1" style="border-radius: 10px"/>
 
-### Controls
+#### Running the Game
 
-- **Arrow Keys**: Navigate cursor
-- **Enter/Space**: Place stone
-- **U**: Undo last move pair
-- **?**: Show game rules and help
-- **ESC**: Quit game
+```bash
+# Run with default settings (Medium difficulty, 19x19 board)
+./gomoku
 
-## Development Guidelines
+# Run with easy difficulty on a 15x15 board
+./gomoku --level easy --board 15
 
-### Code Style
+# Run with custom search depth and timeout
+./gomoku --depth 6 --timeout 30
 
-- **Naming**: snake_case for functions and variables
-- **Headers**: Proper separation of interface (.h) and implementation (.c)
-- **Error Handling**: Consistent error checking and cleanup
-- **Memory Management**: Proper allocation/deallocation patterns
-
-### Module Dependencies
-
-```
-main.c
-├── cli.c (command line parsing)
-├── game.c (depends on board.c, gomoku.c)
-├── ui.c (depends on game.c)
-└── ai.c (depends on game.c, gomoku.c)
+# Show all available options
+./gomoku --help
 ```
 
-### Adding New Features
+### Command Line Options
 
-1. **Evaluate Module**: Determine which module should contain the feature
-2. **Update Headers**: Add function declarations to appropriate .h file
-3. **Implement**: Add implementation to corresponding .c file
-4. **Test**: Add unit tests in `tests/gomoku_test.cpp`
-5. **Document**: Update help text in `ui.c` if user-facing
+| Option             | Description                                | Example        |
+| ------------------ | ------------------------------------------ | -------------- |
+| `-l, --level M`    | Difficulty: `easy`, `intermediate`, `hard` | `--level hard` |
+| `-d, --depth N`    | Search depth (1-10) for AI algorithm       | `--depth 5`    |
+| `-t, --timeout T`  | Move timeout in seconds (optional)         | `--timeout 30` |
+| `-b, --board SIZE` | Board size: 15 or 19 (default: 19)         | `--board 15`   |
+| `-h, --help`       | Show help message                          | `--help`       |
 
-### Performance Considerations
+#### Game Controls
 
-- **AI Timeout**: Always respect move_timeout to maintain responsive gameplay
-- **Memory Usage**: Board scales O(n²), move history grows linearly
-- **Search Depth**: Each depth level exponentially increases computation time
-- **Pattern Matching**: Threat matrix lookup is O(1) for common patterns
+- **Arrow Keys**: Move cursor around the board
+- **Space/Enter**: Place a stone at cursor position
+- **U**: Undo last move pair (human + AI)
+- **?**: Show detailed game rules and help
+- **ESC/Q**: Quit the game
 
-## Continuous Integration
+#### Difficulty Levels
 
-### GitHub Actions Workflow
+| Level            | Search Depth | Response Time   | Best For                   |
+| ---------------- | ------------ | --------------- | -------------------------- |
+| **Easy**         | 2            | < 0.1 seconds   | Beginners, casual play     |
+| **Intermediate** | 4            | 0.1-0.5 seconds | Default, balanced gameplay |
+| **Hard**         | 6            | 0.5-3 seconds   | Challenging, advanced play |
 
-- **Triggers**: Push to any branch, PR to main
-- **Platforms**: Ubuntu and macOS testing
-- **Steps**: Google Test build, project compilation, test execution, CLI testing
-- **Validation**: Memory leak detection with Valgrind (Ubuntu only)
+---
 
-### CI Configuration Notes
+## Developer Information
 
-- Google Test cloned fresh if not present
-- Cross-platform compatibility verified
-- Binary execution tested with various CLI flags
-- Build artifacts not cached (fresh build each time)
+### Architecture Overview
 
-## File Structure Context
+The project follows a modular architecture with clear separation of concerns:
 
 ```
-gomoku-c/
-├── src/                 # All source code
-├── tests/              # Google Test framework and test files
-├── .github/workflows/  # CI/CD configuration
-├── Makefile           # Build configuration
-├── README.md          # User and developer documentation
-└── .cursor            # This context file
+src/
+├── main.c      # Simple orchestrator (105 lines)
+├── gomoku.c/.h # Core evaluation functions
+├── board.c/.h  # Board management and coordinate utilities
+├── game.c/.h   # Game logic and state management
+├── ai.c/.h     # AI module with minimax search
+├── ui.c/.h     # User interface and display
+└── cli.c/.h    # Command-line argument parsing
 ```
 
-## Known Technical Debt & Future Improvements
+### AI Algorithm Implementation
 
-- Consider adding opening book for stronger early game
-- Implement iterative deepening for better time management
-- Add save/load game functionality
-- Support for custom board sizes beyond 15x15 and 19x19
-- Network multiplayer support
-- Performance profiling and optimization
+#### MiniMax with Alpha-Beta Pruning
 
-## Debugging Tips
+- **Search Algorithm**: MiniMax with alpha-beta pruning for optimal performance
+- **Evaluation Function**: Pattern-based position assessment using threat matrices
+- **Timeout Support**: Configurable time limits with graceful degradation
+- **Smart Move Ordering**: Prioritizes winning moves and threats for better pruning
 
-- Use `make clean && make` for clean builds
-- Enable compiler warnings: `-Wall -Wextra` in Makefile
-- Memory debugging: `valgrind ./gomoku` on Linux
-- AI analysis: Check ai_history array for move evaluations
-- Test specific scenarios: Modify board state in unit tests
+#### Pattern Recognition System
+
+The AI recognizes various threat patterns with weighted scoring:
+
+| Pattern             | Score     | Description                   |
+| ------------------- | --------- | ----------------------------- |
+| **Five in a row**   | 1,000,000 | Winning position              |
+| **Straight four**   | 50,000    | Immediate win threat          |
+| **Three in a row**  | 1,000     | Strong threat                 |
+| **Broken patterns** | 100-500   | Partial threats with gaps     |
+| **Combinations**    | Bonus     | Multiple simultaneous threats |
+
+#### Search Space Optimization
+
+- **Proximity-based Search**: Only considers moves within 3 cells of existing stones
+- **Early Game Optimization**: Focuses on center area when board is empty
+- **First Move Randomization**: AI's first move placed randomly 1-2 squares from human's move
+- **Performance Boost**: Reduces search space from 361 to ~20-50 moves per turn
+
+### Testing Framework
+
+The project includes a comprehensive test suite with 20 test cases using Google Test:
+
+```bash
+# Build and run all tests
+make test
+
+# Test categories covered:
+# - Board creation and coordinate utilities
+# - Move validation and game state management
+# - Win detection in all directions (horizontal, vertical, diagonal)
+# - Pattern recognition and threat analysis
+# - Evaluation function accuracy
+# - MiniMax algorithm functionality
+# - Undo functionality and edge cases
+```
+
+#### Test Results
+
+- ✅ **20/20 tests passing**
+- ✅ Board initialization and management
+- ✅ Win detection in all directions
+- ✅ Pattern recognition and threat analysis
+- ✅ Evaluation functions and AI logic
+- ✅ Game state management and undo functionality
+
+### Performance Metrics
+
+| Difficulty | Search Depth | Avg Response Time | Positions Evaluated |
+| ---------- | ------------ | ----------------- | ------------------- |
+| Easy       | 2            | < 0.1 seconds     | ~10-25              |
+| Medium     | 4            | 0.1-0.5 seconds   | ~50-200             |
+| Hard       | 6            | 0.5-3 seconds     | ~200-800            |
+
+**Key Optimizations:**
+
+- **Move Ordering**: 3-5x faster with intelligent priority sorting
+- **Incremental Evaluation**: Only evaluates positions near the last move
+- **Alpha-Beta Pruning**: Reduces effective branching factor significantly
+- **Early Termination**: Immediately selects winning moves
+
+### Core Functions
+
+#### Game Logic (`game.c`)
+
+- `init_game()`: Initialize game state and board
+- `make_move()`: Validate and execute player moves
+- `undo_last_moves()`: Undo functionality for move pairs
+- `start_move_timer()` / `end_move_timer()`: Timing system
+
+#### AI Engine (`ai.c`)
+
+- `find_best_ai_move()`: Main AI move selection with timeout support
+- `minimax_with_timeout()`: MiniMax algorithm with time limits
+- `get_move_priority()`: Move ordering for alpha-beta optimization
+- `is_winning_move()`: Immediate win detection
+
+#### Evaluation System (`gomoku.c`)
+
+- `evaluate_position()`: Main board evaluation function
+- `calc_score_at()`: Threat analysis for individual positions
+- `has_winner()`: Win condition detection in all directions
+- `populate_threat_matrix()`: Initialize pattern recognition system
+
+### Algorithm Complexity
+
+- **Time Complexity**: O(b^d) where b is branching factor and d is depth
+- **Space Complexity**: O(d) for recursion stack
+- **Optimization**: Alpha-beta pruning reduces effective branching factor from ~30 to ~5-10
+
+---
+
+## License & Copyright
+
+This project is © Konstantin Gredeskoul, 2025. It is open source and can be distributed under the MIT License.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests.
+
+## Acknowledgments
+
+- Pattern recognition algorithms adapted from traditional Gomoku AI techniques
+- Google Test framework for comprehensive testing
+- Unicode characters for enhanced visual display
+- Claude-4-MAX for being a great pair programmer.
