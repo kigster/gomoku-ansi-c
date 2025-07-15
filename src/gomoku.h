@@ -11,6 +11,33 @@
 #include <math.h>
 #include "ansi.h"
 
+//===============================================================================
+// GAME CONSTANTS
+//===============================================================================
+
+#define GAME_NAME "Gomoku"
+#define GAME_VERSION "0.2.0"
+#define GAME_AUTHOR "Konstantin Gredeskoul"
+#define GAME_LICENSE "MIT License"
+#define GAME_URL "https://github.com/kigster/gomoku-ansi-c"
+#define GAME_DESCRIPTION "Gomoku, also known as Five in a Row"
+#define GAME_COPYRIGHT "© 2025 Konstantin Gredeskoul, MIT License"
+#define GAME_RULES_BRIEF \
+" ↑ ↓ ← → (arrows) ───→ to move around, \n" \
+"  Enter or Space   ───→ to make a move, \n" \
+"  U                ───→ to undo last move pair (if --undo is enabled), \n" \
+"  ?                ───→ to show game rules, \n" \
+"  ESC              ───→ to quit game." 
+#define GAME_RULES_LONG                                                          \
+  "Gomoku, also known as Five in a Row, is a two-player strategy board game. \n " \
+  "The objective is to get five crosses or naughts in a row, either horizontally,\n " \
+  "vertically, or diagonally. The game is played on a 15x15 grid, or 19x19 \n "   \
+  "grid, with each player taking turns placing their crosses or naughts. The \n " \
+  "first player to get five crosses or naughts in a row wins the game.\n\n " \
+  "In this version you get to always play X which gives you a slight advantage.\n " \
+  "The computer will play O (and will go second). Slightly brigher O denotes the\n " \
+  "computer's last move (you can Undo moves if you enable Undo).\n"
+
 // Board size is now configurable via command line, default is 19
 #define DEFAULT_BOARD_SIZE 19
 
@@ -95,35 +122,6 @@
 #define GAME_AI_WIN 2
 #define GAME_DRAW 3
 #define GAME_QUIT 4
-
-//===============================================================================
-// GAME CONSTANTS
-//===============================================================================
-
-#define GAME_NAME "Gomoku"
-#define GAME_VERSION "0.1.2"
-#define GAME_AUTHOR "Konstantin Gredeskoul"
-#define GAME_LICENSE "MIT License"
-#define GAME_URL "https://github.com/kigster/gomoku-ansi-c"
-#define GAME_DESCRIPTION "Gomoku, also known as Five in a Row"
-#define GAME_COPYRIGHT "© 2025 Konstantin Gredeskoul, MIT License"
-
-#define GAME_RULES_BRIEF \
-" ↑ ↓ ← → (arrows) ───→ to move around, \n" \
-"  Enter or Space   ───→ to make a move, \n" \
-"  U                ───→ to undo last move pair (if --undo is enabled), \n" \
-"  ?                ───→ to show game rules, \n" \
-"  ESC              ───→ to quit game." 
-
-#define GAME_RULES_LONG                                                          \
-  "Gomoku, also known as Five in a Row, is a two-player strategy board game. \n " \
-  "The objective is to get five crosses or naughts in a row, either horizontally,\n " \
-  "vertically, or diagonally. The game is played on a 15x15 grid, or 19x19 \n "   \
-  "grid, with each player taking turns placing their crosses or naughts. The \n " \
-  "first player to get five crosses or naughts in a row wins the game.\n\n " \
-  "In this version you get to always play X which gives you a slight advantage.\n " \
-  "The computer will play O (and will go second). Slightly brigher O denotes the\n " \
-  "computer's last move (you can Undo moves if you enable Undo).\n"
 
 //===============================================================================
 // GAME INTERNAL CONSTANTS
