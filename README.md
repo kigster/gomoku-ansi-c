@@ -15,7 +15,14 @@ Here is the game where the human player prevailed, although it is exceedingly di
 > [!NOTE]
 > This game was popular in the former Soviet Union, but it was called "crosses and naughts" (крестики и нолики).
 
+#### Game 1 (Easy Mode) 
+
 <img src="doc/gomoku-play.png" width="700" border="1" style="border-radius: 10px"/>
+
+#### Game 2 (Hard Mode)
+
+<img src="doc/gomoku-play-on-hard.png" width="700" border="1" style="border-radius: 10px"/>
+
 
 
 ## Building the Game for the Impatient

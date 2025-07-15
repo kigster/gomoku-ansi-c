@@ -128,12 +128,12 @@
 //===============================================================================
 // GAME INTERNAL CONSTANTS
 //===============================================================================
-#define GAME_DEPTH_LEVEL_EASY 1
-#define GAME_DEPTH_LEVEL_MEDIUM 2
-#define GAME_DEPTH_LEVEL_HARD 4
+#define GAME_DEPTH_LEVEL_EASY 2
+#define GAME_DEPTH_LEVEL_MEDIUM 4
+#define GAME_DEPTH_LEVEL_HARD 6
 
-#define GAME_DEPTH_LEVEL_MAX 8
-#define GAME_DEPTH_LEVEL_WARN 5
+#define GAME_DEPTH_LEVEL_MAX 10
+#define GAME_DEPTH_LEVEL_WARN 7
 
 //===============================================================================
 // MAIN MINIMAX EVALUATION FUNCTIONS

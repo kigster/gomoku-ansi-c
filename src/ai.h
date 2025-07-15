@@ -80,6 +80,39 @@ typedef struct {
 } move_t;
 
 /**
+ * Optimized move generation using cached interesting moves.
+ * 
+ * @param game The game state
+ * @param moves Array to store generated moves
+ * @param current_player The current player
+ * @return Number of moves generated
+ */
+int generate_moves_optimized(game_state_t *game, move_t *moves, int current_player);
+
+/**
+ * Optimized move prioritization that avoids expensive temporary placements.
+ * 
+ * @param game The game state
+ * @param x Row coordinate
+ * @param y Column coordinate
+ * @param player The player making the move
+ * @return Priority score for the move
+ */
+int get_move_priority_optimized(game_state_t *game, int x, int y, int player);
+
+/**
+ * Fast threat evaluation without temporary board modifications.
+ * 
+ * @param board The game board
+ * @param x Row coordinate
+ * @param y Column coordinate
+ * @param player The player making the move
+ * @param board_size Size of the board
+ * @return Threat score for the move
+ */
+int evaluate_threat_fast(int **board, int x, int y, int player, int board_size);
+
+/**
  * Checks if a move position is "interesting" (within range of existing stones).
  * 
  * @param board The game board

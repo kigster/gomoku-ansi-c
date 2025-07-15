@@ -54,7 +54,7 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
                 if (config.max_depth >= GAME_DEPTH_LEVEL_WARN) {
                   printf("  %s%s%d%s\n  %s%s%s\n", COLOR_YELLOW,
                          "WARNING: Search at or above the depth of ",
-                         GAME_DEPTH_LEVEL_WARN, " is slow. ",
+                         GAME_DEPTH_LEVEL_WARN, " may be slow without timeout. ",
                          COLOR_BRIGHT_GREEN,
                          "(This message will disappear in 3 seconds.)",
                          COLOR_RESET);
