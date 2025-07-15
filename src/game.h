@@ -8,9 +8,12 @@
 #ifndef GAME_H
 #define GAME_H
 
+#include <stdint.h>
 #include "gomoku.h"
 #include "board.h"
 #include "cli.h"
+
+// move_t is defined in ai.h
 
 //===============================================================================
 // GAME CONSTANTS
@@ -32,6 +35,58 @@ typedef struct {
     double time_taken;     // Time taken to make this move in seconds
     int positions_evaluated; // For AI moves, number of positions evaluated
 } move_history_t;
+
+/**
+ * Structure to represent interesting moves for AI search optimization
+ */
+typedef struct {
+    int x, y;
+    int is_active;         // Whether this move is still interesting
+} interesting_move_t;
+
+/**
+ * Transposition table entry for caching evaluated positions
+ */
+typedef struct {
+    uint64_t hash;         // Position hash
+    int value;             // Evaluated value
+    int depth;             // Search depth
+    int flag;              // Exact, lower bound, or upper bound
+    int best_move_x;       // Best move coordinates
+    int best_move_y;
+} transposition_entry_t;
+
+#define TRANSPOSITION_TABLE_SIZE 100000
+#define TT_EXACT 0
+#define TT_LOWER_BOUND 1
+#define TT_UPPER_BOUND 2
+#define MAX_KILLER_MOVES 2
+#define MAX_SEARCH_DEPTH 10
+#define MAX_THREATS 100
+#define ASPIRATION_WINDOW 50
+#define NULL_MOVE_REDUCTION 2
+
+/**
+ * Threat structure for threat-space search (from Allis 1994 paper)
+ */
+typedef struct {
+    int x, y;              // Position
+    int threat_type;       // Type of threat
+    int player;            // Player who benefits from this threat
+    int priority;          // Priority score
+    int is_active;         // Whether this threat is still valid
+} threat_t;
+
+/**
+ * Aspiration window structure for enhanced pruning
+ */
+typedef struct {
+    int alpha;             // Lower bound
+    int beta;              // Upper bound
+    int depth;             // Depth at which window was set
+} aspiration_window_t;
+
+// move_t is defined in ai.h
 
 /**
  * Structure to represent the current game state
@@ -66,6 +121,33 @@ typedef struct {
     // Timeout tracking
     double search_start_time;
     int search_timed_out;
+    
+    // Optimization caches
+    interesting_move_t interesting_moves[361]; // Max for 19x19 board
+    int interesting_move_count;
+    int stones_on_board;                       // Cached stone count
+    int has_winner_cache[2];                   // Cache for winner detection [player1, player2]
+    int winner_cache_valid;                    // Whether winner cache is valid
+    
+    // Transposition table
+    transposition_entry_t transposition_table[TRANSPOSITION_TABLE_SIZE];
+    uint64_t zobrist_keys[2][361];            // Zobrist keys for hashing
+    uint64_t current_hash;                     // Current position hash
+    
+    // Killer moves heuristic
+    int killer_moves[MAX_SEARCH_DEPTH][MAX_KILLER_MOVES][2]; // [depth][move_num][x,y]
+    
+    // Threat-space search (from research papers)
+    threat_t active_threats[MAX_THREATS];     // Currently active threats
+    int threat_count;                         // Number of active threats
+    
+    // Aspiration windows for enhanced pruning
+    aspiration_window_t aspiration_windows[MAX_SEARCH_DEPTH];
+    int use_aspiration_windows;               // Whether to use aspiration windows
+    
+    // Null-move pruning
+    int null_move_allowed;                    // Whether null moves are allowed
+    int null_move_count;                      // Count of consecutive null moves
 } game_state_t;
 
 //===============================================================================
@@ -127,6 +209,180 @@ int can_undo(game_state_t *game);
  * @param game The game state
  */
 void undo_last_moves(game_state_t *game);
+
+//===============================================================================
+// OPTIMIZATION FUNCTIONS
+//===============================================================================
+
+/**
+ * Initializes the optimization caches for a game state.
+ * 
+ * @param game The game state
+ */
+void init_optimization_caches(game_state_t *game);
+
+/**
+ * Updates the interesting moves cache after a move is made.
+ * 
+ * @param game The game state
+ * @param x X coordinate of the move
+ * @param y Y coordinate of the move
+ */
+void update_interesting_moves(game_state_t *game, int x, int y);
+
+/**
+ * Invalidates the winner cache when a move is made.
+ * 
+ * @param game The game state
+ */
+void invalidate_winner_cache(game_state_t *game);
+
+/**
+ * Gets the cached winner status or computes it if invalid.
+ * 
+ * @param game The game state
+ * @param player The player to check for
+ * @return 1 if player has won, 0 otherwise
+ */
+int get_cached_winner(game_state_t *game, int player);
+
+/**
+ * Initializes the transposition table and Zobrist keys.
+ * 
+ * @param game The game state
+ */
+void init_transposition_table(game_state_t *game);
+
+/**
+ * Computes the Zobrist hash for the current position.
+ * 
+ * @param game The game state
+ * @return The hash value
+ */
+uint64_t compute_zobrist_hash(game_state_t *game);
+
+/**
+ * Stores a position evaluation in the transposition table.
+ * 
+ * @param game The game state
+ * @param hash Position hash
+ * @param value Evaluated value
+ * @param depth Search depth
+ * @param flag Type of bound (exact, lower, upper)
+ * @param best_x Best move x coordinate
+ * @param best_y Best move y coordinate
+ */
+void store_transposition(game_state_t *game, uint64_t hash, int value, int depth, int flag, int best_x, int best_y);
+
+/**
+ * Probes the transposition table for a cached evaluation.
+ * 
+ * @param game The game state
+ * @param hash Position hash
+ * @param depth Search depth
+ * @param alpha Alpha value
+ * @param beta Beta value
+ * @param value Pointer to store the cached value
+ * @return 1 if found and usable, 0 otherwise
+ */
+int probe_transposition(game_state_t *game, uint64_t hash, int depth, int alpha, int beta, int *value);
+
+/**
+ * Initializes the killer moves table.
+ * 
+ * @param game The game state
+ */
+void init_killer_moves(game_state_t *game);
+
+/**
+ * Stores a killer move at the given depth.
+ * 
+ * @param game The game state
+ * @param depth Search depth
+ * @param x Move x coordinate
+ * @param y Move y coordinate
+ */
+void store_killer_move(game_state_t *game, int depth, int x, int y);
+
+/**
+ * Checks if a move is a killer move at the given depth.
+ * 
+ * @param game The game state
+ * @param depth Search depth
+ * @param x Move x coordinate
+ * @param y Move y coordinate
+ * @return 1 if killer move, 0 otherwise
+ */
+int is_killer_move(game_state_t *game, int depth, int x, int y);
+
+/**
+ * Initializes the threat-space search system.
+ * 
+ * @param game The game state
+ */
+void init_threat_space_search(game_state_t *game);
+
+/**
+ * Updates the threat analysis after a move is made.
+ * 
+ * @param game The game state
+ * @param x Move x coordinate
+ * @param y Move y coordinate
+ * @param player Player who made the move
+ */
+void update_threat_analysis(game_state_t *game, int x, int y, int player);
+
+// Threat-space search function available in ai.c
+
+/**
+ * Initializes aspiration windows for enhanced pruning.
+ * 
+ * @param game The game state
+ */
+void init_aspiration_windows(game_state_t *game);
+
+/**
+ * Gets the aspiration window for a given depth.
+ * 
+ * @param game The game state
+ * @param depth Search depth
+ * @param alpha Pointer to store alpha value
+ * @param beta Pointer to store beta value
+ * @return 1 if window found, 0 otherwise
+ */
+int get_aspiration_window(game_state_t *game, int depth, int *alpha, int *beta);
+
+/**
+ * Updates aspiration window based on search results.
+ * 
+ * @param game The game state
+ * @param depth Search depth
+ * @param value Search result value
+ * @param alpha Alpha value used
+ * @param beta Beta value used
+ */
+void update_aspiration_window(game_state_t *game, int depth, int value, int alpha, int beta);
+
+/**
+ * Checks if null-move pruning should be applied.
+ * 
+ * @param game The game state
+ * @param depth Current search depth
+ * @param beta Beta value
+ * @return 1 if null-move should be tried, 0 otherwise
+ */
+int should_try_null_move(game_state_t *game, int depth, int beta);
+
+/**
+ * Performs null-move pruning search.
+ * 
+ * @param game The game state
+ * @param depth Current search depth
+ * @param beta Beta value
+ * @param ai_player AI player
+ * @return Search result or 0 if no pruning
+ */
+int try_null_move_pruning(game_state_t *game, int depth, int beta, int ai_player);
 
 //===============================================================================
 // TIMING FUNCTIONS
