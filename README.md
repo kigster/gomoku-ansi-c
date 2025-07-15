@@ -7,7 +7,6 @@ A C implementation of the Gomoku (Five-in-a-Row) game featuring an AI opponent u
 > [!TIP]
 > This project was produced in colaboration with Claude-4-MAX, but the the original **evaluation function** was written by the author. Also, when we say "playing with AI" we do not mean LLMs, we simply mean you are playing against the computer.
 
-
 ### Completed Game Screenshot
 
 Here is the game where the human player prevailed, although it is exceedingly difficult to win even on Medium setting, which only looks ahead a few moves. 
@@ -15,11 +14,10 @@ Here is the game where the human player prevailed, although it is exceedingly di
 > [!NOTE]
 > This game was popular in the former Soviet Union, but it was called "crosses and naughts" (крестики и нолики).
 
-#### Game 1 (Easy Mode) 
+#### Game Example (Hard Mode, Human Wins)
 
-<img src="doc/gomoku-play.png" width="700" border="1" style="border-radius: 10px"/>
-
-#### Game 2 (Hard Mode)
+> [!TIP]
+> These timings were possible only after additional optimizations were introduced in [this PR](https://github.com/kigster/gomoku-ansi-c/pull/4).
 
 <img src="doc/gomoku-play-on-hard.png" width="700" border="1" style="border-radius: 10px"/>
 
