@@ -12,8 +12,8 @@ BRANCH          := $(shell git branch --show)
 
 CC               = gcc
 CXX              = g++
-CFLAGS           = -Wall -Wextra -Wimplicit-function-declaration -Isrc -O3
-CXXFLAGS         = -Wall -Wextra -std=c++17 -Isrc -Itests/googletest/googletest/include -Wimplicit-function-declaration -O2
+CFLAGS           = -Wall -Wunused-parameter -Wextra -Wimplicit-function-declaration -Isrc -O3
+CXXFLAGS         = -Wall -Wunused-parameter -Wextra -std=c++17 -Isrc -Itests/googletest/googletest/include -Wimplicit-function-declaration -O2	
 LDFLAGS          = -lm
 
 TARGET           = gomoku
@@ -28,10 +28,13 @@ TEST_OBJECTS    := $(TEST_OBJECTS:.c=.o)
 GTEST_LIB        = tests/googletest/build/lib/libgtest.a
 GTEST_MAIN_LIB   = tests/googletest/build/lib/libgtest_main.a
 
-.PHONY: clean test tag help
+# CMake build directory
+BUILD_DIR = build
+
+.PHONY: clean test tag help cmake-build cmake-clean cmake-test
 
 help:		## Prints help message auto-generated from the comments.
-		@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[32m%-10s\033[35m %s\033[0\n", $$1, $$2}'
+		@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[32m%-20s\033[35m %s\033[0\n", $$1, $$2}' | sed '/^$$/d' | sort
 
 version:        ## Prints the current version and tag
 	        @echo "Version is $(VERSION)"
@@ -47,14 +50,13 @@ $(TARGET): $(OBJECTS)
 src/%.o: src/%.c
 		$(CC) $(CFLAGS) -c $< -o $@
 
-# Test targets
-$(TEST_TARGET): tests/gomoku_test.o src/gomoku.o src/board.o src/game.o src/ai.o
+$(TEST_TARGET): tests/gomoku_test.o src/gomoku.o src/board.o src/game.o src/ai.o # Test targets
 		$(CXX) $(CXXFLAGS) tests/gomoku_test.o src/gomoku.o src/board.o src/game.o src/ai.o $(GTEST_LIB) $(GTEST_MAIN_LIB) -pthread -o $(TEST_TARGET)
 
 tests/gomoku_test.o: tests/gomoku_test.cpp src/gomoku.h src/board.h src/game.h src/ai.h
 		$(CXX) $(CXXFLAGS) -c tests/gomoku_test.cpp -o tests/gomoku_test.o
 
-test: $(TEST_TARGET) $(TARGET) ## Run all the unit tests
+test: 		$(TEST_TARGET) $(TARGET) ## Run all the unit tests
 		./$(TEST_TARGET)
 
 clean:  	## Clean up all the intermediate objects
@@ -66,4 +68,17 @@ tag:    	## Tag the current git version with the tag equal to the VERSION consta
 
 release:  	tag ## Update current VERSION tag to this SHA, and publish a new Github Release
 		gh release create $(TAG) --generate-notes
+
+# CMake targets
+cmake-build: 	## Build using CMake (creates build directory and runs cmake ..)
+		mkdir -p $(BUILD_DIR)
+		cd $(BUILD_DIR) && cmake .. && make
+
+cmake-clean: 	## Clean CMake build directory
+		rm -rf $(BUILD_DIR)
+
+cmake-test: 	cmake-build ## Run tests using CMake
+		cd $(BUILD_DIR) && ctest --verbose
+
+cmake-rebuild: 	cmake-clean cmake-build ## Clean and rebuild using CMake
 

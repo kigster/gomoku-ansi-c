@@ -16,27 +16,27 @@
 //===============================================================================
 
 #define GAME_NAME "Gomoku"
-#define GAME_VERSION "0.2.0"
+#define GAME_VERSION "0.3.1"
 #define GAME_AUTHOR "Konstantin Gredeskoul"
 #define GAME_LICENSE "MIT License"
 #define GAME_URL "https://github.com/kigster/gomoku-ansi-c"
 #define GAME_DESCRIPTION "Gomoku, also known as Five in a Row"
 #define GAME_COPYRIGHT "© 2025 Konstantin Gredeskoul, MIT License"
 #define GAME_RULES_BRIEF \
-" ↑ ↓ ← → (arrows) ───→ to move around, \n" \
-"  Enter or Space   ───→ to make a move, \n" \
-"  U                ───→ to undo last move pair (if --undo is enabled), \n" \
-"  ?                ───→ to show game rules, \n" \
-"  ESC              ───→ to quit game." 
+    " ↑ ↓ ← → (arrows) ───→ to move around, \n" \
+    "  Enter or Space   ───→ to make a move, \n" \
+    "  U                ───→ to undo last move pair (if --undo is enabled), \n" \
+    "  ?                ───→ to show game rules, \n" \
+    "  ESC              ───→ to quit game." 
 #define GAME_RULES_LONG                                                          \
-  "Gomoku, also known as Five in a Row, is a two-player strategy board game. \n " \
-  "The objective is to get five crosses or naughts in a row, either horizontally,\n " \
-  "vertically, or diagonally. The game is played on a 15x15 grid, or 19x19 \n "   \
-  "grid, with each player taking turns placing their crosses or naughts. The \n " \
-  "first player to get five crosses or naughts in a row wins the game.\n\n " \
-  "In this version you get to always play X which gives you a slight advantage.\n " \
-  "The computer will play O (and will go second). Slightly brigher O denotes the\n " \
-  "computer's last move (you can Undo moves if you enable Undo).\n"
+    "Gomoku, also known as Five in a Row, is a two-player strategy board game. \n " \
+    "The objective is to get five crosses or naughts in a row, either horizontally,\n " \
+    "vertically, or diagonally. The game is played on a 15x15 grid, or 19x19 \n "   \
+    "grid, with each player taking turns placing their crosses or naughts. The \n " \
+    "first player to get five crosses or naughts in a row wins the game.\n\n " \
+    "In this version you get to always play X which gives you a slight advantage.\n " \
+    "The computer will play O (and will go second). Slightly brigher O denotes the\n " \
+    "computer's last move (you can Undo moves if you enable Undo).\n"
 
 // Board size is now configurable via command line, default is 19
 #define DEFAULT_BOARD_SIZE 19
@@ -145,8 +145,8 @@
 //   alpha: Alpha value for alpha-beta pruning
 //   beta: Beta value for alpha-beta pruning
 int minimax_with_last_move(int **board, int depth, int alpha, int beta,
-                           int maximizing_player, int ai_player, int last_x,
-                           int last_y);
+        int maximizing_player, int ai_player, int last_x,
+        int last_y);
 
 // Description: Display rules.
 //
@@ -180,7 +180,7 @@ int evaluate_position(int **board, int size, int player);
  * @return Score where positive values favor the player, negative favor opponent
  */
 int evaluate_position_incremental(int **board, int size, int player, int last_x,
-                                  int last_y);
+        int last_y);
 
 /**
  * Checks if the specified player has won the game (5 in a row).
@@ -206,7 +206,7 @@ int has_winner(int **board, int size, int player);
  * @return Best evaluation score found
  */
 int minimax_example(int **board, int size, int depth, int alpha, int beta,
-                    int maximizing_player, int ai_player);
+        int maximizing_player, int ai_player);
 
 //===============================================================================
 // PATTERN ANALYSIS FUNCTIONS

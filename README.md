@@ -9,7 +9,7 @@ A C implementation of the Gomoku (Five-in-a-Row) game featuring an AI opponent u
 
 ### Completed Game Screenshot
 
-Here is the game where the human player prevailed, although it is exceedingly difficult to win even on Medium setting, which only looks ahead a few moves. 
+Here is the game where the human player prevailed, although it is exceedingly difficult to win even on Medium setting, which only looks ahead a few moves.
 
 > [!NOTE]
 > This game was popular in the former Soviet Union, but it was called "crosses and naughts" (крестики и нолики).
@@ -20,8 +20,6 @@ Here is the game where the human player prevailed, although it is exceedingly di
 > These timings were possible only after additional optimizations were introduced in [this PR](https://github.com/kigster/gomoku-ansi-c/pull/4).
 
 <img src="doc/gomoku-play-on-hard.png" width="700" border="1" style="border-radius: 10px"/>
-
-
 
 ## Building the Game for the Impatient
 
@@ -64,19 +62,50 @@ Gomoku is a strategy game where players take turns placing stones on a board. Th
 - **GCC compiler** (or any C compiler)
 - **Make** build system
 - **Git** (for downloading Google Test framework)
+- **CMake** (optional, for CMake-based builds)
 
-### Building the Game
+### Quick Setup
+
+For first-time setup, run the automated setup script that installs dependencies and sets up Google Test:
 
 ```bash
 # Clone the repository
 git clone https://github.com/kigster/gomoku-ansi-c.git
 cd gomoku-ansi-c
 
+# Run setup script (installs dependencies and Google Test)
+./tests/setup
+```
+
+### Building the Game
+
+#### Using Make (Traditional)
+
+```bash
 # Build the game
 make
 
+# Build with parallel jobs for faster compilation
+make -j 4
+
 # Clean build files if needed
 make clean
+```
+
+#### Using CMake (Alternative)
+
+```bash
+# Build using CMake (creates build directory and runs cmake ..)
+make cmake-build
+
+# Run tests using CMake
+make cmake-test
+
+# Clean CMake build directory
+make cmake-clean
+
+# Rebuild from scratch
+make cmake-rebuild
 ```
 
 ### Help Screen
@@ -103,13 +132,13 @@ Below is the screenshot of the help screen of the game, since it's a CLI/Termina
 
 ### Command Line Options
 
-| Option | Description | Example |
-|--------|-------------|---------|
-| `-l, --level M` | Difficulty: `easy`, `intermediate`, `hard` | `--level hard` |
-| `-d, --depth N` | Search depth (1-10) for AI algorithm | `--depth 5` |
-| `-t, --timeout T` | Move timeout in seconds (optional) | `--timeout 30` |
-| `-b, --board SIZE` | Board size: 15 or 19 (default: 19) | `--board 15` |
-| `-h, --help` | Show help message | `--help` |
+| Option             | Description                                | Example        |
+| ------------------ | ------------------------------------------ | -------------- |
+| `-l, --level M`    | Difficulty: `easy`, `intermediate`, `hard` | `--level hard` |
+| `-d, --depth N`    | Search depth (1-10) for AI algorithm       | `--depth 5`    |
+| `-t, --timeout T`  | Move timeout in seconds (optional)         | `--timeout 30` |
+| `-b, --board SIZE` | Board size: 15 or 19 (default: 19)         | `--board 15`   |
+| `-h, --help`       | Show help message                          | `--help`       |
 
 ### Game Controls
 
@@ -121,12 +150,11 @@ Below is the screenshot of the help screen of the game, since it's a CLI/Termina
 
 ### Difficulty Levels
 
-| Level | Search Depth | Response Time | Best For |
-|-------|--------------|---------------|----------|
-| **Easy** | 2 | < 0.1 seconds | Beginners, casual play |
-| **Intermediate** | 4 | 0.1-0.5 seconds | Default, balanced gameplay |
-| **Hard** | 6 | 0.5-3 seconds | Challenging, advanced play |
-
+| Level            | Search Depth | Response Time   | Best For                   |
+| ---------------- | ------------ | --------------- | -------------------------- |
+| **Easy**         | 2            | < 0.1 seconds   | Beginners, casual play     |
+| **Intermediate** | 4            | 0.1-0.5 seconds | Default, balanced gameplay |
+| **Hard**         | 6            | 0.5-3 seconds   | Challenging, advanced play |
 
 ---
 
@@ -160,13 +188,13 @@ src/
 
 The AI recognizes various threat patterns with weighted scoring:
 
-| Pattern | Score | Description |
-|---------|-------|-------------|
-| **Five in a row** | 1,000,000 | Winning position |
-| **Straight four** | 50,000 | Immediate win threat |
-| **Three in a row** | 1,000 | Strong threat |
-| **Broken patterns** | 100-500 | Partial threats with gaps |
-| **Combinations** | Bonus | Multiple simultaneous threats |
+| Pattern             | Score     | Description                   |
+| ------------------- | --------- | ----------------------------- |
+| **Five in a row**   | 1,000,000 | Winning position              |
+| **Straight four**   | 50,000    | Immediate win threat          |
+| **Three in a row**  | 1,000     | Strong threat                 |
+| **Broken patterns** | 100-500   | Partial threats with gaps     |
+| **Combinations**    | Bonus     | Multiple simultaneous threats |
 
 #### Search Space Optimization
 
@@ -205,10 +233,10 @@ make test
 ### Performance Metrics
 
 | Difficulty | Search Depth | Avg Response Time | Positions Evaluated |
-|------------|--------------|------------------|---------------------|
-| Easy       | 2            | < 0.1 seconds    | ~10-25              |
-| Medium     | 4            | 0.1-0.5 seconds  | ~50-200            |
-| Hard       | 6            | 0.5-3 seconds    | ~200-800           |
+| ---------- | ------------ | ----------------- | ------------------- |
+| Easy       | 2            | < 0.1 seconds     | ~10-25              |
+| Medium     | 4            | 0.1-0.5 seconds   | ~50-200             |
+| Hard       | 6            | 0.5-3 seconds     | ~200-800            |
 
 **Key Optimizations:**
 

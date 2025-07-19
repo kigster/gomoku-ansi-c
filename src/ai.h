@@ -52,7 +52,7 @@ void find_first_ai_move(game_state_t *game, int *best_x, int *best_y);
  * @return Best evaluation score
  */
 int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, int beta,
-                        int maximizing_player, int ai_player, int last_x, int last_y);
+        int maximizing_player, int ai_player, int last_x, int last_y);
 
 /**
  * Wrapper for backward compatibility with existing minimax function.
