@@ -26,7 +26,16 @@ Here is the game where the human player prevailed, although it is exceedingly di
 Here is how to compile and run the game:
 
 ```bash
-make -j 4
+make build -j 4
+./gomoku -h
+```
+
+## Alternatively
+
+Using CMake:
+
+```bash
+make cmake-build cmake-test
 ./gomoku -h
 ```
 
@@ -74,7 +83,7 @@ git clone https://github.com/kigster/gomoku-ansi-c.git
 cd gomoku-ansi-c
 
 # Run setup script (installs dependencies and Google Test)
-./tests/setup
+make cmake-tests
 ```
 
 ### Building the Game
@@ -83,10 +92,7 @@ cd gomoku-ansi-c
 
 ```bash
 # Build the game
-make
-
-# Build with parallel jobs for faster compilation
-make -j 4
+make build -j 4
 
 # Clean build files if needed
 make clean
