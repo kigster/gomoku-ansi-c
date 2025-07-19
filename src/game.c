@@ -21,14 +21,14 @@ game_state_t *init_game(cli_config_t config) {
     if (!game) {
         return NULL;
     }
-    
+
     // Initialize board
     game->board = create_board(config.board_size);
     if (!game->board) {
         free(game);
         return NULL;
     }
-    
+
     // Initialize game parameters
     game->board_size = config.board_size;
     game->cursor_x = config.board_size / 2;
@@ -38,32 +38,32 @@ game_state_t *init_game(cli_config_t config) {
     game->max_depth = config.max_depth;
     game->move_timeout = config.move_timeout;
     game->config = config;
-    
+
     // Initialize history
     game->move_history_count = 0;
     game->ai_history_count = 0;
     memset(game->ai_status_message, 0, sizeof(game->ai_status_message));
-    
+
     // Initialize AI move tracking
     game->last_ai_move_x = -1;
     game->last_ai_move_y = -1;
-    
+
     // Initialize timing
     game->total_human_time = 0.0;
     game->total_ai_time = 0.0;
     game->move_start_time = 0.0;
     game->search_start_time = 0.0;
     game->search_timed_out = 0;
-    
+
     // Initialize optimization caches
     init_optimization_caches(game);
-    
+
     // Initialize transposition table
     init_transposition_table(game);
-    
+
     // Initialize killer moves
     init_killer_moves(game);
-    
+
     return game;
 }
 
@@ -105,24 +105,24 @@ int make_move(game_state_t *game, int x, int y, int player, double time_taken, i
     if (!is_valid_move(game->board, x, y, game->board_size)) {
         return 0;
     }
-    
+
     // Record move in history before placing it
     add_move_to_history(game, x, y, player, time_taken, positions_evaluated);
-    
+
     // Make the move
     game->board[x][y] = player;
-    
+
     // Update optimization caches
     update_interesting_moves(game, x, y);
-    
+
     // Check for game end conditions
     check_game_state(game);
-    
+
     // Switch to next player if game is still running
     if (game->game_state == GAME_RUNNING) {
         game->current_player = other_player(game->current_player);
     }
-    
+
     return 1;
 }
 
@@ -135,14 +135,14 @@ void undo_last_moves(game_state_t *game) {
     if (!can_undo(game)) {
         return;
     }
-    
+
     // Remove last two moves (AI move and human move) and update timing totals
     for (int i = 0; i < 2; i++) {
         if (game->move_history_count > 0) {
             game->move_history_count--;
             move_history_t last_move = game->move_history[game->move_history_count];
             game->board[last_move.x][last_move.y] = AI_CELL_EMPTY;
-            
+
             // Subtract time from totals
             if (last_move.player == AI_CELL_CROSSES) {
                 game->total_human_time -= last_move.time_taken;
@@ -151,22 +151,22 @@ void undo_last_moves(game_state_t *game) {
             }
         }
     }
-    
+
     // Remove last AI thinking entry
     if (game->ai_history_count > 0) {
         game->ai_history_count--;
     }
-    
+
     // Reset AI last move highlighting
     game->last_ai_move_x = -1;
     game->last_ai_move_y = -1;
-    
+
     // Reset to human turn (since we removed AI move last)
     game->current_player = AI_CELL_CROSSES;
-    
+
     // Clear AI status message
     strcpy(game->ai_status_message, "");
-    
+
     // Reset game state to running (in case it was won)
     game->game_state = GAME_RUNNING;
 }
@@ -194,7 +194,7 @@ int is_search_timed_out(game_state_t *game) {
     if (game->move_timeout <= 0) {
         return 0; // No timeout set
     }
-    
+
     double elapsed = get_current_time() - game->search_start_time;
     return elapsed >= game->move_timeout;
 }
@@ -212,7 +212,7 @@ void add_move_to_history(game_state_t *game, int x, int y, int player, double ti
         move->time_taken = time_taken;
         move->positions_evaluated = positions_evaluated;
         game->move_history_count++;
-        
+
         // Add to total time for each player
         if (player == AI_CELL_CROSSES) {
             game->total_human_time += time_taken;
@@ -230,9 +230,9 @@ void add_ai_history_entry(game_state_t *game, int moves_evaluated) {
         }
         game->ai_history_count = MAX_AI_HISTORY - 1;
     }
-    
+
     snprintf(game->ai_history[game->ai_history_count], sizeof(game->ai_history[game->ai_history_count]),
-             "%2d | %3d positions evaluated", game->ai_history_count + 1, moves_evaluated);
+            "%2d | %3d positions evaluated", game->ai_history_count + 1, moves_evaluated);
     game->ai_history_count++;
 } 
 
@@ -247,7 +247,7 @@ void init_optimization_caches(game_state_t *game) {
     game->winner_cache_valid = 0;
     game->has_winner_cache[0] = 0;
     game->has_winner_cache[1] = 0;
-    
+
     // If board is empty, only center area is interesting
     if (game->stones_on_board == 0) {
         int center = game->board_size / 2;
@@ -264,13 +264,13 @@ void init_optimization_caches(game_state_t *game) {
         }
         game->interesting_move_count = count;
     }
-    
+
     // Initialize transposition table
     init_transposition_table(game);
-    
+
     // Initialize killer moves
     init_killer_moves(game);
-    
+
     // Initialize advanced optimizations from research papers
     init_threat_space_search(game);
     init_aspiration_windows(game);
@@ -279,13 +279,13 @@ void init_optimization_caches(game_state_t *game) {
 void update_interesting_moves(game_state_t *game, int x, int y) {
     // Update stone count
     game->stones_on_board++;
-    
+
     // Invalidate winner cache
     invalidate_winner_cache(game);
-    
+
     // Add new interesting moves around the placed stone
     const int radius = 2; // MAX_RADIUS
-    
+
     for (int i = max(0, x - radius); i <= min(game->board_size - 1, x + radius); i++) {
         for (int j = max(0, y - radius); j <= min(game->board_size - 1, y + radius); j++) {
             if (game->board[i][j] == AI_CELL_EMPTY) {
@@ -293,12 +293,12 @@ void update_interesting_moves(game_state_t *game, int x, int y) {
                 int found = 0;
                 for (int k = 0; k < game->interesting_move_count; k++) {
                     if (game->interesting_moves[k].x == i && game->interesting_moves[k].y == j && 
-                        game->interesting_moves[k].is_active) {
+                            game->interesting_moves[k].is_active) {
                         found = 1;
                         break;
                     }
                 }
-                
+
                 if (!found && game->interesting_move_count < 361) {
                     game->interesting_moves[game->interesting_move_count].x = i;
                     game->interesting_moves[game->interesting_move_count].y = j;
@@ -308,7 +308,7 @@ void update_interesting_moves(game_state_t *game, int x, int y) {
             }
         }
     }
-    
+
     // Remove the move that was just played from interesting moves
     for (int k = 0; k < game->interesting_move_count; k++) {
         if (game->interesting_moves[k].x == x && game->interesting_moves[k].y == y) {
@@ -329,7 +329,7 @@ int get_cached_winner(game_state_t *game, int player) {
         game->has_winner_cache[1] = has_winner(game->board, game->board_size, AI_CELL_NAUGHTS);
         game->winner_cache_valid = 1;
     }
-    
+
     if (player == AI_CELL_CROSSES) {
         return game->has_winner_cache[0];
     } else {
@@ -344,7 +344,7 @@ int get_cached_winner(game_state_t *game, int player) {
 void init_transposition_table(game_state_t *game) {
     // Initialize transposition table
     memset(game->transposition_table, 0, sizeof(game->transposition_table));
-    
+
     // Initialize Zobrist keys with random values
     srand(12345); // Use fixed seed for reproducible results
     for (int player = 0; player < 2; player++) {
@@ -353,14 +353,14 @@ void init_transposition_table(game_state_t *game) {
                 ((uint64_t)rand() << 32) | rand();
         }
     }
-    
+
     // Compute initial hash
     game->current_hash = compute_zobrist_hash(game);
 }
 
 uint64_t compute_zobrist_hash(game_state_t *game) {
     uint64_t hash = 0;
-    
+
     for (int i = 0; i < game->board_size; i++) {
         for (int j = 0; j < game->board_size; j++) {
             if (game->board[i][j] != AI_CELL_EMPTY) {
@@ -370,14 +370,14 @@ uint64_t compute_zobrist_hash(game_state_t *game) {
             }
         }
     }
-    
+
     return hash;
 }
 
 void store_transposition(game_state_t *game, uint64_t hash, int value, int depth, int flag, int best_x, int best_y) {
     int index = hash % TRANSPOSITION_TABLE_SIZE;
     transposition_entry_t *entry = &game->transposition_table[index];
-    
+
     // Replace if this entry is deeper or empty
     if (entry->hash == 0 || entry->depth <= depth) {
         entry->hash = hash;
@@ -392,10 +392,10 @@ void store_transposition(game_state_t *game, uint64_t hash, int value, int depth
 int probe_transposition(game_state_t *game, uint64_t hash, int depth, int alpha, int beta, int *value) {
     int index = hash % TRANSPOSITION_TABLE_SIZE;
     transposition_entry_t *entry = &game->transposition_table[index];
-    
+
     if (entry->hash == hash && entry->depth >= depth) {
         *value = entry->value;
-        
+
         if (entry->flag == TT_EXACT) {
             return 1; // Exact value
         } else if (entry->flag == TT_LOWER_BOUND && entry->value >= beta) {
@@ -404,7 +404,7 @@ int probe_transposition(game_state_t *game, uint64_t hash, int depth, int alpha,
             return 1; // Alpha cutoff
         }
     }
-    
+
     return 0; // Not found or not usable
 }
 
@@ -420,26 +420,26 @@ void init_killer_moves(game_state_t *game) {
 
 void store_killer_move(game_state_t *game, int depth, int x, int y) {
     if (depth >= MAX_SEARCH_DEPTH) return;
-    
+
     // Don't store if already a killer move
     if (is_killer_move(game, depth, x, y)) return;
-    
+
     // Shift killer moves and insert new one at the front
     for (int i = MAX_KILLER_MOVES - 1; i > 0; i--) {
         game->killer_moves[depth][i][0] = game->killer_moves[depth][i-1][0];
         game->killer_moves[depth][i][1] = game->killer_moves[depth][i-1][1];
     }
-    
+
     game->killer_moves[depth][0][0] = x;
     game->killer_moves[depth][0][1] = y;
 }
 
 int is_killer_move(game_state_t *game, int depth, int x, int y) {
     if (depth >= MAX_SEARCH_DEPTH) return 0;
-    
+
     for (int i = 0; i < MAX_KILLER_MOVES; i++) {
         if (game->killer_moves[depth][i][0] == x && 
-            game->killer_moves[depth][i][1] == y) {
+                game->killer_moves[depth][i][1] == y) {
             return 1;
         }
     }
@@ -455,7 +455,7 @@ void init_threat_space_search(game_state_t *game) {
     game->use_aspiration_windows = 1;
     game->null_move_allowed = 1;
     game->null_move_count = 0;
-    
+
     // Initialize threat array
     for (int i = 0; i < MAX_THREATS; i++) {
         game->active_threats[i].is_active = 0;
@@ -473,7 +473,7 @@ void update_threat_analysis(game_state_t *game, int x, int y, int player) {
             }
         }
     }
-    
+
     // Analyze new threats created by this move
     const int radius = 4;
     for (int i = max(0, x - radius); i <= min(game->board_size - 1, x + radius); i++) {
@@ -511,7 +511,7 @@ int get_aspiration_window(game_state_t *game, int depth, int *alpha, int *beta) 
         *beta = WIN_SCORE;
         return 0;
     }
-    
+
     *alpha = game->aspiration_windows[depth].alpha;
     *beta = game->aspiration_windows[depth].beta;
     return 1;
@@ -519,45 +519,45 @@ int get_aspiration_window(game_state_t *game, int depth, int *alpha, int *beta) 
 
 void update_aspiration_window(game_state_t *game, int depth, int value, int alpha, int beta) {
     if (depth >= MAX_SEARCH_DEPTH) return;
-    
+
     // Update the window for future searches at this depth
     game->aspiration_windows[depth].alpha = max(alpha, value - ASPIRATION_WINDOW);
     game->aspiration_windows[depth].beta = min(beta, value + ASPIRATION_WINDOW);
 }
 
-int should_try_null_move(game_state_t *game, int depth, int beta) {
+int should_try_null_move(game_state_t *game, int depth) {
     // Don't try null move if:
     // - Not allowed
     // - Already tried too many null moves
     // - Depth too low
     // - In endgame
     return game->null_move_allowed && 
-           game->null_move_count < 2 && 
-           depth >= 3 && 
-           game->stones_on_board < (game->board_size * game->board_size) / 2;
+        game->null_move_count < 2 && 
+        depth >= 3 && 
+        game->stones_on_board < (game->board_size * game->board_size) / 2;
 }
 
 int try_null_move_pruning(game_state_t *game, int depth, int beta, int ai_player) {
-    if (!should_try_null_move(game, depth, beta)) {
+    if (!should_try_null_move(game, depth)) {
         return 0;
     }
-    
+
     // Temporarily disable null moves to avoid infinite recursion
     game->null_move_allowed = 0;
     game->null_move_count++;
-    
+
     // Search with reduced depth
     int null_score = -minimax_with_timeout(game, game->board, depth - NULL_MOVE_REDUCTION - 1, 
-                                          -(beta + 1), -beta, 0, ai_player, -1, -1);
-    
+            -(beta + 1), -beta, 0, ai_player, -1, -1);
+
     // Restore null move settings
     game->null_move_allowed = 1;
     game->null_move_count--;
-    
+
     // If null move fails high, we can prune
     if (null_score >= beta) {
         return beta; // Null move cutoff
     }
-    
+
     return 0; // No pruning
 } 

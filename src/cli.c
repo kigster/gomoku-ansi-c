@@ -27,7 +27,7 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
         .enable_undo = 0,
         .skip_welcome = 0
     };
-    
+
     // Command line options structure
     static struct option long_options[] = {
         {"depth", required_argument, 0, 'd'},
@@ -41,7 +41,7 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
 
     int c;
     int option_index = 0;
-    
+
     // Parse command-line arguments using getopt_long
     while ((c = getopt_long(argc, argv, "d:l:t:b:hus", long_options, &option_index)) != -1) {
         switch (c) {
@@ -52,17 +52,17 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
                     config.invalid_args = 1;
                 }
                 if (config.max_depth >= GAME_DEPTH_LEVEL_WARN) {
-                  printf("  %s%s%d%s\n  %s%s%s\n", COLOR_YELLOW,
-                         "WARNING: Search at or above the depth of ",
-                         GAME_DEPTH_LEVEL_WARN, " may be slow without timeout. ",
-                         COLOR_BRIGHT_GREEN,
-                         "(This message will disappear in 3 seconds.)",
-                         COLOR_RESET);
+                    printf("  %s%s%d%s\n  %s%s%s\n", COLOR_YELLOW,
+                            "WARNING: Search at or above the depth of ",
+                            GAME_DEPTH_LEVEL_WARN, " may be slow without timeout. ",
+                            COLOR_BRIGHT_GREEN,
+                            "(This message will disappear in 3 seconds.)",
+                            COLOR_RESET);
                     sleep(3);
                 }
 
                 break;
-                
+
             case 'l':
                 if (strcmp(optarg, "easy") == 0) {
                     config.max_depth = GAME_DEPTH_LEVEL_EASY;
@@ -76,7 +76,7 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
                     config.invalid_args = 1;
                 }
                 break;
-                
+
             case 't':
                 config.move_timeout = atoi(optarg);
                 if (config.move_timeout < 0) {
@@ -84,7 +84,7 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
                     config.invalid_args = 1;
                 }
                 break;
-                
+
             case 'b':
                 config.board_size = atoi(optarg);
                 if (config.board_size != 15 && config.board_size != 19) {
@@ -92,30 +92,30 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
                     config.invalid_args = 1;
                 }
                 break;
-                
+
             case 'u':
                 config.enable_undo = 1;
                 break;
-                
+
             case 's':
                 config.skip_welcome = 1;
                 break;
-                
+
             case 'h':
                 config.show_help = 1;
                 break;
-                
+
             case '?':
                 printf("Unknown option or missing argument\n\n");
                 config.invalid_args = 1;
                 break;
-                
+
             default:
                 config.invalid_args = 1;
                 break;
         }
     }
-    
+
     // Check for non-option arguments
     if (optind < argc) {
         printf("Error: Unexpected arguments: ");
@@ -125,14 +125,14 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
         printf("\n\n");
         config.invalid_args = 1;
     }
-    
+
     return config;
 }
 
 void print_help(const char* program_name) {
     printf("\n%sNAME%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
     printf("  %s - an entertaining and engaging five-in-a-row version\n\n", program_name);
-    
+
     printf("%sFLAGS:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
     printf("  %s-d, --depth N%s         The depth of search in the MiniMax algorithm\n", COLOR_YELLOW, COLOR_RESET);
     printf("  %s-l, --level M%s         Can be \"easy\", \"intermediate\", \"hard\"\n", COLOR_YELLOW, COLOR_RESET);
@@ -143,23 +143,23 @@ void print_help(const char* program_name) {
     printf("  %s-u, --undo       %s     Enable the Undo feature (disabled by the default).\n", COLOR_YELLOW, COLOR_RESET);
     printf("  %s-s, --skip-welcome%s    Skip the welcome screen.\n", COLOR_YELLOW, COLOR_RESET);
     printf("  %s-h, --help%s            Show this help message\n", COLOR_YELLOW, COLOR_RESET);
-    
+
     printf("\n%sEXAMPLES:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
     printf("  %s%s --level easy --board 15\n", COLOR_YELLOW, program_name);
     printf("  %s%s -d 4 -t 30 -b 19\n", COLOR_YELLOW, program_name);
     printf("  %s%s --level hard --timeout 60\n", COLOR_YELLOW, program_name);
-    
+
     printf("\n%sDIFFICULTY LEVELS:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
     printf("  %seasy%s         - Search depth %d (quick moves, good for beginners)\n", COLOR_GREEN, COLOR_RESET, GAME_DEPTH_LEVEL_EASY);
     printf("  %sintermediate%s - Search depth %d (balanced gameplay, default setting)\n", COLOR_GREEN, COLOR_RESET, GAME_DEPTH_LEVEL_MEDIUM);
     printf("  %shard%s         - Search depth %d (advanced AI, challenging for experts)\n", COLOR_GREEN, COLOR_RESET, GAME_DEPTH_LEVEL_HARD);
-    
+
     printf("\n%sGAME SYMBOLS:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
     printf("  %s%s%s - Human player (crosses)\n", COLOR_RED, UNICODE_CROSSES, COLOR_RESET);
     printf("  %s%s%s - AI player (naughts)\n", COLOR_BLUE, UNICODE_NAUGHTS, COLOR_RESET);
     printf("  %s%s%s - Current cursor (x on an empty cell)\n", COLOR_X_CURSOR, UNICODE_CURSOR, COLOR_RESET);
     printf("  %s%s - Current cursor on an occupied cell\n", UNICODE_OCCUPIED, COLOR_RESET);
-    
+
     printf("\n%sCONTROLS IN GAME:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
     printf("  Arrow Keys    - Move cursor\n");
     printf("  Space/Enter   - Place stone\n");

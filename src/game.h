@@ -100,51 +100,51 @@ typedef struct {
     int game_state;        // Current game state (GAME_RUNNING, etc.)
     int max_depth;         // AI search depth
     int move_timeout;      // Move timeout in seconds (0 = no timeout)
-    
+
     // Move history
     move_history_t move_history[MAX_MOVE_HISTORY];
     int move_history_count;
-    
+
     // AI history
     char ai_history[MAX_AI_HISTORY][50];
     int ai_history_count;
     char ai_status_message[256];
-    
+
     // Last AI move for highlighting
     int last_ai_move_x, last_ai_move_y;
-    
+
     // Timing
     double total_human_time;
     double total_ai_time;
     double move_start_time;
-    
+
     // Timeout tracking
     double search_start_time;
     int search_timed_out;
-    
+
     // Optimization caches
     interesting_move_t interesting_moves[361]; // Max for 19x19 board
     int interesting_move_count;
     int stones_on_board;                       // Cached stone count
     int has_winner_cache[2];                   // Cache for winner detection [player1, player2]
     int winner_cache_valid;                    // Whether winner cache is valid
-    
+
     // Transposition table
     transposition_entry_t transposition_table[TRANSPOSITION_TABLE_SIZE];
     uint64_t zobrist_keys[2][361];            // Zobrist keys for hashing
     uint64_t current_hash;                     // Current position hash
-    
+
     // Killer moves heuristic
     int killer_moves[MAX_SEARCH_DEPTH][MAX_KILLER_MOVES][2]; // [depth][move_num][x,y]
-    
+
     // Threat-space search (from research papers)
     threat_t active_threats[MAX_THREATS];     // Currently active threats
     int threat_count;                         // Number of active threats
-    
+
     // Aspiration windows for enhanced pruning
     aspiration_window_t aspiration_windows[MAX_SEARCH_DEPTH];
     int use_aspiration_windows;               // Whether to use aspiration windows
-    
+
     // Null-move pruning
     int null_move_allowed;                    // Whether null moves are allowed
     int null_move_count;                      // Count of consecutive null moves
@@ -368,10 +368,9 @@ void update_aspiration_window(game_state_t *game, int depth, int value, int alph
  * 
  * @param game The game state
  * @param depth Current search depth
- * @param beta Beta value
  * @return 1 if null-move should be tried, 0 otherwise
  */
-int should_try_null_move(game_state_t *game, int depth, int beta);
+int should_try_null_move(game_state_t *game, int depth);
 
 /**
  * Performs null-move pruning search.

@@ -18,7 +18,7 @@ int **create_board(int size) {
     if (!new_board) {
         return NULL;
     }
-    
+
     for (int i = 0; i < size; i++) {
         new_board[i] = malloc(size * sizeof(int));
         if (!new_board[i]) {
@@ -29,13 +29,13 @@ int **create_board(int size) {
             free(new_board);
             return NULL;
         }
-        
+
         // Initialize cells to empty
         for (int j = 0; j < size; j++) {
             new_board[i][j] = AI_CELL_EMPTY;
         }
     }
-    
+
     return new_board;
 }
 
@@ -43,7 +43,7 @@ void free_board(int **board, int size) {
     if (!board) {
         return;
     }
-    
+
     for (int i = 0; i < size; i++) {
         free(board[i]);
     }
@@ -65,7 +65,7 @@ const char* get_coordinate_unicode(int index) {
         "❶", "❷", "❸", "❹", "❺", "❻", "❼", "❽", "❾", "❿",
         "⓫", "⓬", "⓭", "⓮", "⓯", "⓰", "⓱", "⓲", "⓳"
     };
-    
+
     if (index >= 0 && index < 19) {
         return coords[index];
     }
