@@ -18,8 +18,8 @@ LDFLAGS          = -lm -pthread
 
 TARGET           = gomoku
 # Mixed C and C++ sources - convert gradually
-CPP_SOURCES      = src/gomoku.cpp src/board.cpp
-C_SOURCES        = src/main.c src/game.c src/ai.c src/ui.c src/cli.c
+CPP_SOURCES      = src/gomoku.cpp src/board.cpp src/main.cpp src/ui.cpp src/cli.cpp src/ai.cpp src/game.cpp
+C_SOURCES        =
 CPP_OBJECTS      = $(CPP_SOURCES:.cpp=.o)
 C_OBJECTS        = $(C_SOURCES:.c=.o)
 OBJECTS          = $(CPP_OBJECTS) $(C_OBJECTS)

@@ -1,12 +1,12 @@
-# Source files for the gomoku executable
+# Source files for the gomoku executable (C++23)
 set(GOMOKU_SOURCES
-    main.c
-    gomoku.c
-    board.c
-    game.c
-    ai.c
-    ui.c
-    cli.c
+    main.cpp
+    gomoku.cpp
+    board.cpp
+    game.cpp
+    ai.cpp
+    ui.cpp
+    cli.cpp
 )
 
 # Create the gomoku executable

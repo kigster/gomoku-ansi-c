@@ -5,19 +5,20 @@
 //  Handles game state, move validation, history management, and timing
 //
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
+#include <iostream>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
 #include "game.h"
 #include "ai.h"
+#include "gomoku.hpp"
 
 //===============================================================================
 // GAME INITIALIZATION AND CLEANUP
 //===============================================================================
 
 game_state_t *init_game(cli_config_t config) {
-    game_state_t *game = malloc(sizeof(game_state_t));
+    game_state_t *game = static_cast<game_state_t*>(std::malloc(sizeof(game_state_t)));
     if (!game) {
         return NULL;
     }
@@ -33,8 +34,8 @@ game_state_t *init_game(cli_config_t config) {
     game->board_size = config.board_size;
     game->cursor_x = config.board_size / 2;
     game->cursor_y = config.board_size / 2;
-    game->current_player = AI_CELL_CROSSES; // Human plays first
-    game->game_state = GAME_RUNNING;
+    game->current_player = static_cast<int>(gomoku::Player::Cross); // Human plays first
+    game->game_state = static_cast<int>(gomoku::GameState::Running);
     game->max_depth = config.max_depth;
     game->move_timeout = config.move_timeout;
     game->config = config;
@@ -81,22 +82,22 @@ void cleanup_game(game_state_t *game) {
 //===============================================================================
 
 void check_game_state(game_state_t *game) {
-    if (has_winner(game->board, game->board_size, AI_CELL_CROSSES)) {
-        game->game_state = GAME_HUMAN_WIN;
-    } else if (has_winner(game->board, game->board_size, AI_CELL_NAUGHTS)) {
-        game->game_state = GAME_AI_WIN;
+    if (has_winner(game->board, game->board_size, static_cast<int>(gomoku::Player::Cross))) {
+        game->game_state = static_cast<int>(gomoku::GameState::HumanWin);
+    } else if (has_winner(game->board, game->board_size, static_cast<int>(gomoku::Player::Naught))) {
+        game->game_state = static_cast<int>(gomoku::GameState::AIWin);
     } else {
         // Check for draw (board full)
         int empty_cells = 0;
         for (int i = 0; i < game->board_size; i++) {
             for (int j = 0; j < game->board_size; j++) {
-                if (game->board[i][j] == AI_CELL_EMPTY) {
+                if (game->board[i][j] == static_cast<int>(gomoku::Player::Empty)) {
                     empty_cells++;
                 }
             }
         }
         if (empty_cells == 0) {
-            game->game_state = GAME_DRAW;
+            game->game_state = static_cast<int>(gomoku::GameState::Draw);
         }
     }
 }
@@ -119,7 +120,7 @@ int make_move(game_state_t *game, int x, int y, int player, double time_taken, i
     check_game_state(game);
 
     // Switch to next player if game is still running
-    if (game->game_state == GAME_RUNNING) {
+    if (game->game_state == static_cast<int>(gomoku::GameState::Running)) {
         game->current_player = other_player(game->current_player);
     }
 
@@ -141,10 +142,10 @@ void undo_last_moves(game_state_t *game) {
         if (game->move_history_count > 0) {
             game->move_history_count--;
             move_history_t last_move = game->move_history[game->move_history_count];
-            game->board[last_move.x][last_move.y] = AI_CELL_EMPTY;
+            game->board[last_move.x][last_move.y] = static_cast<int>(gomoku::Player::Empty);
 
             // Subtract time from totals
-            if (last_move.player == AI_CELL_CROSSES) {
+            if (last_move.player == static_cast<int>(gomoku::Player::Cross)) {
                 game->total_human_time -= last_move.time_taken;
             } else {
                 game->total_ai_time -= last_move.time_taken;
@@ -162,13 +163,13 @@ void undo_last_moves(game_state_t *game) {
     game->last_ai_move_y = -1;
 
     // Reset to human turn (since we removed AI move last)
-    game->current_player = AI_CELL_CROSSES;
+    game->current_player = static_cast<int>(gomoku::Player::Cross);
 
     // Clear AI status message
     strcpy(game->ai_status_message, "");
 
     // Reset game state to running (in case it was won)
-    game->game_state = GAME_RUNNING;
+    game->game_state = static_cast<int>(gomoku::GameState::Running);
 }
 
 //===============================================================================
@@ -214,7 +215,7 @@ void add_move_to_history(game_state_t *game, int x, int y, int player, double ti
         game->move_history_count++;
 
         // Add to total time for each player
-        if (player == AI_CELL_CROSSES) {
+        if (player == static_cast<int>(gomoku::Player::Cross)) {
             game->total_human_time += time_taken;
         } else {
             game->total_ai_time += time_taken;
@@ -286,9 +287,9 @@ void update_interesting_moves(game_state_t *game, int x, int y) {
     // Add new interesting moves around the placed stone
     const int radius = 2; // MAX_RADIUS
 
-    for (int i = max(0, x - radius); i <= min(game->board_size - 1, x + radius); i++) {
-        for (int j = max(0, y - radius); j <= min(game->board_size - 1, y + radius); j++) {
-            if (game->board[i][j] == AI_CELL_EMPTY) {
+    for (int i = std::max(0, x - radius); i <= std::min(game->board_size - 1, x + radius); i++) {
+        for (int j = std::max(0, y - radius); j <= std::min(game->board_size - 1, y + radius); j++) {
+            if (game->board[i][j] == static_cast<int>(gomoku::Player::Empty)) {
                 // Check if this position is already in the interesting moves
                 int found = 0;
                 for (int k = 0; k < game->interesting_move_count; k++) {
@@ -325,12 +326,12 @@ void invalidate_winner_cache(game_state_t *game) {
 int get_cached_winner(game_state_t *game, int player) {
     if (!game->winner_cache_valid) {
         // Compute winner status for both players
-        game->has_winner_cache[0] = has_winner(game->board, game->board_size, AI_CELL_CROSSES);
-        game->has_winner_cache[1] = has_winner(game->board, game->board_size, AI_CELL_NAUGHTS);
+        game->has_winner_cache[0] = has_winner(game->board, game->board_size, static_cast<int>(gomoku::Player::Cross));
+        game->has_winner_cache[1] = has_winner(game->board, game->board_size, static_cast<int>(gomoku::Player::Naught));
         game->winner_cache_valid = 1;
     }
 
-    if (player == AI_CELL_CROSSES) {
+    if (player == static_cast<int>(gomoku::Player::Cross)) {
         return game->has_winner_cache[0];
     } else {
         return game->has_winner_cache[1];
@@ -363,8 +364,8 @@ uint64_t compute_zobrist_hash(game_state_t *game) {
 
     for (int i = 0; i < game->board_size; i++) {
         for (int j = 0; j < game->board_size; j++) {
-            if (game->board[i][j] != AI_CELL_EMPTY) {
-                int player_index = (game->board[i][j] == AI_CELL_CROSSES) ? 0 : 1;
+            if (game->board[i][j] != static_cast<int>(gomoku::Player::Empty)) {
+                int player_index = (game->board[i][j] == static_cast<int>(gomoku::Player::Cross)) ? 0 : 1;
                 int pos = i * game->board_size + j;
                 hash ^= game->zobrist_keys[player_index][pos];
             }
@@ -476,9 +477,9 @@ void update_threat_analysis(game_state_t *game, int x, int y, int player) {
 
     // Analyze new threats created by this move
     const int radius = 4;
-    for (int i = max(0, x - radius); i <= min(game->board_size - 1, x + radius); i++) {
-        for (int j = max(0, y - radius); j <= min(game->board_size - 1, y + radius); j++) {
-            if (game->board[i][j] == AI_CELL_EMPTY) {
+    for (int i = std::max(0, x - radius); i <= std::min(game->board_size - 1, x + radius); i++) {
+        for (int j = std::max(0, y - radius); j <= std::min(game->board_size - 1, y + radius); j++) {
+            if (game->board[i][j] == static_cast<int>(gomoku::Player::Empty)) {
                 // Check if this position creates a threat
                 int threat_level = evaluate_threat_fast(game->board, i, j, player, game->board_size);
                 if (threat_level > 100 && game->threat_count < MAX_THREATS) {
@@ -499,16 +500,16 @@ void update_threat_analysis(game_state_t *game, int x, int y, int player) {
 
 void init_aspiration_windows(game_state_t *game) {
     for (int depth = 0; depth < MAX_SEARCH_DEPTH; depth++) {
-        game->aspiration_windows[depth].alpha = -WIN_SCORE;
-        game->aspiration_windows[depth].beta = WIN_SCORE;
+        game->aspiration_windows[depth].alpha = -gomoku::WIN_SCORE;
+        game->aspiration_windows[depth].beta = gomoku::WIN_SCORE;
         game->aspiration_windows[depth].depth = depth;
     }
 }
 
 int get_aspiration_window(game_state_t *game, int depth, int *alpha, int *beta) {
     if (!game->use_aspiration_windows || depth >= MAX_SEARCH_DEPTH) {
-        *alpha = -WIN_SCORE;
-        *beta = WIN_SCORE;
+        *alpha = -gomoku::WIN_SCORE;
+        *beta = gomoku::WIN_SCORE;
         return 0;
     }
 
@@ -521,8 +522,8 @@ void update_aspiration_window(game_state_t *game, int depth, int value, int alph
     if (depth >= MAX_SEARCH_DEPTH) return;
 
     // Update the window for future searches at this depth
-    game->aspiration_windows[depth].alpha = max(alpha, value - ASPIRATION_WINDOW);
-    game->aspiration_windows[depth].beta = min(beta, value + ASPIRATION_WINDOW);
+    game->aspiration_windows[depth].alpha = std::max(alpha, value - ASPIRATION_WINDOW);
+    game->aspiration_windows[depth].beta = std::min(beta, value + ASPIRATION_WINDOW);
 }
 
 int should_try_null_move(game_state_t *game, int depth) {

@@ -1,22 +1,23 @@
 //
-//  main.c
+//  main.cpp
 //  gomoku - Main game orchestrator
 //
-//  Simple main function that orchestrates the game using modular components
+//  Modern C++23 main function that orchestrates the game using modular components
 //
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include "gomoku_c.h"
+#include <iostream>
+#include <cstdlib>
+#include <ctime>
+#include <cstdio>
+#include "gomoku.hpp"
 #include "game.h"
-#include "ui.h"
+#include "ui.hpp"
 #include "ai.h"
-#include "cli.h"
+#include "cli.hpp"
 
 int main(int argc, char* argv[]) {
     // Initialize random seed for first move randomization
-    srand(time(NULL));
+    std::srand(std::time(nullptr));
 
     // Parse command line arguments
     cli_config_t config = parse_arguments(argc, argv);
@@ -41,22 +42,22 @@ int main(int argc, char* argv[]) {
     // Initialize game state
     game_state_t *game = init_game(config);
     if (!game) {
-        printf("Error: Failed to initialize game\n");
+        std::cout << "Error: Failed to initialize game\n";
         return 1;
     }
 
     // Initialize threat matrix for evaluation functions
-    populate_threat_matrix();
+    gomoku::populate_threat_matrix();
 
     // Enable raw mode for keyboard input
     enable_raw_mode();
 
     // Main game loop
-    while (game->game_state == GAME_RUNNING) {
+    while (game->game_state == static_cast<int>(gomoku::GameState::Running)) {
         // Refresh display
         refresh_display(game);
 
-        if (game->current_player == AI_CELL_CROSSES) {
+        if (game->current_player == static_cast<int>(gomoku::Player::Cross)) {
             // Human's turn - start timer if this is a new turn
             static int human_timer_started = 0;
             if (!human_timer_started) {
@@ -68,7 +69,7 @@ int main(int argc, char* argv[]) {
             handle_input(game);
 
             // Reset timer flag when move is made
-            if (game->current_player != AI_CELL_CROSSES) {
+            if (game->current_player != static_cast<int>(gomoku::Player::Cross)) {
                 human_timer_started = 0;
             }
         } else {
@@ -85,12 +86,12 @@ int main(int argc, char* argv[]) {
                 int positions_evaluated = 1; // Default for simple moves
                 if (game->move_history_count > 0 && game->ai_history_count > 0) {
                     // Extract from the last AI history entry
-                    sscanf(game->ai_history[game->ai_history_count - 1], 
-                            "%*d | %d positions evaluated", &positions_evaluated);
+                    std::sscanf(game->ai_history[game->ai_history_count - 1], 
+                               "%*d | %d positions evaluated", &positions_evaluated);
                 }
 
                 // Make the AI move
-                make_move(game, ai_x, ai_y, AI_CELL_NAUGHTS, ai_move_time, positions_evaluated);
+                make_move(game, ai_x, ai_y, static_cast<int>(gomoku::Player::Naught), ai_move_time, positions_evaluated);
 
                 // Track AI's last move for highlighting
                 game->last_ai_move_x = ai_x;
@@ -100,7 +101,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Game ended - show final state and wait for input
-    if (game->game_state != GAME_QUIT) {
+    if (game->game_state != static_cast<int>(gomoku::GameState::Quit)) {
         refresh_display(game);
         get_key(); // Wait for any key press
     }

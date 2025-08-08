@@ -484,17 +484,18 @@ int is_valid_move(int** board, int x, int y, int size) {
     return x >= 0 && x < size && y >= 0 && y < size && board[x][y] == detail::AI_CELL_EMPTY;
 }
 
-const char* get_coordinate_unicode(int index) {
+std::string_view get_coordinate_unicode(int index) {
     // Convert 0-based index to 1-based display with Unicode circled characters
-    static const char* coords[] = {
-        "❶", "❷", "❸", "❹", "❺", "❻", "❼", "❽", "❾", "❿",
-        "⓫", "⓬", "⓭", "⓮", "⓯", "⓰", "⓱", "⓲", "⓳"
+    using namespace std::string_view_literals;
+    static constexpr std::array coords = {
+        "❶"sv, "❷"sv, "❸"sv, "❹"sv, "❺"sv, "❻"sv, "❼"sv, "❽"sv, "❾"sv, "❿"sv,
+        "⓫"sv, "⓬"sv, "⓭"sv, "⓮"sv, "⓯"sv, "⓰"sv, "⓱"sv, "⓲"sv, "⓳"sv
     };
 
-    if (index >= 0 && index < 19) {
+    if (index >= 0 && index < static_cast<int>(coords.size())) {
         return coords[index];
     }
-    return "?";
+    return "?"sv;
 }
 
 int board_to_display_coord(int board_coord) {

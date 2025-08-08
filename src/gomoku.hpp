@@ -63,6 +63,14 @@ inline constexpr int SEARCH_RADIUS = 4;
 inline constexpr int NEED_TO_WIN = 5;
 inline constexpr int NUM_DIRECTIONS = 4;
 
+// UI Constants
+inline constexpr std::string_view UNICODE_CROSSES = "✕";
+inline constexpr std::string_view UNICODE_NAUGHTS = "○";
+inline constexpr std::string_view UNICODE_CURSOR = "✕";
+inline constexpr std::string_view UNICODE_OCCUPIED = "\033[0;33m◼︎";
+
+// Note: GAME_VERSION, GAME_COPYRIGHT, GAME_URL are defined earlier in the file
+
 //===============================================================================
 // TYPE DEFINITIONS AND CONCEPTS
 //===============================================================================
@@ -302,6 +310,17 @@ template<int Size> requires ValidBoardSize<Size>
 // LEGACY C INTERFACE (for gradual migration)
 //===============================================================================
 
+// Utility functions
+std::string_view get_coordinate_unicode(int index) noexcept;
+
+} // namespace gomoku
+
+//===============================================================================
+// C-COMPATIBLE INTERFACE (declared in global namespace)
+//===============================================================================
+
+// Note: cli_config_t and game_state_t are defined in cli.hpp and game.h respectively
+
 // These functions provide C-compatible interface during migration
 extern "C" {
     int evaluate_position(int** board, int size, int player);
@@ -316,13 +335,19 @@ extern "C" {
                               int maximizing_player, int ai_player, int last_x, int last_y);
     int minimax_example(int** board, int size, int depth, int alpha, int beta,
                        int maximizing_player, int ai_player);
+    // Board management functions
+    int** create_board(int size);
+    void free_board(int** board, int size);
+    int is_valid_move(int** board, int x, int y, int size);
+    int board_to_display_coord(int board_coord);
+    int display_to_board_coord(int display_coord);
+    
+    // Note: Game state and AI functions are declared in game.h and ai.h respectively
 }
 
 //===============================================================================
 // HASH SUPPORT
 //===============================================================================
-
-} // namespace gomoku
 
 // Hash specializations for standard containers
 template<>
