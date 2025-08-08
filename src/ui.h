@@ -9,7 +9,7 @@
 #define UI_H
 
 #include <termios.h>
-#include "gomoku.h"
+#include "gomoku_c.h"
 #include "game.h"
 #include "ansi.h"
 

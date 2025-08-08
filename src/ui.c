@@ -11,8 +11,7 @@
 #include <unistd.h>
 #include "ui.h"
 #include "ansi.h"
-#include "board.h"
-#include "gomoku.h"
+#include "gomoku_c.h"
 
 //===============================================================================
 // INPUT HANDLING

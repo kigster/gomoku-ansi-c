@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include "gomoku.h"
+#include "gomoku_c.h"
 #include "game.h"
 #include "ui.h"
 #include "ai.h"

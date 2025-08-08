@@ -2,10 +2,10 @@
 #include <cstdlib>
 #include <cstring>
 
-// Include the C headers in C++ context
+// Include C-compatible headers for testing
+#include "gomoku_c.h"
+
 extern "C" {
-    #include "gomoku.h"
-    #include "board.h"
     #include "game.h"
     #include "ai.h"
     #include "cli.h"

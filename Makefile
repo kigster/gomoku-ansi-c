@@ -6,25 +6,31 @@
 OS              := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 MAKEFILE_PATH   := $(abspath $(lastword $(MAKEFILE_LIST)))
 CURRENT_DIR     := $(shell ( cd .; pwd -P ) )
-VERSION         := $(shell grep VERSION src/gomoku.h | awk '{print $$3}' | tr -d '"')
+VERSION         := $(shell grep GAME_VERSION src/gomoku.hpp | head -1 | cut -d'"' -f2)
 TAG             := $(shell echo "v$(VERSION)")
 BRANCH          := $(shell git branch --show)
 
 CC               = gcc
 CXX              = g++
 CFLAGS           = -Wall -Wunused-parameter -Wextra -Wimplicit-function-declaration -Isrc -O3
-CXXFLAGS         = -Wall -Wunused-parameter -Wextra -std=c++17 -Isrc -Itests/googletest/googletest/include -Wimplicit-function-declaration -O2	
-LDFLAGS          = -lm
+CXXFLAGS         = -Wall -Wunused-parameter -Wextra -Wpedantic -std=c++23 -Isrc -Itests/googletest/googletest/include -O3 -march=native
+LDFLAGS          = -lm -pthread
 
 TARGET           = gomoku
-SOURCES          = src/main.c src/gomoku.c src/board.c src/game.c src/ai.c src/ui.c src/cli.c
-OBJECTS          = $(SOURCES:.c=.o)
+# Mixed C and C++ sources - convert gradually
+CPP_SOURCES      = src/gomoku.cpp src/board.cpp
+C_SOURCES        = src/main.c src/game.c src/ai.c src/ui.c src/cli.c
+CPP_OBJECTS      = $(CPP_SOURCES:.cpp=.o)
+C_OBJECTS        = $(C_SOURCES:.c=.o)
+OBJECTS          = $(CPP_OBJECTS) $(C_OBJECTS)
 
 # Test configuration
 TEST_TARGET      = test_gomoku
-TEST_SOURCES     = tests/gomoku_test.cpp src/gomoku.c src/board.c src/game.c src/ai.c
-TEST_OBJECTS     = $(TEST_SOURCES:.cpp=.o)
-TEST_OBJECTS    := $(TEST_OBJECTS:.c=.o)
+TEST_CPP_SOURCES = tests/gomoku_test.cpp src/gomoku.cpp src/board.cpp
+TEST_C_SOURCES   = src/game.c src/ai.c
+TEST_CPP_OBJECTS = $(TEST_CPP_SOURCES:.cpp=.o)
+TEST_C_OBJECTS   = $(TEST_C_SOURCES:.c=.o)
+TEST_OBJECTS     = $(TEST_CPP_OBJECTS) $(TEST_C_OBJECTS)
 GTEST_LIB        = tests/googletest/build/lib/libgtest.a
 GTEST_MAIN_LIB   = tests/googletest/build/lib/libgtest_main.a
 
@@ -45,15 +51,20 @@ build: 		$(TARGET) ## Build the Game
 rebuild: 	clean build ## Clean and rebuild the game
 
 $(TARGET): $(OBJECTS)
-		$(CC) $(OBJECTS) $(LDFLAGS) -o $(TARGET)
+		$(CXX) $(OBJECTS) $(LDFLAGS) -o $(TARGET)
 
+# Compilation rules for C++ files
+src/%.o: src/%.cpp
+		$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Compilation rules for C files  
 src/%.o: src/%.c
 		$(CC) $(CFLAGS) -c $< -o $@
 
-$(TEST_TARGET): tests/gomoku_test.o src/gomoku.o src/board.o src/game.o src/ai.o # Test targets
-		$(CXX) $(CXXFLAGS) tests/gomoku_test.o src/gomoku.o src/board.o src/game.o src/ai.o $(GTEST_LIB) $(GTEST_MAIN_LIB) -pthread -o $(TEST_TARGET)
+$(TEST_TARGET): $(TEST_OBJECTS) # Test targets
+		$(CXX) $(CXXFLAGS) $(TEST_OBJECTS) $(GTEST_LIB) $(GTEST_MAIN_LIB) -o $(TEST_TARGET)
 
-tests/gomoku_test.o: tests/gomoku_test.cpp src/gomoku.h src/board.h src/game.h src/ai.h
+tests/gomoku_test.o: tests/gomoku_test.cpp src/gomoku.hpp src/board.hpp src/game.h src/ai.h
 		$(CXX) $(CXXFLAGS) -c tests/gomoku_test.cpp -o tests/gomoku_test.o
 
 test: 		$(TEST_TARGET) $(TARGET) ## Run all the unit tests

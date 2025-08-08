@@ -10,6 +10,7 @@
 
 #include <math.h>
 #include "ansi.h"
+#include <thread>
 
 //===============================================================================
 // GAME CONSTANTS

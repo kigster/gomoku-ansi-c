@@ -11,7 +11,7 @@
 #include <getopt.h>
 #include "cli.h"
 #include "ansi.h"
-#include "gomoku.h"
+#include "gomoku_c.h"
 
 //===============================================================================
 // CLI FUNCTIONS
