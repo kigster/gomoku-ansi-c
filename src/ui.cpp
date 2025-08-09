@@ -157,9 +157,8 @@ void draw_game_header() {
 
     std::cout.flush();
     
-    // Create a temporary input handler for the key press
-    TerminalInput input;
-    [[maybe_unused]] auto key = input.get_key();
+    // Wait for user to press ENTER
+    std::cin.get();
     clear_screen();
 }
 

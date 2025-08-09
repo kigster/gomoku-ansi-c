@@ -35,10 +35,6 @@ enum class Key : int {
 // DISPLAY CONSTANTS
 //===============================================================================
 
-inline constexpr std::string_view GAME_DESCRIPTION = "Gomoku, also known as Five in a Row";
-inline constexpr std::string_view GAME_RULES_BRIEF = "Connect five stones in a row to win";
-inline constexpr std::string_view GAME_RULES_LONG = 
-    "Players take turns placing stones. First to get five in a row (horizontal, vertical, or diagonal) wins!";
 inline constexpr std::string_view UNICODE_EMPTY = "·";
 
 //===============================================================================

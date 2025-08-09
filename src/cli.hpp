@@ -28,7 +28,7 @@ struct Config {
     int max_depth = 4;           // AI search depth (default intermediate)
     int move_timeout = 0;        // Move timeout in seconds (0 = no timeout)
     bool show_help = false;      // Whether to show help and exit
-    bool enable_undo = true;     // Whether to enable undo feature
+    bool enable_undo = false;    // Whether to enable undo feature
     bool skip_welcome = false;   // Whether to skip the welcome screen
 
     // Validation method
