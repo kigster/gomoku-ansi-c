@@ -20,13 +20,13 @@ if(NOT GTest_FOUND)
     endif()
 endif()
 
-# Source files for the test (excluding main.c and ui.c which are not needed for testing)
+# Source files for the test (excluding main.cpp and ui.cpp which are not needed for testing)
 set(TEST_SOURCES
     gomoku_test.cpp
-    ../src/gomoku.c
-    ../src/board.c
-    ../src/game.c
-    ../src/ai.c
+    ../src/gomoku.cpp
+    ../src/board.cpp
+    ../src/game.cpp
+    ../src/ai.cpp
 )
 
 # Create the test executable
