@@ -7,6 +7,8 @@ A C implementation of the Gomoku (Five-in-a-Row) game featuring an AI opponent u
 > [!TIP]
 > This project was produced in colaboration with Claude-4-MAX, but the the original **evaluation function** was written by the author. Also, when we say "playing with AI" we do not mean LLMs, we simply mean you are playing against the computer.
 
+You can read Claude's analysis of it in the [Overview](OVERVIEW.md) file.
+
 ### Completed Game Screenshot
 
 Here is the game where the human player prevailed, although it is exceedingly difficult to win even on Medium setting, which only looks ahead a few moves.
