@@ -311,8 +311,9 @@ void draw_status(game_state_t *game) {
     }
 
     // Difficulty
-    char difficulty_str[box_width];
-    char difficulty_val[box_width];
+    // Provide extra space for color codes and formatting to avoid truncation warnings
+    char difficulty_str[box_width + 16];
+    char difficulty_val[box_width + 16];
     memset(difficulty_str, 0, sizeof(difficulty_str));
     memset(difficulty_val, 0, sizeof(difficulty_val));
 
