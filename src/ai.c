@@ -205,19 +205,23 @@ int compare_moves(const void *a, const void *b) {
 // MINIMAX ALGORITHM
 //===============================================================================
 
-int minimax(int **board, int depth, int alpha, int beta, int maximizing_player, int ai_player) {
-    // Create a temporary game state to use the timeout version
-    // This is for backward compatibility only
+int minimax(int **board, int board_size, int depth, int alpha, int beta,
+        int maximizing_player, int ai_player) {
+    // Create a temporary game state to use the timeout version.
+    // Previously this function assumed a fixed 19x19 board which caused
+    // out-of-bounds access for smaller boards.  We now pass the board size
+    // explicitly to ensure correct bounds are used during search.
     game_state_t temp_game = {
         .board = board,
-        .board_size = 19, // Default size
-        .move_timeout = 0, // No timeout
+        .board_size = board_size,
+        .move_timeout = 0,
         .search_timed_out = 0
     };
 
-    // Use center position as default for initial call
-    int center = 19 / 2;
-    return minimax_with_timeout(&temp_game, board, depth, alpha, beta, maximizing_player, ai_player, center, center);
+    // Use the center position of the provided board as the initial last move.
+    int center = board_size / 2;
+    return minimax_with_timeout(&temp_game, board, depth, alpha, beta,
+            maximizing_player, ai_player, center, center);
 }
 
 int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, int beta,
