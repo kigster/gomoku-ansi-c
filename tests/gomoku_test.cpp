@@ -228,10 +228,16 @@ TEST_F(GomokuTest, UndoFunctionality) {
     // Make two moves
     make_move(game, 9, 9, AI_CELL_CROSSES, 1.0, 0);
     make_move(game, 9, 10, AI_CELL_NAUGHTS, 1.0, 5);
-    
+
+    // Capture timing totals before undo
+    double human_time = game->total_human_time;
+    double ai_time = game->total_ai_time;
+
     // Now can undo
     EXPECT_TRUE(can_undo(game));
     EXPECT_EQ(game->move_history_count, 2);
+    EXPECT_GT(human_time, 0.0);
+    EXPECT_GT(ai_time, 0.0);
     
     // Undo moves
     undo_last_moves(game);
@@ -239,6 +245,8 @@ TEST_F(GomokuTest, UndoFunctionality) {
     EXPECT_EQ(game->board[9][9], AI_CELL_EMPTY);
     EXPECT_EQ(game->board[9][10], AI_CELL_EMPTY);
     EXPECT_EQ(game->current_player, AI_CELL_CROSSES);
+    EXPECT_DOUBLE_EQ(game->total_human_time, 0.0);
+    EXPECT_DOUBLE_EQ(game->total_ai_time, 0.0);
 }
 
 // Test other_player function
