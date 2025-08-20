@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Basic setup for C/C++ dev environment
 
-set -xe
+set -e
 
 os="$(uname -s | tr 'A-Z' 'a-z')"
 

@@ -5,12 +5,15 @@
 //  Handles AI move finding, minimax algorithm, and move prioritization
 //
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
+#include <iostream>
+#include <algorithm>
+#include <limits>
+#include <cstring>
+#include <ctime>
+#include <cmath>
 #include "ai.h"
 #include "ansi.h"
+#include "gomoku.hpp"
 
 //===============================================================================
 // AI CONSTANTS AND STRUCTURES
@@ -32,7 +35,7 @@ int generate_moves_optimized(game_state_t *game, move_t *moves, int current_play
     // Use cached interesting moves
     for (int i = 0; i < game->interesting_move_count; i++) {
         if (game->interesting_moves[i].is_active && 
-                game->board[game->interesting_moves[i].x][game->interesting_moves[i].y] == AI_CELL_EMPTY) {
+                game->board[game->interesting_moves[i].x][game->interesting_moves[i].y] == static_cast<int>(gomoku::Player::Empty)) {
 
             moves[move_count].x = game->interesting_moves[i].x;
             moves[move_count].y = game->interesting_moves[i].y;
@@ -54,7 +57,7 @@ int get_move_priority_optimized(game_state_t *game, int x, int y, int player) {
 
     // Center bias - closer to center is better
     int center_dist = abs(x - center) + abs(y - center);
-    priority += max(0, game->board_size - center_dist);
+    priority += std::max(0, game->board_size - center_dist);
 
     // Quick threat evaluation without temporary placement
     int my_threat = evaluate_threat_fast(game->board, x, y, player, game->board_size);
@@ -127,7 +130,7 @@ int evaluate_threat_fast(int **board, int x, int y, int player, int board_size) 
             threat = 100;    // Weak threat
         }
 
-        max_threat = max(max_threat, threat);
+        max_threat = std::max(max_threat, threat);
     }
 
     return max_threat;
@@ -145,9 +148,9 @@ int is_move_interesting(int **board, int x, int y, int stones_on_board, int boar
     }
 
     // Check if within 3 cells of any existing stone
-    for (int i = max(0, x - MAX_RADIUS); i <= min(board_size - 1, x + MAX_RADIUS); i++) {
-        for (int j = max(0, y - MAX_RADIUS); j <= min(board_size - 1, y + MAX_RADIUS); j++) {
-            if (board[i][j] != AI_CELL_EMPTY) {
+    for (int i = std::max(0, x - MAX_RADIUS); i <= std::min(board_size - 1, x + MAX_RADIUS); i++) {
+        for (int j = std::max(0, y - MAX_RADIUS); j <= std::min(board_size - 1, y + MAX_RADIUS); j++) {
+            if (board[i][j] != static_cast<int>(gomoku::Player::Empty)) {
                 return 1; // Found a stone within 3 cells
             }
         }
@@ -159,7 +162,7 @@ int is_move_interesting(int **board, int x, int y, int stones_on_board, int boar
 int is_winning_move(int **board, int x, int y, int player, int board_size) {
     board[x][y] = player;
     int is_win = has_winner(board, board_size, player);
-    board[x][y] = AI_CELL_EMPTY;
+    board[x][y] = static_cast<int>(gomoku::Player::Empty);
     return is_win;
 }
 
@@ -179,14 +182,14 @@ int get_move_priority(int **board, int x, int y, int player, int board_size) {
 
     // Center bias - closer to center is better
     int center_dist = abs(x - center) + abs(y - center);
-    priority += max(0, board_size - center_dist);
+    priority += std::max(0, board_size - center_dist);
 
     // Check for immediate threats/opportunities
     board[x][y] = player; // Temporarily place the move
     int my_score = calc_score_at(board, board_size, player, x, y);
     board[x][y] = other_player(player); // Check opponent's response
     int opp_score = calc_score_at(board, board_size, other_player(player), x, y);
-    board[x][y] = AI_CELL_EMPTY; // Restore empty
+    board[x][y] = static_cast<int>(gomoku::Player::Empty); // Restore empty
 
     // Prioritize offensive and defensive moves
     priority += my_score / 10;   // Our opportunities
@@ -298,7 +301,7 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
             board[i][j] = current_player_turn;
 
             // Update hash incrementally
-            int player_index = (current_player_turn == AI_CELL_CROSSES) ? 0 : 1;
+            int player_index = (current_player_turn == static_cast<int>(gomoku::Player::Cross)) ? 0 : 1;
             int pos = i * game->board_size + j;
             game->current_hash ^= game->zobrist_keys[player_index][pos];
 
@@ -313,14 +316,14 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
             // Restore cache
             invalidate_winner_cache(game);
 
-            board[i][j] = AI_CELL_EMPTY;
+            board[i][j] = static_cast<int>(gomoku::Player::Empty);
 
             if (eval > max_eval) {
                 max_eval = eval;
                 best_x = i;
                 best_y = j;
             }
-            alpha = max(alpha, eval);
+            alpha = std::max(alpha, eval);
 
             // Early termination for winning moves
             if (eval >= WIN_SCORE - 1000) {
@@ -365,7 +368,7 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
             board[i][j] = current_player_turn;
 
             // Update hash incrementally
-            int player_index = (current_player_turn == AI_CELL_CROSSES) ? 0 : 1;
+            int player_index = (current_player_turn == static_cast<int>(gomoku::Player::Cross)) ? 0 : 1;
             int pos = i * game->board_size + j;
             game->current_hash ^= game->zobrist_keys[player_index][pos];
 
@@ -380,14 +383,14 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
             // Restore cache
             invalidate_winner_cache(game);
 
-            board[i][j] = AI_CELL_EMPTY;
+            board[i][j] = static_cast<int>(gomoku::Player::Empty);
 
             if (eval < min_eval) {
                 min_eval = eval;
                 best_x = i;
                 best_y = j;
             }
-            beta = min(beta, eval);
+            beta = std::min(beta, eval);
 
             // Early termination for losing moves
             if (eval <= -WIN_SCORE + 1000) {
@@ -422,7 +425,7 @@ void find_first_ai_move(game_state_t *game, int *best_x, int *best_y) {
     int human_x = -1, human_y = -1;
     for (int i = 0; i < game->board_size && human_x == -1; i++) {
         for (int j = 0; j < game->board_size && human_x == -1; j++) {
-            if (game->board[i][j] == AI_CELL_CROSSES) {
+            if (game->board[i][j] == static_cast<int>(gomoku::Player::Cross)) {
                 human_x = i;
                 human_y = j;
             }
@@ -451,7 +454,7 @@ void find_first_ai_move(game_state_t *game, int *best_x, int *best_y) {
                 // Check bounds and if position is empty
                 if (new_x >= 0 && new_x < game->board_size && 
                         new_y >= 0 && new_y < game->board_size &&
-                        game->board[new_x][new_y] == AI_CELL_EMPTY) {
+                        game->board[new_x][new_y] == static_cast<int>(gomoku::Player::Empty)) {
                     valid_moves[move_count][0] = new_x;
                     valid_moves[move_count][1] = new_y;
                     move_count++;
@@ -471,8 +474,8 @@ void find_first_ai_move(game_state_t *game, int *best_x, int *best_y) {
         *best_y = human_y + (rand() % 3 - 1);
 
         // Ensure bounds
-        *best_x = max(0, min(game->board_size - 1, *best_x));
-        *best_y = max(0, min(game->board_size - 1, *best_y));
+        *best_x = std::max(0, std::min(game->board_size - 1, *best_x));
+        *best_y = std::max(0, std::min(game->board_size - 1, *best_y));
     }
 }
 
@@ -485,7 +488,7 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
     int stone_count = 0;
     for (int i = 0; i < game->board_size; i++) {
         for (int j = 0; j < game->board_size; j++) {
-            if (game->board[i][j] != AI_CELL_EMPTY) {
+            if (game->board[i][j] != static_cast<int>(gomoku::Player::Empty)) {
                 stone_count++;
             }
         }
@@ -515,11 +518,11 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
 
     // Generate and sort moves using optimized method
     move_t moves[361]; // Max for 19x19 board
-    int move_count = generate_moves_optimized(game, moves, AI_CELL_NAUGHTS);
+    int move_count = generate_moves_optimized(game, moves, static_cast<int>(gomoku::Player::Naught));
 
     // Check for immediate winning moves first
     for (int i = 0; i < move_count; i++) {
-        if (evaluate_threat_fast(game->board, moves[i].x, moves[i].y, AI_CELL_NAUGHTS, game->board_size) >= 100000) {
+        if (evaluate_threat_fast(game->board, moves[i].x, moves[i].y, static_cast<int>(gomoku::Player::Naught), game->board_size) >= 100000) {
             *best_x = moves[i].x;
             *best_y = moves[i].y;
             snprintf(game->ai_status_message, sizeof(game->ai_status_message), 
@@ -562,20 +565,20 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
             int i = moves[m].x;
             int j = moves[m].y;
 
-            game->board[i][j] = AI_CELL_NAUGHTS;
+            game->board[i][j] = static_cast<int>(gomoku::Player::Naught);
 
             // Update hash incrementally
-            int player_index = 1; // AI_CELL_NAUGHTS
+            int player_index = 1; // static_cast<int>(gomoku::Player::Naught)
             int pos = i * game->board_size + j;
             game->current_hash ^= game->zobrist_keys[player_index][pos];
 
             int score = minimax_with_timeout(game, game->board, current_depth - 1, -WIN_SCORE - 1, WIN_SCORE + 1,
-                    0, AI_CELL_NAUGHTS, i, j);
+                    0, static_cast<int>(gomoku::Player::Naught), i, j);
 
             // Restore hash
             game->current_hash ^= game->zobrist_keys[player_index][pos];
 
-            game->board[i][j] = AI_CELL_EMPTY;
+            game->board[i][j] = static_cast<int>(gomoku::Player::Empty);
 
             if (score > depth_best_score) {
                 depth_best_score = score;

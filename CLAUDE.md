@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project Overview
+
+This is a **modern C++23 implementation** of Gomoku (Five in a Row) that was successfully refactored from a C99 codebase. The project leverages advanced C++23 features while maintaining full compatibility with both traditional Make and CMake build systems.
+
 ## Development Commands
 
 ### Setup (First Time)
@@ -16,11 +20,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 #### Traditional Make Build
 
 ```bash
-# Build the game (uses Makefile)
+# shows help and available targets
 make
+make help
+
+# Build the game (uses Makefile)
+make build
 
 # Build with parallel jobs for faster compilation
-make -j 4
+make build --j 4
 
 # Clean build artifacts
 make clean
@@ -70,24 +78,29 @@ make release
 
 ## Code Architecture
 
-### Modular Design
+### Modern C++23 Design
 
-The project follows a clean modular architecture with clear separation of concerns:
+The project follows a clean modular architecture with modern C++23 features and clear separation of concerns:
 
-- **main.c** (105 lines): Simple orchestrator that initializes components and starts the game loop
-- **gomoku.c/.h**: Core evaluation functions for minimax algorithm and pattern recognition
-- **board.c/.h**: Board management, memory allocation, and coordinate utilities
-- **game.c/.h**: Game logic, state management, move validation, and timing
-- **ai.c/.h**: AI module with minimax search, alpha-beta pruning, and move prioritization
-- **ui.c/.h**: User interface, display rendering, and keyboard input handling
-- **cli.c/.h**: Command-line argument parsing and configuration
+- **main.cpp**: Simple orchestrator that initializes components and starts the game loop
+- **gomoku.cpp/.hpp**: Core evaluation functions with C++23 concepts, templates, and `std::expected`
+- **board.cpp/.hpp**: Template-based `Board` class with RAII, `ValidBoardSize` concept, and modern C++ containers
+- **game.cpp/.hpp**: Game logic, state management, move validation with modern C++ features
+- **ai.cpp/.hpp**: AI module with minimax search, alpha-beta pruning, and move prioritization
+- **ui.cpp/.hpp**: User interface with `TerminalInput`/`TerminalDisplay` classes and `std::format`
+- **cli.cpp/.hpp**: Command-line parsing using `std::expected`, `std::span`, and `std::string_view`
 
-### Key Data Structures
+### Key Modern C++23 Features
 
-- **game_state_t**: Central game state containing board, config, history, and timing
-- **move_history_t**: Move tracking with timing and evaluation metrics
-- **cli_config_t**: Configuration from command-line arguments
-- **interesting_move_t**: AI search optimization for move prioritization
+- **Concepts**: `ValidBoardSize` concept for compile-time board size validation
+- **Templates**: Template-based `Board<Size>` class with compile-time size validation
+- **std::expected**: Error handling in CLI parsing and validation without exceptions
+- **std::span**: Memory-safe view over contiguous sequences for argument parsing
+- **std::string_view**: Efficient string handling without unnecessary copies
+- **std::format**: Type-safe string formatting replacing C-style printf
+- **enum class**: Type-safe enumerations (`Player`, `GameState`, `ThreatType`, `Difficulty`)
+- **RAII**: Automatic memory management in `Board` class eliminating manual malloc/free
+- **constexpr**: Compile-time computation for constants and simple functions
 
 ### AI Implementation
 
@@ -101,10 +114,12 @@ The AI uses minimax with alpha-beta pruning and several optimizations:
 
 ### Build Configuration
 
-- **Compiler**: GCC with optimization flags (-O3 for game, -O2 for tests)
-- **Warning Flags**: -Wall -Wextra -Wunused-parameter -Wimplicit-function-declaration
-- **Libraries**: Math library (-lm) for evaluation functions
+- **C++ Standard**: C++23 (`-std=c++23`) with full modern feature support
+- **Compiler**: GCC/Clang with optimization flags (-O3 for game, -O2 for tests)
+- **Warning Flags**: -Wall -Wextra -Wpedantic -Wunused-parameter for strict code quality
+- **Libraries**: Math library (-lm) and pthread for threading support
 - **Test Framework**: Google Test (C++) for comprehensive testing
+- **Dual Build Systems**: Both traditional Makefile and CMake with consistent C++23 configuration
 
 ### Testing Structure
 
@@ -143,9 +158,26 @@ The AI uses minimax with alpha-beta pruning and several optimizations:
 - Alpha-beta pruning with intelligent move ordering
 - Timeout mechanisms to prevent long search times
 
-### Code Style
+### Modern C++23 Refactoring
 
-- Function naming: snake_case with descriptive names
-- Constants: ALL*CAPS with prefixes (GAME*, AI*, THREAT*)
-- Error handling: RT_SUCCESS/RT_FAILURE return codes
-- Header guards: Standard #ifndef/#define pattern
+This project underwent a complete transformation from C99 to modern C++23:
+
+#### Migration Strategy
+- **Incremental Conversion**: Files converted in pairs (header + implementation) 
+- **Mixed Language Support**: Temporary `extern "C"` linkage during transition
+- **Full C++23 Adoption**: Complete elimination of C-style code and headers
+- **Build System Updates**: Both Makefile and CMake reconfigured for C++23
+
+#### Key Architectural Improvements
+- **Memory Safety**: RAII replacing manual memory management
+- **Type Safety**: Strong typing with concepts and enum classes  
+- **Error Handling**: `std::expected` replacing error codes
+- **Performance**: Template specialization and compile-time validation
+- **Maintainability**: Modern C++ idioms and clear interfaces
+
+#### Code Style
+- **Function naming**: snake_case with descriptive names (maintained)
+- **Constants**: `inline constexpr` variables replacing macros
+- **Error handling**: `std::expected<T, Error>` for recoverable errors
+- **Header guards**: `#pragma once` for simplicity
+- **Namespaces**: `gomoku::` namespace for organization

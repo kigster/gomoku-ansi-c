@@ -9,9 +9,8 @@
 #define GAME_H
 
 #include <stdint.h>
-#include "gomoku.h"
-#include "board.h"
-#include "cli.h"
+#include "gomoku.hpp"
+#include "cli.hpp"
 
 // move_t is defined in ai.h
 

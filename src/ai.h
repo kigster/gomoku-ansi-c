@@ -8,7 +8,7 @@
 #ifndef AI_H
 #define AI_H
 
-#include "gomoku.h"
+#include "gomoku.hpp"
 #include "game.h"
 
 //===============================================================================
