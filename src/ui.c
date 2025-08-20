@@ -475,7 +475,7 @@ void display_rules(void) {
     // CLI options
     printf("%sCOMMAND LINE OPTIONS%s\n", COLOR_BOLD_BLACK, COLOR_RESET);
     printf("   -d, --depth N        Search depth (1-10) for AI minimax algorithm\n");
-    printf("   -l, --level M        Difficulty: easy, intermediate, hard\n");
+    printf("   -l, --level M        Difficulty: easy, medium, hard\n");
     printf("   -t, --timeout T      Move timeout in seconds (optional)\n");
     printf("   -b, --board SIZE     Board size: 15 or 19 (default: 19)\n");
     printf("   -h, --help           Show command line help\n\n");
@@ -487,9 +487,9 @@ void display_rules(void) {
 
     // Game variations
     printf("%sDIFFICULTY LEVELS%s\n", COLOR_BOLD_BLACK, COLOR_RESET);
-    printf("   • Easy (depth 1):         Quick moves, good for beginners\n");
-    printf("   • Intermediate (depth 3): Balanced gameplay, default setting\n");
-    printf("   • Hard (depth 4):         Advanced AI, challenging for experts\n\n");
+    printf("   • Easy (depth %d):         Quick moves, good for beginners\n", GAME_DEPTH_LEVEL_EASY);
+    printf("   • Medium (depth %d):       Balanced gameplay, default setting\n", GAME_DEPTH_LEVEL_MEDIUM);
+    printf("   • Hard (depth %d):         Advanced AI, challenging for experts\n\n", GAME_DEPTH_LEVEL_HARD);
 
     printf("%s═══════════════════════════════════════════════════════════════════════════════%s\n", COLOR_BOLD_BLACK, COLOR_RESET);
     printf("                      %sPress any key to return to game%s\n", COLOR_YELLOW, COLOR_RESET);

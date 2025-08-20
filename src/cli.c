@@ -66,13 +66,15 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
             case 'l':
                 if (strcmp(optarg, "easy") == 0) {
                     config.max_depth = GAME_DEPTH_LEVEL_EASY;
-                } else if (strcmp(optarg, "intermediate") == 0) {
+                } else if (strcmp(optarg, "medium") == 0 ||
+                           strcmp(optarg, "intermediate") == 0) {
+                    // Support legacy "intermediate" as an alias for "medium"
                     config.max_depth = GAME_DEPTH_LEVEL_MEDIUM;
                 } else if (strcmp(optarg, "hard") == 0) {
                     config.max_depth = GAME_DEPTH_LEVEL_HARD;
                 } else {
                     printf("Error: Invalid difficulty level '%s'\n", optarg);
-                    printf("Valid options are: easy, intermediate, hard\n\n");
+                    printf("Valid options are: easy, medium, hard\n\n");
                     config.invalid_args = 1;
                 }
                 break;
@@ -135,7 +137,7 @@ void print_help(const char* program_name) {
 
     printf("%sFLAGS:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
     printf("  %s-d, --depth N%s         The depth of search in the MiniMax algorithm\n", COLOR_YELLOW, COLOR_RESET);
-    printf("  %s-l, --level M%s         Can be \"easy\", \"intermediate\", \"hard\"\n", COLOR_YELLOW, COLOR_RESET);
+    printf("  %s-l, --level M%s         Can be \"easy\", \"medium\", \"hard\"\n", COLOR_YELLOW, COLOR_RESET);
     printf("  %s-t, --timeout T%s       Timeout in seconds that AI (and human)\n", COLOR_YELLOW, COLOR_RESET);
     printf("                        have to make their move, otherwise AI must choose\n");
     printf("                        the best move found so far, while human looses the game.\n");
@@ -151,7 +153,7 @@ void print_help(const char* program_name) {
 
     printf("\n%sDIFFICULTY LEVELS:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
     printf("  %seasy%s         - Search depth %d (quick moves, good for beginners)\n", COLOR_GREEN, COLOR_RESET, GAME_DEPTH_LEVEL_EASY);
-    printf("  %sintermediate%s - Search depth %d (balanced gameplay, default setting)\n", COLOR_GREEN, COLOR_RESET, GAME_DEPTH_LEVEL_MEDIUM);
+    printf("  %smedium%s      - Search depth %d (balanced gameplay, default setting)\n", COLOR_GREEN, COLOR_RESET, GAME_DEPTH_LEVEL_MEDIUM);
     printf("  %shard%s         - Search depth %d (advanced AI, challenging for experts)\n", COLOR_GREEN, COLOR_RESET, GAME_DEPTH_LEVEL_HARD);
 
     printf("\n%sGAME SYMBOLS:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);

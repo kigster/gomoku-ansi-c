@@ -142,7 +142,7 @@ Below is the screenshot of the help screen of the game, since it's a CLI/Termina
 
 | Option             | Description                                | Example        |
 | ------------------ | ------------------------------------------ | -------------- |
-| `-l, --level M`    | Difficulty: `easy`, `intermediate`, `hard` | `--level hard` |
+| `-l, --level M`    | Difficulty: `easy`, `medium`, `hard` | `--level hard` |
 | `-d, --depth N`    | Search depth (1-10) for AI algorithm       | `--depth 5`    |
 | `-t, --timeout T`  | Move timeout in seconds (optional)         | `--timeout 30` |
 | `-b, --board SIZE` | Board size: 15 or 19 (default: 19)         | `--board 15`   |
