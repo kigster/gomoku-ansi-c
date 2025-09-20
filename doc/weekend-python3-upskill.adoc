@@ -1,0 +1,186 @@
+= Weekend Python 3 Upskilling Plan
+:toc:
+:toclevels: 2
+
+== Learning Goals
+
+* Map existing Ruby, C, Bash, and JavaScript knowledge to Python 3 core syntax and idioms.
+* Adopt modern "Pythonic" constructs including type hints, dataclasses, pattern matching, asyncio, and packaging best practices.
+* Reinforce concepts with compact, hands-on exercises for each topic.
+
+== Day 0 (Friday Evening): Setup & Orientation
+
+=== Environment
+
+* Install Python 3.11 or newer.
+* Create a virtual environment: `python -m venv ~/pyweekend && source ~/pyweekend/bin/activate`.
+* Install helpful tooling: `pip install ipython black pytest mypy`.
+
+=== Quick Syntax Alignment (1 hr)
+
+* Review indentation-driven blocks, significant whitespace, and module structure.
+* Compare Python functions, list and dict literals, slicing, and truthiness with Ruby and C.
+
+[.exercise]
+====
+Write `hello.py` that prints a greeting using `print(f"Hello, {name}")`, prompting for the name with `input()`.
+====
+
+== Day 1 Morning: Core Language & Data Structures
+
+=== Pythonic Syntax & Flow Control (1.5 hrs)
+
+* `if`/`elif`/`else`, `for` loops over iterables, `while`, `break`, and `continue`.
+* Multiple assignment, tuple unpacking, `enumerate`, and `zip`.
+* Truthiness rules where empty sequences evaluate to `False`.
+
+[.exercise]
+====
+Re-implement FizzBuzz using tuple unpacking and a list comprehension to generate the output sequence.
+====
+
+=== Built-in Collections & Comprehensions (1.5 hrs)
+
+* `list`, `tuple`, `dict`, `set`, `collections.Counter`, and `defaultdict`.
+* List, dict, and set comprehensions; generator expressions for lazy evaluation.
+* Built-in helpers such as `any`, `all`, `sum`, and `sorted` with key functions.
+
+[.exercise]
+====
+Given logs of games, build a frequency table with `Counter` and transform it with a dict comprehension.
+====
+
+== Day 1 Afternoon: Functions, Types, & Modules
+
+=== Functions & Functional Tools (1.5 hrs)
+
+* Default and keyword arguments, `*args`, and `**kwargs`.
+* First-class functions, `map`, `filter`, and `functools.partial`.
+* Lambdas versus named functions and the basics of decorators.
+
+[.exercise]
+====
+Create a decorator that measures execution time and apply it to an algorithm of your choice.
+====
+
+=== Type Hints & Dataclasses (1.5 hrs)
+
+* `typing` basics such as `list[str]`, `dict[str, int]`, `Callable`, and `Protocol`.
+* Philosophy of gradual typing compared to static typing in C.
+* `@dataclass`, frozen dataclasses, default factories, and `slots=True`.
+
+[.exercise]
+====
+Define a `@dataclass` for a Gomoku move, annotate relevant functions, and run `mypy` to check types.
+====
+
+== Day 1 Evening: Files, Exceptions, Context Managers
+
+* Exception hierarchy, `try`/`except`/`else`/`finally`, and creating custom exceptions.
+* Context managers with `with`, implementing via `contextlib` or `__enter__`/`__exit__` methods.
+* File I/O with `pathlib.Path`, JSON handling, and a brief look at YAML.
+
+[.exercise]
+====
+Build a log reader that safely opens a file, parses JSON lines, and catches malformed entries gracefully.
+====
+
+== Day 2 Morning: Object Orientation & Pattern Matching
+
+=== Classes & Protocols (1.5 hrs)
+
+* Class definitions, instance versus class variables, and private naming conventions.
+* Inheritance versus composition, `super()`, and mixins.
+* Duck typing and structural subtyping with `typing.Protocol`.
+
+[.exercise]
+====
+Implement a board renderer protocol and two concrete classes (text and ANSI) that demonstrate polymorphism.
+====
+
+=== Pattern Matching (1 hr)
+
+* Structural pattern matching with `match`/`case`, guards, and sequence or dict patterns.
+* Comparisons with Ruby `case` statements and JavaScript destructuring.
+
+[.exercise]
+====
+Use `match` to interpret user commands (`place`, `undo`, etc.) for a CLI application.
+====
+
+== Day 2 Midday: Iterables, Generators, Async
+
+=== Iterators & Generators (1.5 hrs)
+
+* Iterator protocol, `iter`, and `next`.
+* Generator functions, `yield from`, and generator-based pipelines.
+* Essentials from `itertools` for efficient iteration patterns.
+
+[.exercise]
+====
+Create a generator that produces Gomoku winning-line candidates and chain it with `itertools` helpers.
+====
+
+=== Asyncio & Concurrency (1.5 hrs)
+
+* Event loop basics, `async def`, `await`, and distinguishing tasks from threads or processes.
+* `asyncio.gather`, async context managers, and cancellation handling.
+* Contrasts with Node.js async patterns and Ruby fibers.
+
+[.exercise]
+====
+Write an async fetcher (simulating I/O with `asyncio.sleep`) that concurrently validates moves.
+====
+
+== Day 2 Afternoon: Packaging, Testing, Tooling
+
+=== Modules, Packages & Environments (1 hr)
+
+* Module import system, `__init__.py`, and relative versus absolute imports.
+* `pip`, `pyproject.toml`, and an overview of `setuptools` versus `poetry`.
+* Use of `pip-tools` or `poetry` for reproducible dependency management.
+
+[.exercise]
+====
+Package a mini library named `gomoku_utils` with a `pyproject.toml` and install it locally for testing.
+====
+
+=== Testing & Tooling (1.5 hrs)
+
+* `pytest` basics, fixtures, and parametrization.
+* Doctests and property-based testing with `hypothesis`.
+* Formatting with `black`, linting with `ruff`, and static typing with `mypy`.
+
+[.exercise]
+====
+Write a `pytest` suite for board evaluation functions, run `pytest`, add type hints, and run `mypy`.
+====
+
+== Day 2 Evening: Capstone & Reflection
+
+* Combine learnings into a small CLI Gomoku helper that:
+** Parses moves from a file using context managers and dataclasses.
+** Evaluates board state using generators and comprehensions.
+** Offers interactive commands with `match` pattern matching.
+** Includes tests, type hints, and a `pyproject.toml` for packaging.
+* Optional stretch goal: expose an async API to evaluate multiple boards concurrently.
+
+=== Reflection Checklist
+
+* Which Python features feel most different from Ruby or C?
+* Where do type hints help or hinder productivity?
+* How does Python's standard library support rapid scripting compared to Ruby or JavaScript?
+
+== Additional Resources
+
+* link:https://docs.python.org/3/tutorial/[Official Python Tutorial] (focus on Data Structures, Classes, Errors and Exceptions, and Virtual Environments and Packages).
+* "Fluent Python" (2nd Edition) chapters covering the data model, typing, and concurrency.
+* link:https://realpython.com/[Real Python] articles on asyncio, dataclasses, and pattern matching.
+* link:https://python-patterns.guide/[python-patterns.guide] for idiomatic Python insights.
+
+== Tips for Success
+
+* Use IPython or `python -i` for quick experimentation, similar to IRB.
+* Translate familiar Ruby scripts into Python to reinforce idioms.
+* Keep `pydoc` and `help()` handy; Python's introspection is powerful.
+* Leverage list and dict comprehensions alongside the standard library before reaching for external packages.
