@@ -567,6 +567,9 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
     game->search_start_time = get_current_time();
     game->search_timed_out = 0;
 
+    // Clear stale TT entries from previous searches
+    clear_transposition_table(game);
+
     // Count stones on board to detect first AI move
     int stone_count = 0;
     for (int i = 0; i < game->board_size; i++) {

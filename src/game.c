@@ -341,20 +341,35 @@ int get_cached_winner(game_state_t *game, int player) {
 // TRANSPOSITION TABLE FUNCTIONS
 //===============================================================================
 
+// Simple 64-bit PRNG (splitmix64) for high-quality Zobrist keys
+static uint64_t splitmix64_state = 0;
+static uint64_t splitmix64_next(void) {
+    uint64_t z = (splitmix64_state += 0x9e3779b97f4a7c15ULL);
+    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
+    return z ^ (z >> 31);
+}
+
 void init_transposition_table(game_state_t *game) {
     // Initialize transposition table
     memset(game->transposition_table, 0, sizeof(game->transposition_table));
 
-    // Initialize Zobrist keys with random values
-    srand(12345); // Use fixed seed for reproducible results
+    // Initialize Zobrist keys with a proper 64-bit PRNG
+    // (rand() only provides 31 bits, giving poor hash distribution)
+    splitmix64_state = 0x12345678ABCDEF01ULL;
     for (int player = 0; player < 2; player++) {
         for (int pos = 0; pos < 361; pos++) {
-            game->zobrist_keys[player][pos] = 
-                ((uint64_t)rand() << 32) | rand();
+            game->zobrist_keys[player][pos] = splitmix64_next();
         }
     }
 
     // Compute initial hash
+    game->current_hash = compute_zobrist_hash(game);
+}
+
+void clear_transposition_table(game_state_t *game) {
+    memset(game->transposition_table, 0, sizeof(game->transposition_table));
+    // Recompute current hash for the actual board position
     game->current_hash = compute_zobrist_hash(game);
 }
 
@@ -375,7 +390,7 @@ uint64_t compute_zobrist_hash(game_state_t *game) {
 }
 
 void store_transposition(game_state_t *game, uint64_t hash, int value, int depth, int flag, int best_x, int best_y) {
-    int index = hash % TRANSPOSITION_TABLE_SIZE;
+    int index = hash & TRANSPOSITION_TABLE_MASK;
     transposition_entry_t *entry = &game->transposition_table[index];
 
     // Replace if this entry is deeper or empty
@@ -390,7 +405,7 @@ void store_transposition(game_state_t *game, uint64_t hash, int value, int depth
 }
 
 int probe_transposition(game_state_t *game, uint64_t hash, int depth, int alpha, int beta, int *value) {
-    int index = hash % TRANSPOSITION_TABLE_SIZE;
+    int index = hash & TRANSPOSITION_TABLE_MASK;
     transposition_entry_t *entry = &game->transposition_table[index];
 
     if (entry->hash == hash && entry->depth >= depth) {
