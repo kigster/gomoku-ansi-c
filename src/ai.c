@@ -17,6 +17,7 @@
 //===============================================================================
 
 #define MAX_RADIUS 3
+#define SEARCH_MOVE_RADIUS 3
 #define WIN_SCORE 1000000
 
 //===============================================================================
@@ -294,7 +295,8 @@ int minimax(int **board, int board_size, int depth, int alpha, int beta,
 }
 
 int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, int beta,
-        int maximizing_player, int ai_player, int last_x, int last_y) {
+        int maximizing_player, int ai_player,
+        int last_x __attribute__((unused)), int last_y __attribute__((unused))) {
     // Check for timeout first
     if (is_search_timed_out(game)) {
         game->search_timed_out = 1;
