@@ -56,8 +56,9 @@ typedef struct {
     int best_move_y;
 } transposition_entry_t;
 
-// Power of 2 for fast modulo via bitmask (1M entries)
-#define TRANSPOSITION_TABLE_SIZE (1 << 20)
+// Power of 2 for fast modulo via bitmask (128K entries, ~4MB)
+// Reduced from 1M to avoid memory issues on CI runners
+#define TRANSPOSITION_TABLE_SIZE (1 << 17)
 #define TRANSPOSITION_TABLE_MASK (TRANSPOSITION_TABLE_SIZE - 1)
 #define TT_EXACT 0
 #define TT_LOWER_BOUND 1
