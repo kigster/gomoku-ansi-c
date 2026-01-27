@@ -251,16 +251,29 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
         return tt_value;
     }
 
-    // Check for immediate wins/losses first (terminal conditions)
-    if (get_cached_winner(game, ai_player)) {
-        int value = WIN_SCORE + depth; // Prefer faster wins
-        store_transposition(game, hash, value, depth, TT_EXACT, -1, -1);
-        return value;
-    }
-    if (get_cached_winner(game, other_player(ai_player))) {
-        int value = -WIN_SCORE - depth; // Prefer slower losses
-        store_transposition(game, hash, value, depth, TT_EXACT, -1, -1);
-        return value;
+    // Check for win/loss. Use fast incremental check when we know the last move,
+    // falling back to full board scan otherwise.
+    {
+        int ai_won = 0, opp_won = 0;
+        if (last_x >= 0 && last_y >= 0 && board[last_x][last_y] != AI_CELL_EMPTY) {
+            // Fast path: only check lines through the last move (O(36))
+            ai_won = has_winner_at(board, game->board_size, ai_player, last_x, last_y);
+            opp_won = has_winner_at(board, game->board_size, other_player(ai_player), last_x, last_y);
+        } else {
+            // Fallback: full board scan (used at root or with unknown last move)
+            ai_won = has_winner(board, game->board_size, ai_player);
+            opp_won = has_winner(board, game->board_size, other_player(ai_player));
+        }
+        if (ai_won) {
+            int value = WIN_SCORE + depth;
+            store_transposition(game, hash, value, depth, TT_EXACT, -1, -1);
+            return value;
+        }
+        if (opp_won) {
+            int value = -WIN_SCORE - depth;
+            store_transposition(game, hash, value, depth, TT_EXACT, -1, -1);
+            return value;
+        }
     }
 
     // Check search depth limit - use full board evaluation at leaf nodes

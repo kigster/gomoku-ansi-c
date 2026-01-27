@@ -175,6 +175,46 @@ int has_winner(int **board, int size, int player) {
     return 0; // No winner
 }
 
+/**
+ * Fast win detection checking only lines through position (x,y).
+ * Only needs to check 4 directions through the given cell.
+ * O(36) instead of O(board_size^2 * 4) for the full board scan.
+ */
+int has_winner_at(int **board, int size, int player, int x, int y) {
+    if (board[x][y] != player) {
+        return 0;
+    }
+
+    int directions[4][2] = {{1,0}, {0,1}, {1,1}, {1,-1}};
+    for (int d = 0; d < 4; d++) {
+        int dx = directions[d][0];
+        int dy = directions[d][1];
+        int count = 1;
+
+        // Count in positive direction
+        int nx = x + dx, ny = y + dy;
+        while (nx >= 0 && nx < size && ny >= 0 && ny < size && board[nx][ny] == player) {
+            count++;
+            nx += dx;
+            ny += dy;
+        }
+
+        // Count in negative direction
+        nx = x - dx;
+        ny = y - dy;
+        while (nx >= 0 && nx < size && ny >= 0 && ny < size && board[nx][ny] == player) {
+            count++;
+            nx -= dx;
+            ny -= dy;
+        }
+
+        if (count >= 5) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 //===============================================================================
 // PATTERN ANALYSIS FUNCTIONS (CORE LOGIC FROM ORIGINAL)
 //===============================================================================
