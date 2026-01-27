@@ -403,16 +403,16 @@ void populate_threat_matrix() {
     threat_cost[THREAT_NOTHING]                 = 0;
     threat_cost[THREAT_FIVE]                    = 100000;
     threat_cost[THREAT_STRAIGHT_FOUR]           = 50000;
+    threat_cost[THREAT_FOUR]                    = 10000;
+    threat_cost[THREAT_FOUR_BROKEN]             = 5000;
     threat_cost[THREAT_THREE]                   = 1000;
-    threat_cost[THREAT_FOUR]                    = 300;
-    threat_cost[THREAT_FOUR_BROKEN]             = 150;
-    threat_cost[THREAT_THREE_BROKEN]            = 30;
+    threat_cost[THREAT_THREE_BROKEN]            = 100;
     threat_cost[THREAT_TWO]                     = 20;
     threat_cost[THREAT_NEAR_ENEMY]              = 5;
 
     // Combination threats
-    threat_cost[THREAT_THREE_AND_FOUR]          = 5000;
-    threat_cost[THREAT_THREE_AND_THREE]         = 5000;
+    threat_cost[THREAT_THREE_AND_FOUR]          = 10000;
+    threat_cost[THREAT_THREE_AND_THREE]         = 8000;
     threat_cost[THREAT_THREE_AND_THREE_BROKEN]  = 300;    
 }
 
