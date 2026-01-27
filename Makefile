@@ -50,10 +50,13 @@ $(TARGET): $(OBJECTS)
 src/%.o: src/%.c
 		$(CC) $(CFLAGS) -c $< -o $@
 
-$(TEST_TARGET): tests/gomoku_test.o src/gomoku.o src/board.o src/game.o src/ai.o # Test targets
+googletest: 	## Build GoogleTest framework (needed for running tests)
+		bash -c "./tests-setup"
+
+$(TEST_TARGET): googletest tests/gomoku_test.o src/gomoku.o src/board.o src/game.o src/ai.o # Test targets
 		$(CXX) $(CXXFLAGS) tests/gomoku_test.o src/gomoku.o src/board.o src/game.o src/ai.o $(GTEST_LIB) $(GTEST_MAIN_LIB) -pthread -o $(TEST_TARGET)
 
-tests/gomoku_test.o: tests/gomoku_test.cpp src/gomoku.h src/board.h src/game.h src/ai.h
+tests/gomoku_test.o: googletest tests/gomoku_test.cpp src/gomoku.h src/board.h src/game.h src/ai.h
 		$(CXX) $(CXXFLAGS) -c tests/gomoku_test.cpp -o tests/gomoku_test.o
 
 test: 		$(TEST_TARGET) $(TARGET) ## Run all the unit tests
