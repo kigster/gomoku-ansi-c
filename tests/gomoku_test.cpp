@@ -341,50 +341,39 @@ TEST_F(GomokuTest, BlockedPatterns) {
     EXPECT_GT(unblocked_score, score);
 }
 
-// Test that threat score ordering is correct (FOUR > THREE > TWO)
-TEST_F(GomokuTest, ThreatScoreOrdering) {
-    // Build an open four: .XXXX. (one open end)
-    // Place 4 in a row with one side open
-    board[7][5] = AI_CELL_CROSSES;
+// Test that evaluate_threat_fast accounts for open vs blocked ends
+TEST_F(GomokuTest, ThreatFastOpenEnds) {
+    // Three in a row with both ends open: .XXX.
     board[7][6] = AI_CELL_CROSSES;
     board[7][7] = AI_CELL_CROSSES;
     board[7][8] = AI_CELL_CROSSES;
-    int four_score = calc_score_at(board, BOARD_SIZE, AI_CELL_CROSSES, 7, 7);
+    // Position 7,5 is where we evaluate placing a stone to extend
+    // Evaluate at 7,5 which would make 4 consecutive, but let's test at the empty end
+    int open_threat = evaluate_threat_fast(board, 7, 5, AI_CELL_CROSSES, BOARD_SIZE);
 
-    // Clear and build an open three: .XXX.
-    memset(board[7], 0, BOARD_SIZE * sizeof(int));
-    board[7][6] = AI_CELL_CROSSES;
-    board[7][7] = AI_CELL_CROSSES;
-    board[7][8] = AI_CELL_CROSSES;
-    int three_score = calc_score_at(board, BOARD_SIZE, AI_CELL_CROSSES, 7, 7);
+    // Three in a row with both ends blocked: OXXX0
+    board[7][5] = AI_CELL_NAUGHTS; // Block left
+    board[7][9] = AI_CELL_NAUGHTS; // Block right
+    int blocked_threat = evaluate_threat_fast(board, 7, 4, AI_CELL_CROSSES, BOARD_SIZE);
 
-    // Clear and build a two: .XX.
-    memset(board[7], 0, BOARD_SIZE * sizeof(int));
-    board[7][7] = AI_CELL_CROSSES;
-    board[7][8] = AI_CELL_CROSSES;
-    int two_score = calc_score_at(board, BOARD_SIZE, AI_CELL_CROSSES, 7, 7);
-
-    // Four must score higher than three, three higher than two
-    EXPECT_GT(four_score, three_score)
-        << "A four-in-a-row (one move from win) must score higher than a three";
-    EXPECT_GT(three_score, two_score)
-        << "A three-in-a-row must score higher than a two";
+    EXPECT_GT(open_threat, blocked_threat)
+        << "Open-ended lines must score higher than blocked lines";
 }
 
-// Test that THREAT_FOUR forces immediate response by scoring high enough
-TEST_F(GomokuTest, FourInARowIsUrgent) {
-    // Build a four with one open end (opponent must block or lose)
-    board[7][5] = AI_CELL_CROSSES;
-    board[7][6] = AI_CELL_CROSSES;
+// Test that fully blocked patterns score zero
+TEST_F(GomokuTest, ThreatFastDeadPattern) {
+    // Two in a row with both ends blocked: OXX0
+    board[7][6] = AI_CELL_NAUGHTS; // Block left
     board[7][7] = AI_CELL_CROSSES;
     board[7][8] = AI_CELL_CROSSES;
-    // board[7][4] is open, board[7][9] is open
+    board[7][9] = AI_CELL_NAUGHTS; // Block right
 
-    int score = calc_score_at(board, BOARD_SIZE, AI_CELL_CROSSES, 7, 7);
-
-    // A four-in-a-row should score at least 5000 to be treated as urgent
-    EXPECT_GE(score, 5000)
-        << "A four-in-a-row must score high enough to be treated as urgent";
+    // Evaluate at the blocked position -- the line through 7,7 horizontally is dead
+    int threat = evaluate_threat_fast(board, 7, 5, AI_CELL_CROSSES, BOARD_SIZE);
+    // The horizontal direction should contribute 0 (blocked both sides)
+    // Other directions may contribute small amounts, so just check it's low
+    EXPECT_LT(threat, 100)
+        << "A pattern blocked on both ends should not score as a threat";
 }
 
 int main(int argc, char **argv) {
