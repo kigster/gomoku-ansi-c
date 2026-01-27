@@ -554,6 +554,7 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
         int depth_best_score = -WIN_SCORE - 1;
         int depth_best_x = *best_x;
         int depth_best_y = *best_y;
+        int root_alpha = -WIN_SCORE - 1; // Track best score for alpha-beta narrowing
 
         // Search all moves at current depth
         for (int m = 0; m < move_count; m++) {
@@ -573,7 +574,9 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
             int pos = i * game->board_size + j;
             game->current_hash ^= game->zobrist_keys[player_index][pos];
 
-            int score = minimax_with_timeout(game, game->board, current_depth - 1, -WIN_SCORE - 1, WIN_SCORE + 1,
+            // Use root_alpha as the lower bound -- after finding a move with
+            // score S, we only need to check if other moves are better than S.
+            int score = minimax_with_timeout(game, game->board, current_depth - 1, root_alpha, WIN_SCORE + 1,
                     0, AI_CELL_NAUGHTS, i, j);
 
             // Restore hash
@@ -585,6 +588,10 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
                 depth_best_score = score;
                 depth_best_x = i;
                 depth_best_y = j;
+                // Narrow the alpha window for subsequent root moves
+                if (score > root_alpha) {
+                    root_alpha = score;
+                }
 
                 // Early termination for very good moves
                 if (score >= WIN_SCORE - 1000) {
