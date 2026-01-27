@@ -232,8 +232,8 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
         return evaluate_position_incremental(board, game->board_size, ai_player, last_x, last_y);
     }
 
-    // Compute position hash
-    uint64_t hash = compute_zobrist_hash(game);
+    // Use incrementally maintained hash instead of recomputing from scratch
+    uint64_t hash = game->current_hash;
 
     // Probe transposition table
     int tt_value;
