@@ -284,7 +284,7 @@ void update_interesting_moves(game_state_t *game, int x, int y) {
     invalidate_winner_cache(game);
 
     // Add new interesting moves around the placed stone
-    const int radius = 2; // MAX_RADIUS
+    const int radius = 3; // MAX_RADIUS - matches ai.c
 
     for (int i = max(0, x - radius); i <= min(game->board_size - 1, x + radius); i++) {
         for (int j = max(0, y - radius); j <= min(game->board_size - 1, y + radius); j++) {
