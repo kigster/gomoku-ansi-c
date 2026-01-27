@@ -229,7 +229,7 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
     // Check for timeout first
     if (is_search_timed_out(game)) {
         game->search_timed_out = 1;
-        return evaluate_position_incremental(board, game->board_size, ai_player, last_x, last_y);
+        return evaluate_position(board, game->board_size, ai_player);
     }
 
     // Compute position hash
@@ -253,9 +253,10 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
         return value;
     }
 
-    // Check search depth limit
+    // Check search depth limit - use full board evaluation at leaf nodes
+    // to avoid missing threats far from the last move
     if (depth == 0) {
-        int value = evaluate_position_incremental(board, game->board_size, ai_player, last_x, last_y);
+        int value = evaluate_position(board, game->board_size, ai_player);
         store_transposition(game, hash, value, depth, TT_EXACT, -1, -1);
         return value;
     }
