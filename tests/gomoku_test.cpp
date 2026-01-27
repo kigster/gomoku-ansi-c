@@ -341,6 +341,35 @@ TEST_F(GomokuTest, BlockedPatterns) {
     EXPECT_GT(unblocked_score, score);
 }
 
+// Test incremental win detection at a specific position
+TEST_F(GomokuTest, HasWinnerAtPosition) {
+    // Place 5 crosses horizontally at row 7, cols 3-7
+    for (int i = 3; i < 8; i++) {
+        board[7][i] = AI_CELL_CROSSES;
+    }
+
+    // Should detect win when checking at any of the 5 cells
+    EXPECT_TRUE(has_winner_at(board, BOARD_SIZE, AI_CELL_CROSSES, 7, 5));
+    EXPECT_TRUE(has_winner_at(board, BOARD_SIZE, AI_CELL_CROSSES, 7, 3));
+    EXPECT_TRUE(has_winner_at(board, BOARD_SIZE, AI_CELL_CROSSES, 7, 7));
+
+    // Should NOT detect win for the other player
+    EXPECT_FALSE(has_winner_at(board, BOARD_SIZE, AI_CELL_NAUGHTS, 7, 5));
+
+    // Should NOT detect win at an unrelated position
+    EXPECT_FALSE(has_winner_at(board, BOARD_SIZE, AI_CELL_CROSSES, 0, 0));
+}
+
+// Test has_winner_at with no win
+TEST_F(GomokuTest, HasWinnerAtNoWin) {
+    board[7][5] = AI_CELL_CROSSES;
+    board[7][6] = AI_CELL_CROSSES;
+    board[7][7] = AI_CELL_CROSSES;
+    board[7][8] = AI_CELL_CROSSES;
+    // Only 4 in a row -- not a win
+    EXPECT_FALSE(has_winner_at(board, BOARD_SIZE, AI_CELL_CROSSES, 7, 7));
+}
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

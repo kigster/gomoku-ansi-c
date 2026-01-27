@@ -193,6 +193,19 @@ int evaluate_position_incremental(int **board, int size, int player, int last_x,
 int has_winner(int **board, int size, int player);
 
 /**
+ * Fast win detection checking only the 4 lines through position (x,y).
+ * Use this when you know the last move and only need to check if it created a win.
+ *
+ * @param board 2D array representing the game board
+ * @param size Size of the board
+ * @param player The player to check for
+ * @param x Row of the last move
+ * @param y Column of the last move
+ * @return 1 if player has won through (x,y), 0 otherwise
+ */
+int has_winner_at(int **board, int size, int player, int x, int y);
+
+/**
  * Example minimax implementation using the evaluation function.
  * This shows how to integrate the evaluation with minimax + alpha-beta pruning.
  *
