@@ -341,6 +341,52 @@ TEST_F(GomokuTest, BlockedPatterns) {
     EXPECT_GT(unblocked_score, score);
 }
 
+// Test that threat score ordering is correct (FOUR > THREE > TWO)
+TEST_F(GomokuTest, ThreatScoreOrdering) {
+    // Build an open four: .XXXX. (one open end)
+    // Place 4 in a row with one side open
+    board[7][5] = AI_CELL_CROSSES;
+    board[7][6] = AI_CELL_CROSSES;
+    board[7][7] = AI_CELL_CROSSES;
+    board[7][8] = AI_CELL_CROSSES;
+    int four_score = calc_score_at(board, BOARD_SIZE, AI_CELL_CROSSES, 7, 7);
+
+    // Clear and build an open three: .XXX.
+    memset(board[7], 0, BOARD_SIZE * sizeof(int));
+    board[7][6] = AI_CELL_CROSSES;
+    board[7][7] = AI_CELL_CROSSES;
+    board[7][8] = AI_CELL_CROSSES;
+    int three_score = calc_score_at(board, BOARD_SIZE, AI_CELL_CROSSES, 7, 7);
+
+    // Clear and build a two: .XX.
+    memset(board[7], 0, BOARD_SIZE * sizeof(int));
+    board[7][7] = AI_CELL_CROSSES;
+    board[7][8] = AI_CELL_CROSSES;
+    int two_score = calc_score_at(board, BOARD_SIZE, AI_CELL_CROSSES, 7, 7);
+
+    // Four must score higher than three, three higher than two
+    EXPECT_GT(four_score, three_score)
+        << "A four-in-a-row (one move from win) must score higher than a three";
+    EXPECT_GT(three_score, two_score)
+        << "A three-in-a-row must score higher than a two";
+}
+
+// Test that THREAT_FOUR forces immediate response by scoring high enough
+TEST_F(GomokuTest, FourInARowIsUrgent) {
+    // Build a four with one open end (opponent must block or lose)
+    board[7][5] = AI_CELL_CROSSES;
+    board[7][6] = AI_CELL_CROSSES;
+    board[7][7] = AI_CELL_CROSSES;
+    board[7][8] = AI_CELL_CROSSES;
+    // board[7][4] is open, board[7][9] is open
+
+    int score = calc_score_at(board, BOARD_SIZE, AI_CELL_CROSSES, 7, 7);
+
+    // A four-in-a-row should score at least 5000 to be treated as urgent
+    EXPECT_GE(score, 5000)
+        << "A four-in-a-row must score high enough to be treated as urgent";
+}
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
