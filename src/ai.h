@@ -58,6 +58,7 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
  * Wrapper for backward compatibility with existing minimax function.
  * 
  * @param board The game board
+ * @param board_size Size of the board (number of rows/columns)
  * @param depth Current search depth
  * @param alpha Alpha value for pruning
  * @param beta Beta value for pruning
@@ -65,7 +66,8 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
  * @param ai_player The AI player
  * @return Best evaluation score
  */
-int minimax(int **board, int depth, int alpha, int beta, int maximizing_player, int ai_player);
+int minimax(int **board, int board_size, int depth, int alpha, int beta,
+        int maximizing_player, int ai_player);
 
 //===============================================================================
 // MOVE EVALUATION AND ORDERING

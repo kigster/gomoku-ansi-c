@@ -262,7 +262,7 @@ TEST_F(GomokuTest, MinimaxBasic) {
     board[7][8] = AI_CELL_NAUGHTS;
     
     // Test minimax with depth 1
-    int score = minimax(board, 1, -1000000, 1000000, 1, AI_CELL_NAUGHTS);
+    int score = minimax(board, BOARD_SIZE, 1, -1000000, 1000000, 1, AI_CELL_NAUGHTS);
     
     // Should return a reasonable score (not extreme values unless winning)
     EXPECT_GT(score, -1000000);
@@ -276,8 +276,25 @@ TEST_F(GomokuTest, MinimaxWithWin) {
         board[7][i] = AI_CELL_CROSSES;
     }
     
-    int score = minimax(board, 1, -1000000, 1000000, 1, AI_CELL_CROSSES);
+    int score = minimax(board, BOARD_SIZE, 1, -1000000, 1000000, 1, AI_CELL_CROSSES);
     EXPECT_EQ(score, 1000001); // Should recognize the win (WIN_SCORE + depth for faster wins)
+}
+
+// Ensure minimax works correctly on boards smaller than 19x19
+TEST_F(GomokuTest, MinimaxDifferentBoardSize) {
+    const int SMALL_SIZE = 15;
+    int **small_board = create_board(SMALL_SIZE);
+    ASSERT_NE(small_board, nullptr);
+
+    small_board[7][7] = AI_CELL_CROSSES;
+    small_board[7][8] = AI_CELL_NAUGHTS;
+
+    int score = minimax(small_board, SMALL_SIZE, 1, -1000000, 1000000, 1,
+            AI_CELL_NAUGHTS);
+    EXPECT_GT(score, -1000000);
+    EXPECT_LT(score, 1000000);
+
+    free_board(small_board, SMALL_SIZE);
 }
 
 // Test corner cases
