@@ -17,6 +17,7 @@
 //===============================================================================
 
 #define MAX_RADIUS 3
+#define SEARCH_MOVE_RADIUS 3
 #define WIN_SCORE 1000000
 
 //===============================================================================
@@ -39,6 +40,65 @@ int generate_moves_optimized(game_state_t *game, move_t *moves, int current_play
             moves[move_count].priority = get_move_priority_optimized(game, 
                     game->interesting_moves[i].x, game->interesting_moves[i].y, current_player);
             move_count++;
+        }
+    }
+
+    return move_count;
+}
+
+/**
+ * Dynamic move generation that scans the actual board state.
+ * Unlike generate_moves_optimized() which uses a cache frozen at the root,
+ * this function finds all empty cells within SEARCH_MOVE_RADIUS of any
+ * occupied cell on the current (possibly modified) board.
+ * This is essential during minimax search where temporary moves change
+ * which positions are tactically relevant.
+ */
+int generate_moves_dynamic(int **board, int board_size, move_t *moves, int current_player __attribute__((unused))) {
+    // Use a flat boolean array for O(1) duplicate detection
+    int visited[19][19];
+    memset(visited, 0, sizeof(visited));
+
+    int move_count = 0;
+    int has_stones = 0;
+
+    for (int i = 0; i < board_size; i++) {
+        for (int j = 0; j < board_size; j++) {
+            if (board[i][j] != AI_CELL_EMPTY) {
+                has_stones = 1;
+                // Add empty cells within radius
+                int ri_min = (i - SEARCH_MOVE_RADIUS > 0) ? i - SEARCH_MOVE_RADIUS : 0;
+                int ri_max = (i + SEARCH_MOVE_RADIUS < board_size - 1) ? i + SEARCH_MOVE_RADIUS : board_size - 1;
+                int rj_min = (j - SEARCH_MOVE_RADIUS > 0) ? j - SEARCH_MOVE_RADIUS : 0;
+                int rj_max = (j + SEARCH_MOVE_RADIUS < board_size - 1) ? j + SEARCH_MOVE_RADIUS : board_size - 1;
+
+                for (int ri = ri_min; ri <= ri_max; ri++) {
+                    for (int rj = rj_min; rj <= rj_max; rj++) {
+                        if (board[ri][rj] == AI_CELL_EMPTY && !visited[ri][rj]) {
+                            visited[ri][rj] = 1;
+                            moves[move_count].x = ri;
+                            moves[move_count].y = rj;
+                            moves[move_count].priority = 0; // Will be set by caller if needed
+                            move_count++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // If no stones on board, offer center area
+    if (!has_stones) {
+        int center = board_size / 2;
+        for (int i = center - 2; i <= center + 2; i++) {
+            for (int j = center - 2; j <= center + 2; j++) {
+                if (i >= 0 && i < board_size && j >= 0 && j < board_size) {
+                    moves[move_count].x = i;
+                    moves[move_count].y = j;
+                    moves[move_count].priority = 0;
+                    move_count++;
+                }
+            }
         }
     }
 
@@ -235,7 +295,8 @@ int minimax(int **board, int board_size, int depth, int alpha, int beta,
 }
 
 int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, int beta,
-        int maximizing_player, int ai_player, int last_x, int last_y) {
+        int maximizing_player, int ai_player,
+        int last_x __attribute__((unused)), int last_y __attribute__((unused))) {
     // Check for timeout first
     if (is_search_timed_out(game)) {
         game->search_timed_out = 1;
@@ -291,9 +352,16 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
 
     int current_player_turn = maximizing_player ? ai_player : other_player(ai_player);
 
-    // Generate and sort moves using optimized method
+    // Generate moves dynamically from the actual board state, not a frozen cache.
+    // This ensures moves that become relevant due to hypothetical placements
+    // deeper in the search tree are properly considered.
     move_t moves[361]; // Max for 19x19 board
-    int move_count = generate_moves_optimized(game, moves, current_player_turn);
+    int move_count = generate_moves_dynamic(board, game->board_size, moves, current_player_turn);
+
+    // Assign priorities for move ordering
+    for (int m = 0; m < move_count; m++) {
+        moves[m].priority = get_move_priority_optimized(game, moves[m].x, moves[m].y, current_player_turn);
+    }
 
     if (move_count == 0) {
         return 0; // No moves available
