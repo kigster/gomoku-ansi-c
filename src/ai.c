@@ -156,35 +156,45 @@ int evaluate_threat_fast(int **board, int x, int y, int player, int board_size) 
         int dy = directions[d][1];
         int count = 1; // Count the stone we're about to place
 
-        // Count in positive direction
+        // Count in positive direction and check if end is open
         int nx = x + dx, ny = y + dy;
-        while (nx >= 0 && nx < board_size && ny >= 0 && ny < board_size && 
+        while (nx >= 0 && nx < board_size && ny >= 0 && ny < board_size &&
                 board[nx][ny] == player) {
             count++;
             nx += dx;
             ny += dy;
         }
+        // Check if the positive end is open (empty cell in bounds)
+        int open_pos = (nx >= 0 && nx < board_size && ny >= 0 && ny < board_size &&
+                board[nx][ny] == AI_CELL_EMPTY);
 
-        // Count in negative direction
+        // Count in negative direction and check if end is open
         nx = x - dx;
         ny = y - dy;
-        while (nx >= 0 && nx < board_size && ny >= 0 && ny < board_size && 
+        while (nx >= 0 && nx < board_size && ny >= 0 && ny < board_size &&
                 board[nx][ny] == player) {
             count++;
             nx -= dx;
             ny -= dy;
         }
+        // Check if the negative end is open (empty cell in bounds)
+        int open_neg = (nx >= 0 && nx < board_size && ny >= 0 && ny < board_size &&
+                board[nx][ny] == AI_CELL_EMPTY);
 
-        // Evaluate threat level
+        int open_ends = open_pos + open_neg;
+
+        // Evaluate threat level accounting for open/blocked ends
         int threat = 0;
         if (count >= 5) {
-            threat = 100000; // Win
+            threat = 100000; // Win - doesn't matter if ends are open
+        } else if (open_ends == 0) {
+            threat = 0;      // Dead pattern - both ends blocked
         } else if (count == 4) {
-            threat = 10000;  // Strong threat
+            threat = (open_ends == 2) ? 50000 : 10000; // Straight four vs half-open four
         } else if (count == 3) {
-            threat = 1000;   // Medium threat
+            threat = (open_ends == 2) ? 1000 : 200;    // Open three vs half-open three
         } else if (count == 2) {
-            threat = 100;    // Weak threat
+            threat = (open_ends == 2) ? 100 : 20;      // Open two vs half-open two
         }
 
         max_threat = max(max_threat, threat);
@@ -289,11 +299,11 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
     // Check for timeout first
     if (is_search_timed_out(game)) {
         game->search_timed_out = 1;
-        return evaluate_position_incremental(board, game->board_size, ai_player, last_x, last_y);
+        return evaluate_position(board, game->board_size, ai_player);
     }
 
-    // Compute position hash
-    uint64_t hash = compute_zobrist_hash(game);
+    // Use incrementally maintained hash instead of recomputing from scratch
+    uint64_t hash = game->current_hash;
 
     // Probe transposition table
     int tt_value;
@@ -313,9 +323,10 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
         return value;
     }
 
-    // Check search depth limit
+    // Check search depth limit - use full board evaluation at leaf nodes
+    // to avoid missing threats far from the last move
     if (depth == 0) {
-        int value = evaluate_position_incremental(board, game->board_size, ai_player, last_x, last_y);
+        int value = evaluate_position(board, game->board_size, ai_player);
         store_transposition(game, hash, value, depth, TT_EXACT, -1, -1);
         return value;
     }

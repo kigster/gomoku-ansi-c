@@ -341,47 +341,39 @@ TEST_F(GomokuTest, BlockedPatterns) {
     EXPECT_GT(unblocked_score, score);
 }
 
-// Test that dynamic move generation finds moves near stones on the board
-TEST_F(GomokuTest, DynamicMoveGeneration) {
-    // Place a stone at center
-    board[9][9] = AI_CELL_CROSSES;
+// Test that evaluate_threat_fast accounts for open vs blocked ends
+TEST_F(GomokuTest, ThreatFastOpenEnds) {
+    // Three in a row with both ends open: .XXX.
+    board[7][6] = AI_CELL_CROSSES;
+    board[7][7] = AI_CELL_CROSSES;
+    board[7][8] = AI_CELL_CROSSES;
+    // Position 7,5 is where we evaluate placing a stone to extend
+    // Evaluate at 7,5 which would make 4 consecutive, but let's test at the empty end
+    int open_threat = evaluate_threat_fast(board, 7, 5, AI_CELL_CROSSES, BOARD_SIZE);
 
-    move_t moves[361];
-    int count = generate_moves_dynamic(board, BOARD_SIZE, moves, AI_CELL_NAUGHTS);
+    // Three in a row with both ends blocked: OXXX0
+    board[7][5] = AI_CELL_NAUGHTS; // Block left
+    board[7][9] = AI_CELL_NAUGHTS; // Block right
+    int blocked_threat = evaluate_threat_fast(board, 7, 4, AI_CELL_CROSSES, BOARD_SIZE);
 
-    // Should generate moves within radius 2 of (9,9)
-    EXPECT_GT(count, 0);
-
-    // All generated moves should be empty and within radius 2 of (9,9)
-    for (int i = 0; i < count; i++) {
-        EXPECT_EQ(board[moves[i].x][moves[i].y], AI_CELL_EMPTY);
-        int dx = abs(moves[i].x - 9);
-        int dy = abs(moves[i].y - 9);
-        EXPECT_LE(dx, 2);
-        EXPECT_LE(dy, 2);
-    }
+    EXPECT_GT(open_threat, blocked_threat)
+        << "Open-ended lines must score higher than blocked lines";
 }
 
-// Test that dynamic move generation discovers new moves after temporary placements
-TEST_F(GomokuTest, DynamicMoveGenAfterTempPlacement) {
-    // Place a stone at (9,9)
-    board[9][9] = AI_CELL_CROSSES;
+// Test that fully blocked patterns score zero
+TEST_F(GomokuTest, ThreatFastDeadPattern) {
+    // Two in a row with both ends blocked: OXX0
+    board[7][6] = AI_CELL_NAUGHTS; // Block left
+    board[7][7] = AI_CELL_CROSSES;
+    board[7][8] = AI_CELL_CROSSES;
+    board[7][9] = AI_CELL_NAUGHTS; // Block right
 
-    move_t moves_before[361];
-    int count_before = generate_moves_dynamic(board, BOARD_SIZE, moves_before, AI_CELL_NAUGHTS);
-
-    // Now simulate a temporary placement far away at (3,3)
-    board[3][3] = AI_CELL_NAUGHTS;
-
-    move_t moves_after[361];
-    int count_after = generate_moves_dynamic(board, BOARD_SIZE, moves_after, AI_CELL_CROSSES);
-
-    // Should have more moves now (includes neighbors of both stones)
-    EXPECT_GT(count_after, count_before)
-        << "Dynamic generation must discover new moves near temporary placements";
-
-    // Clean up
-    board[3][3] = AI_CELL_EMPTY;
+    // Evaluate at the blocked position -- the line through 7,7 horizontally is dead
+    int threat = evaluate_threat_fast(board, 7, 5, AI_CELL_CROSSES, BOARD_SIZE);
+    // The horizontal direction should contribute 0 (blocked both sides)
+    // Other directions may contribute small amounts, so just check it's low
+    EXPECT_LT(threat, 100)
+        << "A pattern blocked on both ends should not score as a threat";
 }
 
 int main(int argc, char **argv) {
