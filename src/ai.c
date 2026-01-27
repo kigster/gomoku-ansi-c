@@ -294,11 +294,6 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
             int i = moves[m].x;
             int j = moves[m].y;
 
-            // Aggressive pruning: Skip moves with very low priority at deeper levels
-            if (depth > 2 && moves[m].priority < 10) {
-                continue;
-            }
-
             board[i][j] = current_player_turn;
 
             // Update hash incrementally
@@ -360,11 +355,6 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
 
             int i = moves[m].x;
             int j = moves[m].y;
-
-            // Aggressive pruning: Skip moves with very low priority at deeper levels
-            if (depth > 2 && moves[m].priority < 10) {
-                continue;
-            }
 
             board[i][j] = current_player_turn;
 
