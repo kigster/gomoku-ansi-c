@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Basic setup for C/C++ dev environment
+# Run this script to check out the GoogleTest library and build it.
 
 set -xe
+
+project_root=$(pwd -P)
 
 os="$(uname -s | tr 'A-Z' 'a-z')"
 
@@ -12,8 +15,8 @@ if [[ $os == darwin ]]; then
 elif [[ $os == linux ]]; then
   command -v gcc || {
     sudo apt-get update -yqq
-    sudo apt-get install build-essential -yqq
-  }
+      sudo apt-get install build-essential -yqq
+    }
 fi
 
 command -v cmake >/dev/null || {
@@ -33,12 +36,25 @@ echo "Building GoogleTest..."
 mkdir -p build
 cd build
 echo "Configuring and building GoogleTest..."
-cmake .. && make -j 4
+set +e
 
-echo "GoogleTest setup complete!"
-echo "You can now build the project using:"
-echo "  make                 # Traditional Make build"
-echo "  make cmake-build     # CMake build"
-echo "  make test            # Run tests with Make"
-echo "  make cmake-test      # Run tests with CMake"
+cmake .. && make -j 4 >/dev/null 2>&1
+code=$?
 
+if [[ ${code} -ne 0 ]]; then
+  make -j 4 >/dev/null 2>&1
+  code=$?
+fi
+
+cd "${project_root}" >/dev/null || exit 4
+
+declare -a test_libs
+test_libs=($(find tests -name 'libgtest*.a'))
+
+if [[ ${#test_libs[@]} -ge 2 ]]; then
+  echo -e "\e[1;32mGoogleTest built successfully.\e[0m"
+  exit 0
+else
+  echo -e "\e[1;31mNo test libraries were built. Please check the output above for details.\e[0m"
+  exit 1
+fi
