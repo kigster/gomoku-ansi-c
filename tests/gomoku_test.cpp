@@ -341,6 +341,41 @@ TEST_F(GomokuTest, BlockedPatterns) {
     EXPECT_GT(unblocked_score, score);
 }
 
+// Test that evaluate_threat_fast accounts for open vs blocked ends
+TEST_F(GomokuTest, ThreatFastOpenEnds) {
+    // Three in a row with both ends open: .XXX.
+    board[7][6] = AI_CELL_CROSSES;
+    board[7][7] = AI_CELL_CROSSES;
+    board[7][8] = AI_CELL_CROSSES;
+    // Position 7,5 is where we evaluate placing a stone to extend
+    // Evaluate at 7,5 which would make 4 consecutive, but let's test at the empty end
+    int open_threat = evaluate_threat_fast(board, 7, 5, AI_CELL_CROSSES, BOARD_SIZE);
+
+    // Three in a row with both ends blocked: OXXX0
+    board[7][5] = AI_CELL_NAUGHTS; // Block left
+    board[7][9] = AI_CELL_NAUGHTS; // Block right
+    int blocked_threat = evaluate_threat_fast(board, 7, 4, AI_CELL_CROSSES, BOARD_SIZE);
+
+    EXPECT_GT(open_threat, blocked_threat)
+        << "Open-ended lines must score higher than blocked lines";
+}
+
+// Test that fully blocked patterns score zero
+TEST_F(GomokuTest, ThreatFastDeadPattern) {
+    // Two in a row with both ends blocked: OXX0
+    board[7][6] = AI_CELL_NAUGHTS; // Block left
+    board[7][7] = AI_CELL_CROSSES;
+    board[7][8] = AI_CELL_CROSSES;
+    board[7][9] = AI_CELL_NAUGHTS; // Block right
+
+    // Evaluate at the blocked position -- the line through 7,7 horizontally is dead
+    int threat = evaluate_threat_fast(board, 7, 5, AI_CELL_CROSSES, BOARD_SIZE);
+    // The horizontal direction should contribute 0 (blocked both sides)
+    // Other directions may contribute small amounts, so just check it's low
+    EXPECT_LT(threat, 100)
+        << "A pattern blocked on both ends should not score as a threat";
+}
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
