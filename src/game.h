@@ -56,7 +56,9 @@ typedef struct {
     int best_move_y;
 } transposition_entry_t;
 
-#define TRANSPOSITION_TABLE_SIZE 100000
+// Power of 2 for fast modulo via bitmask (1M entries)
+#define TRANSPOSITION_TABLE_SIZE (1 << 20)
+#define TRANSPOSITION_TABLE_MASK (TRANSPOSITION_TABLE_SIZE - 1)
 #define TT_EXACT 0
 #define TT_LOWER_BOUND 1
 #define TT_UPPER_BOUND 2
@@ -252,6 +254,14 @@ int get_cached_winner(game_state_t *game, int player);
  * @param game The game state
  */
 void init_transposition_table(game_state_t *game);
+
+/**
+ * Clears the transposition table entries without reinitializing Zobrist keys.
+ * Call this at the start of each new move's search to avoid stale entries.
+ *
+ * @param game The game state
+ */
+void clear_transposition_table(game_state_t *game);
 
 /**
  * Computes the Zobrist hash for the current position.
