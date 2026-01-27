@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Basic setup for C/C++ dev environment
+# Run this script to check out the GoogleTest library and build it.
 
 set -xe
 
@@ -45,12 +46,12 @@ if [[ ${code} -ne 0 ]]; then
   code=$?
 fi
 
-cd ${project_root} >/dev/null || exit 4
+cd "${project_root}" >/dev/null || exit 4
 
 declare -a test_libs
-test_libs=($(find tests -name '*.a'))
+test_libs=($(find tests -name 'libgtest*.a'))
 
-if [[ ${#test_libs[@]} -eq 2 ]]; then
+if [[ ${#test_libs[@]} -ge 2 ]]; then
   echo -e "\e[1;32mGoogleTest built successfully.\e[0m"
   exit 0
 else

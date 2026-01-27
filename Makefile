@@ -62,6 +62,8 @@ tests/gomoku_test.o: googletest tests/gomoku_test.cpp src/gomoku.h src/board.h s
 test: 		$(TEST_TARGET) $(TARGET) ## Run all the unit tests
 		./$(TEST_TARGET)
 
+tests: 		test
+
 clean:  	## Clean up all the intermediate objects
 		rm -f $(TARGET) $(TEST_TARGET) $(OBJECTS) tests/gomoku_test.o
 
