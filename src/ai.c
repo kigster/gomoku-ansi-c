@@ -224,7 +224,8 @@ int evaluate_threat_fast(int **board, int x, int y, int player, int board_size) 
         // Evaluate threat level with consideration for holes and openness
         int threat = 0;
 
-        if (contiguous >= 5 || total >= 5) {
+        // Only contiguous >= 5 is a true win. total >= 5 with holes is NOT a win.
+        if (contiguous >= 5) {
             threat = 100000; // Win
         } else if (contiguous == 4) {
             if (open_ends >= 2) {
