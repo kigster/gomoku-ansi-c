@@ -200,6 +200,13 @@ void draw_board(game_state_t *game) {
     int current_player_index = (game->current_player == AI_CELL_CROSSES) ? 0 : 1;
     int is_human_turn = (game->player_type[current_player_index] == PLAYER_TYPE_HUMAN);
 
+    // Find the last move position for highlighting (from move history)
+    int last_move_x = -1, last_move_y = -1;
+    if (game->move_history_count > 0) {
+        last_move_x = game->move_history[game->move_history_count - 1].x;
+        last_move_y = game->move_history[game->move_history_count - 1].y;
+    }
+
     for (int i = 0; i < game->board_size; i++) {
         printf("  ");
         if (i > 9) {
@@ -210,6 +217,7 @@ void draw_board(game_state_t *game) {
         for (int j = 0; j < game->board_size; j++) {
             // Only show cursor if it's a human player's turn
             int is_cursor_here = is_human_turn && (i == game->cursor_x && j == game->cursor_y);
+            int is_last_move = (i == last_move_x && j == last_move_y);
 
             printf(" "); // Always add the space before the symbol
 
@@ -224,23 +232,25 @@ void draw_board(game_state_t *game) {
                 }
             } else if (game->board[i][j] == AI_CELL_CROSSES) {
                 if (is_cursor_here) {
-                    // Human stone with cursor: add grey background
+                    // X stone with cursor: add grey background
                     printf("%s%s%s", COLOR_RESET, UNICODE_OCCUPIED, COLOR_RESET);
+                } else if (is_last_move) {
+                    // X stone that was the last move: highlight it
+                    printf("%s%s%s", COLOR_X_LAST_MOVE, UNICODE_CROSSES, COLOR_RESET);
                 } else {
-                    // Human stone without cursor: normal red
+                    // X stone without cursor: normal red
                     printf("%s%s%s", COLOR_X_NORMAL, UNICODE_CROSSES, COLOR_RESET);
                 }
             } else { // AI_CELL_NAUGHTS
                 if (is_cursor_here) {
-                    // AI stone with cursor: add grey background
+                    // O stone with cursor: add grey background
                     printf("%s%s%s", COLOR_RESET, UNICODE_OCCUPIED, COLOR_RESET);
+                } else if (is_last_move) {
+                    // O stone that was the last move: highlight it
+                    printf("%s%s%s", COLOR_O_LAST_MOVE, UNICODE_NAUGHTS, COLOR_RESET);
                 } else {
-                    // AI stone without cursor: normal highlighting
-                    if (i == game->last_ai_move_x && j == game->last_ai_move_y) {
-                        printf("%s%s%s", COLOR_O_LAST_MOVE, UNICODE_NAUGHTS, COLOR_RESET);
-                    } else {
-                        printf("%s%s%s", COLOR_O_NORMAL, UNICODE_NAUGHTS, COLOR_RESET);
-                    }
+                    // O stone without cursor: normal blue
+                    printf("%s%s%s", COLOR_O_NORMAL, UNICODE_NAUGHTS, COLOR_RESET);
                 }
             }
         }
