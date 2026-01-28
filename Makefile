@@ -101,3 +101,7 @@ install: build  ## Install the binary to the prefix
 
 uninstall: 	## Uninstall the binary from the prefix
 		-rm -f $(BINDIR)/$(PACKAGE)
+
+format: 	## Format all source and test files using clang-format
+		find src -maxdepth 2 -name '*.c**'   | xargs clang-format -i
+		find tests -maxdepth 1 -name '*.c**' | xargs clang-format -i
