@@ -592,7 +592,35 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
         snprintf(game->ai_status_message, sizeof(game->ai_status_message),
                 "%s%c%s It's a checkmate ;-)",
                 ai_color, ai_symbol, COLOR_RESET);
-        add_ai_history_entry(game, winning_move_count); // Checked winning_move_count moves
+        add_ai_history_entry(game, winning_move_count);
+        return;
+    }
+
+    // CRITICAL: Check for opponent's winning threats that MUST be blocked
+    // If opponent can win next turn, we must block (unless we could win first, handled above)
+    int blocking_moves_x[361];
+    int blocking_moves_y[361];
+    int blocking_move_count = 0;
+    int opponent = other_player(ai_player);
+
+    for (int i = 0; i < move_count; i++) {
+        if (evaluate_threat_fast(game->board, moves[i].x, moves[i].y, opponent, game->board_size) >= 100000) {
+            blocking_moves_x[blocking_move_count] = moves[i].x;
+            blocking_moves_y[blocking_move_count] = moves[i].y;
+            blocking_move_count++;
+        }
+    }
+
+    if (blocking_move_count > 0) {
+        // Opponent can win next turn - we MUST block
+        // If there are multiple blocking moves, randomly select one
+        int selected = rand() % blocking_move_count;
+        *best_x = blocking_moves_x[selected];
+        *best_y = blocking_moves_y[selected];
+        snprintf(game->ai_status_message, sizeof(game->ai_status_message),
+                "%s%c%s Blocking opponent's win!",
+                ai_color, ai_symbol, COLOR_RESET);
+        add_ai_history_entry(game, blocking_move_count);
         return;
     }
 
