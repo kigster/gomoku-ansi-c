@@ -16,8 +16,7 @@
 // AI CONSTANTS AND STRUCTURES
 //===============================================================================
 
-#define MAX_RADIUS 3
-#define SEARCH_MOVE_RADIUS 3
+#define MAX_RADIUS 2
 #define WIN_SCORE 1000000
 
 //===============================================================================
@@ -27,18 +26,61 @@
 /**
  * Optimized move generation using cached interesting moves
  */
-int generate_moves_optimized(game_state_t *game, move_t *moves, int current_player) {
+int generate_moves_optimized(game_state_t *game, int **board, move_t *moves, int current_player, int depth_remaining) {
+    int size = game->board_size;
     int move_count = 0;
 
-    // Use cached interesting moves
-    for (int i = 0; i < game->interesting_move_count; i++) {
-        if (game->interesting_moves[i].is_active && 
-                game->board[game->interesting_moves[i].x][game->interesting_moves[i].y] == AI_CELL_EMPTY) {
+    // If the board is empty, play center.
+    int stones = 0;
+    for (int i = 0; i < size; i++) {
+        for (int j = 0; j < size; j++) {
+            if (board[i][j] != AI_CELL_EMPTY) {
+                stones++;
+            }
+        }
+    }
+    if (stones == 0) {
+        moves[0].x = size / 2;
+        moves[0].y = size / 2;
+        moves[0].priority = 1000;
+        return 1;
+    }
 
-            moves[move_count].x = game->interesting_moves[i].x;
-            moves[move_count].y = game->interesting_moves[i].y;
-            moves[move_count].priority = get_move_priority_optimized(game, 
-                    game->interesting_moves[i].x, game->interesting_moves[i].y, current_player);
+    // Candidate map to avoid duplicates.
+    unsigned char candidate[19][19];
+    memset(candidate, 0, sizeof(candidate));
+
+    int radius = MAX_RADIUS;
+
+    for (int x = 0; x < size; x++) {
+        for (int y = 0; y < size; y++) {
+            if (board[x][y] == AI_CELL_EMPTY) {
+                continue;
+            }
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dy = -radius; dy <= radius; dy++) {
+                    int nx = x + dx;
+                    int ny = y + dy;
+                    if (nx < 0 || nx >= size || ny < 0 || ny >= size) {
+                        continue;
+                    }
+                    if (board[nx][ny] != AI_CELL_EMPTY) {
+                        continue;
+                    }
+                    candidate[nx][ny] = 1;
+                }
+            }
+        }
+    }
+
+    for (int x = 0; x < size; x++) {
+        for (int y = 0; y < size; y++) {
+            if (!candidate[x][y]) {
+                continue;
+            }
+            moves[move_count].x = x;
+            moves[move_count].y = y;
+            moves[move_count].priority = get_move_priority_optimized(game, board, x, y, current_player, depth_remaining);
             move_count++;
         }
     }
@@ -47,104 +89,39 @@ int generate_moves_optimized(game_state_t *game, move_t *moves, int current_play
 }
 
 /**
- * Dynamic move generation that scans the actual board state.
- * Unlike generate_moves_optimized() which uses a cache frozen at the root,
- * this function finds all empty cells within SEARCH_MOVE_RADIUS of any
- * occupied cell on the current (possibly modified) board.
- * This is essential during minimax search where temporary moves change
- * which positions are tactically relevant.
+ * Optimized move prioritization without temporary placements.
+ * This is used only for move ordering (not pruning).
  */
-int generate_moves_dynamic(int **board, int board_size, move_t *moves, int current_player __attribute__((unused))) {
-    // Use a flat boolean array for O(1) duplicate detection
-    int visited[19][19];
-    memset(visited, 0, sizeof(visited));
-
-    int move_count = 0;
-    int has_stones = 0;
-
-    for (int i = 0; i < board_size; i++) {
-        for (int j = 0; j < board_size; j++) {
-            if (board[i][j] != AI_CELL_EMPTY) {
-                has_stones = 1;
-                // Add empty cells within radius
-                int ri_min = (i - SEARCH_MOVE_RADIUS > 0) ? i - SEARCH_MOVE_RADIUS : 0;
-                int ri_max = (i + SEARCH_MOVE_RADIUS < board_size - 1) ? i + SEARCH_MOVE_RADIUS : board_size - 1;
-                int rj_min = (j - SEARCH_MOVE_RADIUS > 0) ? j - SEARCH_MOVE_RADIUS : 0;
-                int rj_max = (j + SEARCH_MOVE_RADIUS < board_size - 1) ? j + SEARCH_MOVE_RADIUS : board_size - 1;
-
-                for (int ri = ri_min; ri <= ri_max; ri++) {
-                    for (int rj = rj_min; rj <= rj_max; rj++) {
-                        if (board[ri][rj] == AI_CELL_EMPTY && !visited[ri][rj]) {
-                            visited[ri][rj] = 1;
-                            moves[move_count].x = ri;
-                            moves[move_count].y = rj;
-                            moves[move_count].priority = 0; // Will be set by caller if needed
-                            move_count++;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // If no stones on board, offer center area
-    if (!has_stones) {
-        int center = board_size / 2;
-        for (int i = center - 2; i <= center + 2; i++) {
-            for (int j = center - 2; j <= center + 2; j++) {
-                if (i >= 0 && i < board_size && j >= 0 && j < board_size) {
-                    moves[move_count].x = i;
-                    moves[move_count].y = j;
-                    moves[move_count].priority = 0;
-                    move_count++;
-                }
-            }
-        }
-    }
-
-    return move_count;
-}
-
-/**
- * Optimized move prioritization that avoids expensive temporary placements
- */
-int get_move_priority_optimized(game_state_t *game, int x, int y, int player) {
+int get_move_priority_optimized(game_state_t *game, int **board, int x, int y, int player, int depth_remaining) {
     int center = game->board_size / 2;
     int priority = 0;
 
-    // Center bias - closer to center is better
+    // Center bias - closer to center is better early on.
     int center_dist = abs(x - center) + abs(y - center);
     priority += max(0, game->board_size - center_dist);
 
-    // Quick threat evaluation without temporary placement
-    int my_threat = evaluate_threat_fast(game->board, x, y, player, game->board_size);
-    int opp_threat = evaluate_threat_fast(game->board, x, y, other_player(player), game->board_size);
+    int my_threat = evaluate_threat_fast(board, x, y, player, game->board_size);
+    int opp_threat = evaluate_threat_fast(board, x, y, other_player(player), game->board_size);
 
-    // Immediate win detection
+    // Winning move or mandatory block should come first.
     if (my_threat >= 100000) {
-        return 100000;
+        return 2000000000;
     }
-
-    // Blocking opponent's win
     if (opp_threat >= 100000) {
-        return 50000;
+        return 1500000000;
     }
 
-    // Killer move bonus
-    if (is_killer_move(game, game->max_depth, x, y)) {
-        priority += 10000;
+    // Killer move bonus (depth-local).
+    if (is_killer_move(game, depth_remaining, x, y)) {
+        priority += 1000000;
     }
 
-    // Prioritize offensive and defensive moves
-    priority += my_threat / 10;   // Our opportunities
-    priority += opp_threat / 5;   // Blocking opponent
+    priority += my_threat * 10;
+    priority += opp_threat * 12;
 
     return priority;
 }
 
-/**
- * Fast threat evaluation without temporary board modifications
- */
 int evaluate_threat_fast(int **board, int x, int y, int player, int board_size) {
     int max_threat = 0;
 
@@ -156,45 +133,35 @@ int evaluate_threat_fast(int **board, int x, int y, int player, int board_size) 
         int dy = directions[d][1];
         int count = 1; // Count the stone we're about to place
 
-        // Count in positive direction and check if end is open
+        // Count in positive direction
         int nx = x + dx, ny = y + dy;
-        while (nx >= 0 && nx < board_size && ny >= 0 && ny < board_size &&
+        while (nx >= 0 && nx < board_size && ny >= 0 && ny < board_size && 
                 board[nx][ny] == player) {
             count++;
             nx += dx;
             ny += dy;
         }
-        // Check if the positive end is open (empty cell in bounds)
-        int open_pos = (nx >= 0 && nx < board_size && ny >= 0 && ny < board_size &&
-                board[nx][ny] == AI_CELL_EMPTY);
 
-        // Count in negative direction and check if end is open
+        // Count in negative direction
         nx = x - dx;
         ny = y - dy;
-        while (nx >= 0 && nx < board_size && ny >= 0 && ny < board_size &&
+        while (nx >= 0 && nx < board_size && ny >= 0 && ny < board_size && 
                 board[nx][ny] == player) {
             count++;
             nx -= dx;
             ny -= dy;
         }
-        // Check if the negative end is open (empty cell in bounds)
-        int open_neg = (nx >= 0 && nx < board_size && ny >= 0 && ny < board_size &&
-                board[nx][ny] == AI_CELL_EMPTY);
 
-        int open_ends = open_pos + open_neg;
-
-        // Evaluate threat level accounting for open/blocked ends
+        // Evaluate threat level
         int threat = 0;
         if (count >= 5) {
-            threat = 100000; // Win - doesn't matter if ends are open
-        } else if (open_ends == 0) {
-            threat = 0;      // Dead pattern - both ends blocked
+            threat = 100000; // Win
         } else if (count == 4) {
-            threat = (open_ends == 2) ? 50000 : 10000; // Straight four vs half-open four
+            threat = 10000;  // Strong threat
         } else if (count == 3) {
-            threat = (open_ends == 2) ? 1000 : 200;    // Open three vs half-open three
+            threat = 1000;   // Medium threat
         } else if (count == 2) {
-            threat = (open_ends == 2) ? 100 : 20;      // Open two vs half-open two
+            threat = 100;    // Weak threat
         }
 
         max_threat = max(max_threat, threat);
@@ -295,15 +262,17 @@ int minimax(int **board, int board_size, int depth, int alpha, int beta,
 }
 
 int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, int beta,
-        int maximizing_player, int ai_player,
-        int last_x __attribute__((unused)), int last_y __attribute__((unused))) {
+        int maximizing_player, int ai_player, int last_x, int last_y) {
+    (void)last_x;
+    (void)last_y;
+
     // Check for timeout first
     if (is_search_timed_out(game)) {
         game->search_timed_out = 1;
         return evaluate_position(board, game->board_size, ai_player);
     }
 
-    // Use incrementally maintained hash instead of recomputing from scratch
+    // Compute position hash
     uint64_t hash = game->current_hash;
 
     // Probe transposition table
@@ -312,33 +281,19 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
         return tt_value;
     }
 
-    // Check for win/loss. Use fast incremental check when we know the last move,
-    // falling back to full board scan otherwise.
-    {
-        int ai_won = 0, opp_won = 0;
-        if (last_x >= 0 && last_y >= 0 && board[last_x][last_y] != AI_CELL_EMPTY) {
-            // Fast path: only check lines through the last move (O(36))
-            ai_won = has_winner_at(board, game->board_size, ai_player, last_x, last_y);
-            opp_won = has_winner_at(board, game->board_size, other_player(ai_player), last_x, last_y);
-        } else {
-            // Fallback: full board scan (used at root or with unknown last move)
-            ai_won = has_winner(board, game->board_size, ai_player);
-            opp_won = has_winner(board, game->board_size, other_player(ai_player));
-        }
-        if (ai_won) {
-            int value = WIN_SCORE + depth;
-            store_transposition(game, hash, value, depth, TT_EXACT, -1, -1);
-            return value;
-        }
-        if (opp_won) {
-            int value = -WIN_SCORE - depth;
-            store_transposition(game, hash, value, depth, TT_EXACT, -1, -1);
-            return value;
-        }
+    // Check for immediate wins/losses first (terminal conditions)
+    if (get_cached_winner(game, ai_player)) {
+        int value = WIN_SCORE + depth; // Prefer faster wins
+        store_transposition(game, hash, value, depth, TT_EXACT, -1, -1);
+        return value;
+    }
+    if (get_cached_winner(game, other_player(ai_player))) {
+        int value = -WIN_SCORE - depth; // Prefer slower losses
+        store_transposition(game, hash, value, depth, TT_EXACT, -1, -1);
+        return value;
     }
 
-    // Check search depth limit - use full board evaluation at leaf nodes
-    // to avoid missing threats far from the last move
+    // Check search depth limit
     if (depth == 0) {
         int value = evaluate_position(board, game->board_size, ai_player);
         store_transposition(game, hash, value, depth, TT_EXACT, -1, -1);
@@ -352,16 +307,9 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
 
     int current_player_turn = maximizing_player ? ai_player : other_player(ai_player);
 
-    // Generate moves dynamically from the actual board state, not a frozen cache.
-    // This ensures moves that become relevant due to hypothetical placements
-    // deeper in the search tree are properly considered.
+    // Generate and sort moves using optimized method
     move_t moves[361]; // Max for 19x19 board
-    int move_count = generate_moves_dynamic(board, game->board_size, moves, current_player_turn);
-
-    // Assign priorities for move ordering
-    for (int m = 0; m < move_count; m++) {
-        moves[m].priority = get_move_priority_optimized(game, moves[m].x, moves[m].y, current_player_turn);
-    }
+    int move_count = generate_moves_optimized(game, board, moves, current_player_turn, depth);
 
     if (move_count == 0) {
         return 0; // No moves available
@@ -372,6 +320,7 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
 
     int best_x = -1, best_y = -1;
     int original_alpha = alpha;
+    int original_beta = beta;
 
     if (maximizing_player) {
         int max_eval = -WIN_SCORE - 1;
@@ -384,7 +333,7 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
             }
 
             int i = moves[m].x;
-            int j = moves[m].y;
+            int j = moves[m].y; 
 
             board[i][j] = current_player_turn;
 
@@ -425,11 +374,11 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
 
         // Store in transposition table
         int flag = (max_eval <= original_alpha) ? TT_UPPER_BOUND : 
-            (max_eval >= beta) ? TT_LOWER_BOUND : TT_EXACT;
+            (max_eval >= original_beta) ? TT_LOWER_BOUND : TT_EXACT;
         store_transposition(game, hash, max_eval, depth, flag, best_x, best_y);
 
         // Store killer move if beta cutoff occurred
-        if (max_eval >= beta && best_x != -1) {
+        if (max_eval >= original_beta && best_x != -1) {
             store_killer_move(game, depth, best_x, best_y);
         }
 
@@ -446,7 +395,7 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
             }
 
             int i = moves[m].x;
-            int j = moves[m].y;
+            int j = moves[m].y; 
 
             board[i][j] = current_player_turn;
 
@@ -487,11 +436,11 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha, 
 
         // Store in transposition table
         int flag = (min_eval <= original_alpha) ? TT_UPPER_BOUND : 
-            (min_eval >= beta) ? TT_LOWER_BOUND : TT_EXACT;
+            (min_eval >= original_beta) ? TT_LOWER_BOUND : TT_EXACT;
         store_transposition(game, hash, min_eval, depth, flag, best_x, best_y);
 
         // Store killer move if alpha cutoff occurred
-        if (min_eval <= alpha && best_x != -1) {
+        if (min_eval <= original_alpha && best_x != -1) {
             store_killer_move(game, depth, best_x, best_y);
         }
 
@@ -572,8 +521,8 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
     char ai_symbol = (ai_player == AI_CELL_CROSSES) ? 'X' : 'O';
     const char* ai_color = (ai_player == AI_CELL_CROSSES) ? COLOR_RED : COLOR_BLUE;
 
-    // Clear stale TT entries from previous searches
-    clear_transposition_table(game);
+    // Ensure zobrist hash is consistent with the current board
+    game->current_hash = compute_zobrist_hash(game);
 
     // Count stones on board to detect first AI move
     int stone_count = 0;
@@ -611,7 +560,7 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
 
     // Generate and sort moves using optimized method
     move_t moves[361]; // Max for 19x19 board
-    int move_count = generate_moves_optimized(game, moves, ai_player);
+    int move_count = generate_moves_optimized(game, game->board, moves, ai_player, game->max_depth);
 
     // Check for immediate winning moves first
     for (int i = 0; i < move_count; i++) {
@@ -646,7 +595,6 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
         int depth_best_score = -WIN_SCORE - 1;
         int depth_best_x = *best_x;
         int depth_best_y = *best_y;
-        int root_alpha = -WIN_SCORE - 1; // Track best score for alpha-beta narrowing
 
         // Search all moves at current depth
         for (int m = 0; m < move_count; m++) {
@@ -666,9 +614,7 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
             int pos = i * game->board_size + j;
             game->current_hash ^= game->zobrist_keys[player_index][pos];
 
-            // Use root_alpha as the lower bound -- after finding a move with
-            // score S, we only need to check if other moves are better than S.
-            int score = minimax_with_timeout(game, game->board, current_depth - 1, root_alpha, WIN_SCORE + 1,
+            int score = minimax_with_timeout(game, game->board, current_depth - 1, -WIN_SCORE - 1, WIN_SCORE + 1,
                     0, ai_player, i, j);
 
             // Restore hash
@@ -680,10 +626,6 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
                 depth_best_score = score;
                 depth_best_x = i;
                 depth_best_y = j;
-                // Narrow the alpha window for subsequent root moves
-                if (score > root_alpha) {
-                    root_alpha = score;
-                }
 
                 // Early termination for very good moves
                 if (score >= WIN_SCORE - 1000) {

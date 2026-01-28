@@ -87,5 +87,3 @@ cmake-test: 	cmake-build ## Run tests using CMake
 
 cmake-rebuild: 	cmake-clean cmake-build ## Clean and rebuild using CMake
 
-run: 		clean build
-		./$(TARGET)

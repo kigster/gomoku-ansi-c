@@ -89,20 +89,7 @@ typedef struct {
  * @param current_player The current player
  * @return Number of moves generated
  */
-int generate_moves_optimized(game_state_t *game, move_t *moves, int current_player);
-
-/**
- * Dynamic move generation that scans the actual board state.
- * Finds all empty cells within a radius of any occupied cell.
- * Used during minimax search where the board has temporary modifications.
- *
- * @param board The game board (may have temporary search modifications)
- * @param board_size Size of the board
- * @param moves Array to store generated moves
- * @param current_player The current player
- * @return Number of moves generated
- */
-int generate_moves_dynamic(int **board, int board_size, move_t *moves, int current_player);
+int generate_moves_optimized(game_state_t *game, int **board, move_t *moves, int current_player, int depth_remaining);
 
 /**
  * Optimized move prioritization that avoids expensive temporary placements.
@@ -113,7 +100,7 @@ int generate_moves_dynamic(int **board, int board_size, move_t *moves, int curre
  * @param player The player making the move
  * @return Priority score for the move
  */
-int get_move_priority_optimized(game_state_t *game, int x, int y, int player);
+int get_move_priority_optimized(game_state_t *game, int **board, int x, int y, int player, int depth_remaining);
 
 /**
  * Fast threat evaluation without temporary board modifications.
