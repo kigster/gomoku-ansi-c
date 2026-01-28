@@ -16,12 +16,12 @@
 //===============================================================================
 
 #define GAME_NAME "Gomoku"
-#define GAME_VERSION "0.3.1"
+#define GAME_VERSION "0.4.0"
 #define GAME_AUTHOR "Konstantin Gredeskoul"
 #define GAME_LICENSE "MIT License"
 #define GAME_URL "https://github.com/kigster/gomoku-ansi-c"
 #define GAME_DESCRIPTION "Gomoku, also known as Five in a Row"
-#define GAME_COPYRIGHT "© 2025 Konstantin Gredeskoul, MIT License"
+#define GAME_COPYRIGHT "© 2025-2026 Konstantin Gredeskoul, MIT License"
 #define GAME_RULES_BRIEF \
     " ↑ ↓ ← → (arrows) ───→ to move around, \n" \
     "  Enter or Space   ───→ to make a move, \n" \
