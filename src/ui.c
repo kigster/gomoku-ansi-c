@@ -330,8 +330,10 @@ void draw_status(game_state_t *game) {
     memset(difficulty_str, 0, sizeof(difficulty_str));
     memset(difficulty_val, 0, sizeof(difficulty_val));
 
-    snprintf(difficulty_str, sizeof(difficulty_str), "%sDifficulty     : %-*s", difficulty_color, action_width, difficulty_name);
-    printf("%s%s│ %s %s  │\n", prefix, COLOR_RESET, difficulty_str, COLOR_RESET);
+    snprintf(difficulty_str, sizeof(difficulty_str), "%sDifficulty     : %s", difficulty_color, difficulty_name);
+    printf("%s%s│ %s", prefix, COLOR_RESET, difficulty_str);
+    printf(ESCAPE_MOVE_CURSOR_TO, 27, 42);
+    printf("%s│%s\n", COLOR_RESET, COLOR_RESET);
 
     // Search Depth - show both depths if different
     memset(difficulty_str, 0, sizeof(difficulty_str));
@@ -340,12 +342,12 @@ void draw_status(game_state_t *game) {
                 "%sSearch Depth   : X=%d, O=%d",
                 COLOR_MAGENTA,
                 game->depth_for_player[0], game->depth_for_player[1]);
-        printf("%s%s│ %s%-*s%s  │%s\n", prefix, COLOR_RESET, difficulty_str,
-               action_width, "", COLOR_RESET, COLOR_RESET);
     } else {
-        snprintf(difficulty_str, sizeof(difficulty_str), "%sSearch Depth   : %-*d", difficulty_color, action_width, game->max_depth);
-        printf("%s%s│ %s %s  │%s\n", prefix, COLOR_RESET, difficulty_str, COLOR_RESET, COLOR_RESET);
+        snprintf(difficulty_str, sizeof(difficulty_str), "%sSearch Depth   : %d", difficulty_color, game->max_depth);
     }
+    printf("%s%s│ %s", prefix, COLOR_RESET, difficulty_str);
+    printf(ESCAPE_MOVE_CURSOR_TO, 28, 42);
+    printf("%s│%s\n", COLOR_RESET, COLOR_RESET);
 
     // Separator line
     printf("%s%s│ %-*s %s│%s\n", prefix, COLOR_RESET, box_width - 4, "", COLOR_RESET, COLOR_RESET);
