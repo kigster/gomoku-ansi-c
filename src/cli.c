@@ -26,7 +26,11 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
         .show_help = 0,
         .invalid_args = 0,
         .enable_undo = 0,
-        .skip_welcome = 0
+        .skip_welcome = 0,
+        .player_x_type = PLAYER_TYPE_HUMAN,  // X is human by default
+        .player_o_type = PLAYER_TYPE_AI,     // O is AI by default
+        .depth_x = -1,                       // -1 means use max_depth
+        .depth_o = -1                        // -1 means use max_depth
     };
 
     // Command line options structure
@@ -38,20 +42,44 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
         {"help", no_argument, 0, 'h'},
         {"undo", no_argument, 0, 'u'},
         {"skip-welcome", no_argument, 0, 's'},
+        {"player-x", required_argument, 0, 'x'},
+        {"player-o", required_argument, 0, 'o'},
         {0, 0, 0, 0}};
 
     int c;
     int option_index = 0;
 
     // Parse command-line arguments using getopt_long
-    while ((c = getopt_long(argc, argv, "d:l:t:b:hus", long_options, &option_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "d:l:t:b:husx:o:", long_options, &option_index)) != -1) {
         switch (c) {
             case 'd':
-                config.max_depth = atoi(optarg);
-                if (config.max_depth < 1 || config.max_depth > GAME_DEPTH_LEVEL_MAX) {
-                    printf("Error: Search depth must be between 1 and %d\n", GAME_DEPTH_LEVEL_MAX);
-                    config.invalid_args = 1;
+                // Check for asymmetric depth format: "4:6"
+                if (strchr(optarg, ':') != NULL) {
+                    int depth1, depth2;
+                    if (sscanf(optarg, "%d:%d", &depth1, &depth2) == 2) {
+                        if (depth1 < 1 || depth1 > GAME_DEPTH_LEVEL_MAX ||
+                            depth2 < 1 || depth2 > GAME_DEPTH_LEVEL_MAX) {
+                            printf("Error: Both depths must be between 1 and %d\n", GAME_DEPTH_LEVEL_MAX);
+                            config.invalid_args = 1;
+                        } else {
+                            config.depth_x = depth1;
+                            config.depth_o = depth2;
+                            config.max_depth = (depth1 > depth2) ? depth1 : depth2;  // For display
+                        }
+                    } else {
+                        printf("Error: Invalid depth format '%s'. Use 'N' or 'N:M'\n", optarg);
+                        config.invalid_args = 1;
+                    }
+                } else {
+                    // Single depth for both players
+                    config.max_depth = atoi(optarg);
+                    if (config.max_depth < 1 || config.max_depth > GAME_DEPTH_LEVEL_MAX) {
+                        printf("Error: Search depth must be between 1 and %d\n", GAME_DEPTH_LEVEL_MAX);
+                        config.invalid_args = 1;
+                    }
+                    // Leave depth_x and depth_o as -1 to use max_depth
                 }
+
                 if (config.max_depth >= GAME_DEPTH_LEVEL_WARN) {
                     printf("  %s%s%d%s\n  %s%s%s\n", COLOR_YELLOW,
                             "WARNING: Search at or above the depth of ",
@@ -104,6 +132,30 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
                 config.skip_welcome = 1;
                 break;
 
+            case 'x':
+                if (strcmp(optarg, "human") == 0) {
+                    config.player_x_type = PLAYER_TYPE_HUMAN;
+                } else if (strcmp(optarg, "ai") == 0) {
+                    config.player_x_type = PLAYER_TYPE_AI;
+                } else {
+                    printf("Error: Invalid player type '%s' for -x/--player-x\n", optarg);
+                    printf("Valid options are: human, ai\n\n");
+                    config.invalid_args = 1;
+                }
+                break;
+
+            case 'o':
+                if (strcmp(optarg, "human") == 0) {
+                    config.player_o_type = PLAYER_TYPE_HUMAN;
+                } else if (strcmp(optarg, "ai") == 0) {
+                    config.player_o_type = PLAYER_TYPE_AI;
+                } else {
+                    printf("Error: Invalid player type '%s' for -o/--player-o\n", optarg);
+                    printf("Valid options are: human, ai\n\n");
+                    config.invalid_args = 1;
+                }
+                break;
+
             case 'h':
                 config.show_help = 1;
                 break;
@@ -137,7 +189,10 @@ void print_help(const char* program_name) {
     printf("  %s - an entertaining and engaging five-in-a-row version\n\n", program_name);
 
     printf("%sFLAGS:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
-    printf("  %s-d, --depth N%s         The depth of search in the MiniMax algorithm\n", COLOR_YELLOW, COLOR_RESET);
+    printf("  %s-x, --player-x TYPE%s   Player X type: \"human\" or \"ai\" (default: human)\n", COLOR_YELLOW, COLOR_RESET);
+    printf("  %s-o, --player-o TYPE%s   Player O type: \"human\" or \"ai\" (default: ai)\n", COLOR_YELLOW, COLOR_RESET);
+    printf("  %s-d, --depth N%s         The depth of search. Use N for both, or N:M for\n", COLOR_YELLOW, COLOR_RESET);
+    printf("                        asymmetric depths (X:O). Examples: '4' or '4:6'\n");
     printf("  %s-l, --level M%s         Can be \"easy\", \"medium\", \"hard\"\n", COLOR_YELLOW, COLOR_RESET);
     printf("  %s-t, --timeout T%s       Timeout in seconds that AI (and human)\n", COLOR_YELLOW, COLOR_RESET);
     printf("                        have to make their move, otherwise AI must choose\n");
@@ -148,9 +203,11 @@ void print_help(const char* program_name) {
     printf("  %s-h, --help%s            Show this help message\n", COLOR_YELLOW, COLOR_RESET);
 
     printf("\n%sEXAMPLES:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
-    printf("  %s%s --level easy --board 15\n", COLOR_YELLOW, program_name);
-    printf("  %s%s -d 4 -t 30 -b 19\n", COLOR_YELLOW, program_name);
-    printf("  %s%s --level hard --timeout 60\n", COLOR_YELLOW, program_name);
+    printf("  %s%s --level easy --board 15%s                # Human vs AI (easy)\n", COLOR_YELLOW, program_name, COLOR_RESET);
+    printf("  %s%s -x human -o human%s                      # Human vs Human\n", COLOR_YELLOW, program_name, COLOR_RESET);
+    printf("  %s%s -x ai -o human%s                         # AI vs Human (AI plays first)\n", COLOR_YELLOW, program_name, COLOR_RESET);
+    printf("  %s%s -x ai -o ai -d 4:6 --skip-welcome%s      # AI vs AI (X depth 4, O depth 6)\n", COLOR_YELLOW, program_name, COLOR_RESET);
+    printf("  %s%s -d 4 -t 30 -b 19%s                       # Custom depth and timeout\n", COLOR_YELLOW, program_name, COLOR_RESET);
 
     printf("\n%sDIFFICULTY LEVELS:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
     printf("  %seasy%s         - Search depth %d (quick moves, good for beginners)\n", COLOR_GREEN, COLOR_RESET, GAME_DEPTH_LEVEL_EASY);
@@ -178,5 +235,33 @@ void print_help(const char* program_name) {
 }
 
 int validate_config(const cli_config_t *config) {
-    return !config->invalid_args;
+    if (config->invalid_args) {
+        return 0;
+    }
+
+    // Validate depths for AI players
+    if (config->player_x_type == PLAYER_TYPE_AI || config->player_o_type == PLAYER_TYPE_AI) {
+        int effective_depth_x = (config->depth_x >= 0) ? config->depth_x : config->max_depth;
+        int effective_depth_o = (config->depth_o >= 0) ? config->depth_o : config->max_depth;
+
+        if (effective_depth_x < 1 || effective_depth_x > GAME_DEPTH_LEVEL_MAX) {
+            printf("Error: Player X AI depth must be between 1 and %d\n", GAME_DEPTH_LEVEL_MAX);
+            return 0;
+        }
+
+        if (effective_depth_o < 1 || effective_depth_o > GAME_DEPTH_LEVEL_MAX) {
+            printf("Error: Player O AI depth must be between 1 and %d\n", GAME_DEPTH_LEVEL_MAX);
+            return 0;
+        }
+    }
+
+    // Warn if timeout is set for human vs human
+    if (config->player_x_type == PLAYER_TYPE_HUMAN &&
+        config->player_o_type == PLAYER_TYPE_HUMAN &&
+        config->move_timeout > 0) {
+        printf("Warning: Timeout is set for Human vs Human mode. ");
+        printf("Humans will lose if they don't move within %d seconds.\n\n", config->move_timeout);
+    }
+
+    return 1;
 } 

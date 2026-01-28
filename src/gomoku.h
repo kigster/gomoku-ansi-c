@@ -50,6 +50,12 @@
 #define AI_CELL_CROSSES 1
 #define AI_CELL_NAUGHTS -1
 
+// Player types
+typedef enum {
+    PLAYER_TYPE_HUMAN = 0,
+    PLAYER_TYPE_AI = 1
+} player_type_t;
+
 // Search parameters
 #define SEARCH_RADIUS 4
 #define NEED_TO_WIN 5

@@ -516,6 +516,11 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
     game->search_start_time = get_current_time();
     game->search_timed_out = 0;
 
+    // Determine which player the AI is playing as
+    int ai_player = game->current_player;  // Could be CROSSES or NAUGHTS
+    char ai_symbol = (ai_player == AI_CELL_CROSSES) ? 'X' : 'O';
+    const char* ai_color = (ai_player == AI_CELL_CROSSES) ? COLOR_RED : COLOR_BLUE;
+
     // Ensure zobrist hash is consistent with the current board
     game->current_hash = compute_zobrist_hash(game);
 
@@ -542,27 +547,29 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
 
     // Clear previous AI status message and show thinking message
     strcpy(game->ai_status_message, "");
-    if (game->move_timeout > 0) {
-        printf("%s%s%s It's AI's Turn... Please wait... (timeout: %ds)\n", 
-                COLOR_BLUE, "O", COLOR_RESET, game->move_timeout);
-    } else {
-        printf("%s%s%s It's AI's Turn... Please wait...\n", 
-                COLOR_BLUE, "O", COLOR_RESET);
+    if (game->config.skip_welcome) {
+        if (game->move_timeout > 0) {
+            printf("%s%c%s It's AI's Turn... Please wait... (timeout: %ds)\n",
+                    ai_color, ai_symbol, COLOR_RESET, game->move_timeout);
+        } else {
+            printf("%s%c%s It's AI's Turn... Please wait...\n",
+                    ai_color, ai_symbol, COLOR_RESET);
+        }
+        fflush(stdout);
     }
-    fflush(stdout);
 
     // Generate and sort moves using optimized method
     move_t moves[361]; // Max for 19x19 board
-    int move_count = generate_moves_optimized(game, game->board, moves, AI_CELL_NAUGHTS, game->max_depth);
+    int move_count = generate_moves_optimized(game, game->board, moves, ai_player, game->max_depth);
 
     // Check for immediate winning moves first
     for (int i = 0; i < move_count; i++) {
-        if (evaluate_threat_fast(game->board, moves[i].x, moves[i].y, AI_CELL_NAUGHTS, game->board_size) >= 100000) {
+        if (evaluate_threat_fast(game->board, moves[i].x, moves[i].y, ai_player, game->board_size) >= 100000) {
             *best_x = moves[i].x;
             *best_y = moves[i].y;
-            snprintf(game->ai_status_message, sizeof(game->ai_status_message), 
-                    "%s%s%s It's a checkmate ;-)", 
-                    COLOR_BLUE, "O", COLOR_RESET);
+            snprintf(game->ai_status_message, sizeof(game->ai_status_message),
+                    "%s%c%s It's a checkmate ;-)",
+                    ai_color, ai_symbol, COLOR_RESET);
             add_ai_history_entry(game, 1); // Only checked 1 move
             return;
         }
@@ -600,15 +607,15 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
             int i = moves[m].x;
             int j = moves[m].y;
 
-            game->board[i][j] = AI_CELL_NAUGHTS;
+            game->board[i][j] = ai_player;
 
             // Update hash incrementally
-            int player_index = 1; // AI_CELL_NAUGHTS
+            int player_index = (ai_player == AI_CELL_CROSSES) ? 0 : 1;
             int pos = i * game->board_size + j;
             game->current_hash ^= game->zobrist_keys[player_index][pos];
 
             int score = minimax_with_timeout(game, game->board, current_depth - 1, -WIN_SCORE - 1, WIN_SCORE + 1,
-                    0, AI_CELL_NAUGHTS, i, j);
+                    0, ai_player, i, j);
 
             // Restore hash
             game->current_hash ^= game->zobrist_keys[player_index][pos];
