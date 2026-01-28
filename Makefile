@@ -87,3 +87,7 @@ cmake-test: 	cmake-build ## Run tests using CMake
 
 cmake-rebuild: 	cmake-clean cmake-build ## Clean and rebuild using CMake
 
+format: 	## Format all source and test files using clang-format	
+		find src -maxdepth 2 -name '*.c**'   | xargs clang-format -i
+		find tests -maxdepth 1 -name '*.c**' | xargs clang-format -i
+
