@@ -59,8 +59,8 @@ See the following screenshot for an example:
 
 Gomoku is a strategy game where players take turns placing stones on a board. The goal is to be the first to get five stones in a row (horizontally, vertically, or diagonally).
 
-- **Human plays first** (Crosses stones ✕) - this is an advantage
-- **AI plays second** (Naughts stones ○)
+- **X plays first** (by default X is a human player). First player has a slight advantage.
+- **O plays next** (by default AI plays ○)
 - **Win condition**: First to get exactly 5 in a row wins
 - **Overline rule**: Six or more stones in a row do NOT count as a win
 
@@ -85,7 +85,7 @@ git clone https://github.com/kigster/gomoku-ansi-c.git
 cd gomoku-ansi-c
 
 # Run setup script (installs dependencies and Google Test)
-make cmake-tests
+make test
 ```
 
 ### Building the Game
@@ -93,11 +93,11 @@ make cmake-tests
 #### Using Make (Traditional)
 
 ```bash
-# Build the game
-make build -j 4
-
 # Clean build files if needed
 make clean
+
+# Build the game
+make build -j 4
 ```
 
 #### Using CMake (Alternative)
@@ -124,12 +124,13 @@ Below is the screenshot of the help screen of the game, since it's a CLI/Termina
 
 ---
 
-## USAGE
+## GAMEPLAY
 
 ### Quick Start
 
 ```bash
 # Run with default settings (Medium difficulty, 19x19 board)
+# Human is X, AI is O. 
 ./gomoku
 
 # Run with easy difficulty on a 15x15 board
@@ -140,6 +141,26 @@ Below is the screenshot of the help screen of the game, since it's a CLI/Termina
 
 # Show all available options
 ./gomoku --help
+```
+
+### Switching Players
+
+This game supports all four permitations of who is playing what:
+
+1. (Default) Human starts as X, AI responds with O
+1. Human vs Human (taking turns controlling cursor)
+1. AI starts as X, human follows with O.
+1. AI plays as X, against AI as O. In this mode its possible to set different depth levels for each AI using the following syntax: --depth N:M where N is the search depth of X, and N is the search depth of O.
+
+To choose a non default configuration, simply pass:
+
+```bash
+# make AI go first, and use search depth of 5
+./gomoku -x ai -o human -d 5
+
+# oh watch AI play against itself, but give second AI that
+# will play naughts a slightly more look ahead power
+./gomoku -x ai -o ai -d 4:5 
 ```
 
 ### Complete Help Output
@@ -171,7 +192,7 @@ EXAMPLES:
 
 DIFFICULTY LEVELS:
   easy         - Search depth 2 (quick moves, good for beginners)
-  medium      - Search depth 4 (balanced gameplay, default setting)
+  medium       - Search depth 4 (balanced gameplay, default setting)
   hard         - Search depth 6 (advanced AI, challenging for experts)
 
 GAME SYMBOLS:
@@ -209,18 +230,24 @@ Examples:
 #### Difficulty & Search Depth
 
 **`-l, --level M`** (options: `easy`, `medium`, `hard`)
-Quick difficulty preset that sets the search depth:
-- **easy**: Depth 2 - Very fast, suitable for beginners
-- **medium**: Depth 4 - Balanced, default setting, moderately challenging
-- **hard**: Depth 6 - Slow but very challenging gameplay
+
+> [!TIP]
+> Quick difficulty preset that sets the search depth.
+>
+> - **easy**: Depth 2 - Very fast, suitable for beginners
+> - **medium**: Depth 4 - Balanced, default setting, moderately challenging
+> - **hard**: Depth 6 - Slow but very challenging gameplay
 
 ```bash
 ./gomoku --level easy    # Quick, beginner-friendly
 ./gomoku --level hard    # Challenging for experienced players
 ```
 
-**`-d, --depth N`** or **`-d, --depth N:M`**
+> [!TIP]
+> **`-d, --depth N`** or **`-d, --depth N:M`**
+
 Manually set the search depth (overrides `--level` if both are specified).
+
 - Single value: Both players use the same depth
 - N:M format: X uses depth N, O uses depth M (asymmetric)
 - Valid range: 1-10 (higher = stronger AI but slower)
@@ -234,7 +261,9 @@ Manually set the search depth (overrides `--level` if both are specified).
 #### Time Management
 
 **`-t, --timeout T`**
+
 Set a maximum time limit (in seconds) for each move. Both human and AI players must make a move within this timeout. If the timeout is exceeded:
+
 - **AI**: Plays the best move found so far
 - **Human**: Loses the game (move is not made)
 
@@ -248,6 +277,7 @@ Useful for preventing long wait times during deep AI searches.
 #### Board Configuration
 
 **`-b, --board SIZE`** (options: `15`, `19`)
+
 Choose the board size. The standard Gomoku board is 19x19, but 15x15 is also available for faster games.
 
 ```bash
@@ -258,6 +288,7 @@ Choose the board size. The standard Gomoku board is 19x19, but 15x15 is also ava
 #### Features
 
 **`-u, --undo`**
+
 Enable the undo feature, allowing players to undo the last move pair (human move + AI response). Disabled by default.
 
 ```bash
@@ -266,6 +297,7 @@ Enable the undo feature, allowing players to undo the last move pair (human move
 ```
 
 **`-s, --skip-welcome`**
+
 Skip the welcome screen and start the game immediately.
 
 ```bash
@@ -274,6 +306,7 @@ Skip the welcome screen and start the game immediately.
 ```
 
 **`-h, --help`**
+
 Display the help message and exit.
 
 ```bash
@@ -453,7 +486,7 @@ make test
 
 ## License & Copyright
 
-This project is © Konstantin Gredeskoul, 2025. It is open source and can be distributed under the MIT License.
+This project is © Konstantin Gredeskoul, 2025-2026. It is open source and can be distributed under the MIT License.
 
 ## Contributing
 
