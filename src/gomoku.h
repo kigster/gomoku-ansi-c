@@ -16,7 +16,7 @@
 //===============================================================================
 
 #define GAME_NAME "Gomoku"
-#define GAME_VERSION "0.3.2"
+#define GAME_VERSION "0.3.1"
 #define GAME_AUTHOR "Konstantin Gredeskoul"
 #define GAME_LICENSE "MIT License"
 #define GAME_URL "https://github.com/kigster/gomoku-ansi-c"
@@ -191,19 +191,6 @@ int evaluate_position_incremental(int **board, int size, int player, int last_x,
  * @return 1 if player has won, 0 otherwise
  */
 int has_winner(int **board, int size, int player);
-
-/**
- * Fast win detection checking only the 4 lines through position (x,y).
- * Use this when you know the last move and only need to check if it created a win.
- *
- * @param board 2D array representing the game board
- * @param size Size of the board
- * @param player The player to check for
- * @param x Row of the last move
- * @param y Column of the last move
- * @return 1 if player has won through (x,y), 0 otherwise
- */
-int has_winner_at(int **board, int size, int player, int x, int y);
 
 /**
  * Example minimax implementation using the evaluation function.
