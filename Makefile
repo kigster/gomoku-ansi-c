@@ -1,4 +1,4 @@
-eing a great pair programmer.# vim: ft=make
+# vim: ft=make
 # vim: tabstop=8
 # vim: shiftwidth=8
 # vim: noexpandtab
@@ -54,14 +54,17 @@ build: 		$(TARGET) ## Build the Game
 
 rebuild: 	clean build ## Clean and rebuild the game
 
+submodules: 	## Initialize and update git submodules
+		@git submodule update --init --recursive lib/json-c
+
 json-c: 	$(JSONC_LIB)
 
-$(JSONC_LIB):
+$(JSONC_LIB): submodules
 		@if [ ! -f $(JSONC_LIB) ]; then \
 			echo "Building json-c library..."; \
 			mkdir -p $(JSONC_BUILD); \
-			cd $(JSONC_BUILD) && cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF >/dev/null 2>&1; \
-			$(MAKE) -C $(JSONC_BUILD) -j4 >/dev/null 2>&1; \
+			LDFLAGS="" cmake -S $(JSONC_DIR) -B $(JSONC_BUILD) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DBUILD_STATIC_LIBS=ON; \
+			LDFLAGS="" $(MAKE) -C $(JSONC_BUILD) -j4; \
 		fi
 
 $(TARGET): $(JSONC_LIB) $(OBJECTS)
