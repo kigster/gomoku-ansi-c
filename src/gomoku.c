@@ -343,13 +343,59 @@ int count_squares(int value, int player, int *last_square, int *hole_count,
     return RT_CONTINUE;
 }
 
-int calc_combination_threat(int one, int two) {    
-    if (((one == THREAT_THREE) && (two == THREAT_FOUR || two == THREAT_FOUR_BROKEN)) || 
-            ((two == THREAT_THREE) && (one == THREAT_FOUR || one == THREAT_FOUR_BROKEN))) {
+int calc_combination_threat(int one, int two) {
+    // Ensure one <= two for simpler comparisons
+    if (one > two) {
+        int temp = one;
+        one = two;
+        two = temp;
+    }
+
+    // WINNING COMBINATIONS (opponent can only block one threat)
+
+    // Open three + any four = winning (opponent can't block both)
+    if (one == THREAT_THREE && (two == THREAT_FOUR || two == THREAT_STRAIGHT_FOUR || two == THREAT_FOUR_BROKEN)) {
         return threat_cost[THREAT_THREE_AND_FOUR];
-    } else if (one == THREAT_THREE && two == THREAT_THREE) {
+    }
+
+    // Two open threes = winning
+    if (one == THREAT_THREE && two == THREAT_THREE) {
         return threat_cost[THREAT_THREE_AND_THREE];
     }
+
+    // VERY STRONG COMBINATIONS
+
+    // Broken three + any four = very strong (likely winning)
+    if (one == THREAT_THREE_BROKEN && (two == THREAT_FOUR || two == THREAT_STRAIGHT_FOUR || two == THREAT_FOUR_BROKEN)) {
+        return threat_cost[THREAT_THREE_AND_THREE];  // Treat as strong as double three
+    }
+
+    // Open three + broken three = strong threat
+    if (one == THREAT_THREE && two == THREAT_THREE_BROKEN) {
+        return threat_cost[THREAT_THREE_AND_THREE_BROKEN];
+    }
+
+    // Two broken threes with potential = moderate threat
+    if (one == THREAT_THREE_BROKEN && two == THREAT_THREE_BROKEN) {
+        return threat_cost[THREAT_THREE_AND_THREE_BROKEN] / 2;
+    }
+
+    // Four + Four = extremely dangerous (multiple must-block threats)
+    if ((one == THREAT_FOUR || one == THREAT_FOUR_BROKEN) &&
+        (two == THREAT_FOUR || two == THREAT_FOUR_BROKEN)) {
+        return threat_cost[THREAT_THREE_AND_FOUR];  // Treat as winning
+    }
+
+    // Any four + two = developing threat
+    if ((one == THREAT_TWO) && (two == THREAT_FOUR || two == THREAT_FOUR_BROKEN)) {
+        return 500;
+    }
+
+    // Open three + two = developing threat
+    if (one == THREAT_TWO && two == THREAT_THREE) {
+        return 300;
+    }
+
     return 0;
 }
 
@@ -360,20 +406,22 @@ void populate_threat_matrix() {
 
     threat_initialized = 1;
 
+    // Single threats - base values
     threat_cost[THREAT_NOTHING]                 = 0;
-    threat_cost[THREAT_FIVE]                    = 100000;
-    threat_cost[THREAT_STRAIGHT_FOUR]           = 50000;
-    threat_cost[THREAT_THREE]                   = 1000;
-    threat_cost[THREAT_FOUR]                    = 300;
-    threat_cost[THREAT_FOUR_BROKEN]             = 150;
-    threat_cost[THREAT_THREE_BROKEN]            = 30;
-    threat_cost[THREAT_TWO]                     = 20;
-    threat_cost[THREAT_NEAR_ENEMY]              = 5;
+    threat_cost[THREAT_FIVE]                    = 100000;   // Winning position
+    threat_cost[THREAT_STRAIGHT_FOUR]           = 50000;    // Open four = guaranteed win next turn
+    threat_cost[THREAT_FOUR]                    = 10000;    // Closed four = MUST block or lose!
+    threat_cost[THREAT_FOUR_BROKEN]             = 8000;     // Four with hole = still must block
+    threat_cost[THREAT_THREE]                   = 1000;     // Open three = serious threat
+    threat_cost[THREAT_THREE_BROKEN]            = 200;      // Three with hole = developing threat
+    threat_cost[THREAT_TWO]                     = 50;       // Open two = potential
+    threat_cost[THREAT_NEAR_ENEMY]              = 10;       // Positional value
 
-    // Combination threats
-    threat_cost[THREAT_THREE_AND_FOUR]          = 5000;
-    threat_cost[THREAT_THREE_AND_THREE]         = 5000;
-    threat_cost[THREAT_THREE_AND_THREE_BROKEN]  = 300;    
+    // Combination threats - these are nearly winning positions!
+    // If you have an open three + any four, opponent can only block one
+    threat_cost[THREAT_THREE_AND_FOUR]          = 45000;    // Nearly as good as straight four
+    threat_cost[THREAT_THREE_AND_THREE]         = 40000;    // Double open three = winning
+    threat_cost[THREAT_THREE_AND_THREE_BROKEN]  = 5000;     // Weaker but still dangerous
 }
 
 //===============================================================================
