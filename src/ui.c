@@ -397,16 +397,64 @@ void draw_status(game_state_t *game) {
                 box_width - 4, "", COLOR_RESET);
 
         switch (game->game_state) {
-            case GAME_HUMAN_WIN:
-                printf("%s%s│ %-*s %s│\n", prefix, COLOR_RESET, 
-                        box_width - 4, "Human wins! Great job!", COLOR_RESET);
+            case GAME_HUMAN_WIN: {
+                // CROSSES (X) won
+                int winner_index = 0;  // CROSSES
+                int loser_index = 1;   // NAUGHTS
+                player_type_t winner_type = game->player_type[winner_index];
+                player_type_t loser_type = game->player_type[loser_index];
+                int winner_depth = game->depth_for_player[winner_index];
+                int loser_depth = game->depth_for_player[loser_index];
+
+                char winner_str[80], loser_str[80];
+                if (winner_type == PLAYER_TYPE_HUMAN) {
+                    snprintf(winner_str, sizeof(winner_str), "Winner: X (Human)");
+                } else {
+                    const char* level_name = (winner_depth <= 2) ? "Easy" : (winner_depth <= 4) ? "Medium" : "Hard";
+                    snprintf(winner_str, sizeof(winner_str), "Winner: X (AI @ %s)", level_name);
+                }
+
+                if (loser_type == PLAYER_TYPE_HUMAN) {
+                    snprintf(loser_str, sizeof(loser_str), "Loser: O (Human)");
+                } else {
+                    const char* level_name = (loser_depth <= 2) ? "Easy" : (loser_depth <= 4) ? "Medium" : "Hard";
+                    snprintf(loser_str, sizeof(loser_str), "Loser: O (AI @ %s)", level_name);
+                }
+
+                printf("%s%s│ %-*s %s│\n", prefix, COLOR_RESET, box_width - 4, winner_str, COLOR_RESET);
+                printf("%s%s│ %-*s %s│\n", prefix, COLOR_RESET, box_width - 4, loser_str, COLOR_RESET);
                 break;
-            case GAME_AI_WIN:
-                printf("%s%s│ %-*s %s│\n", prefix, COLOR_RESET, 
-                        box_width - 4, "AI wins! Try again!", COLOR_RESET);
+            }
+            case GAME_AI_WIN: {
+                // NAUGHTS (O) won
+                int winner_index = 1;  // NAUGHTS
+                int loser_index = 0;   // CROSSES
+                player_type_t winner_type = game->player_type[winner_index];
+                player_type_t loser_type = game->player_type[loser_index];
+                int winner_depth = game->depth_for_player[winner_index];
+                int loser_depth = game->depth_for_player[loser_index];
+
+                char winner_str[80], loser_str[80];
+                if (winner_type == PLAYER_TYPE_HUMAN) {
+                    snprintf(winner_str, sizeof(winner_str), "Winner: O (Human)");
+                } else {
+                    const char* level_name = (winner_depth <= 2) ? "Easy" : (winner_depth <= 4) ? "Medium" : "Hard";
+                    snprintf(winner_str, sizeof(winner_str), "Winner: O (AI @ %s)", level_name);
+                }
+
+                if (loser_type == PLAYER_TYPE_HUMAN) {
+                    snprintf(loser_str, sizeof(loser_str), "Loser: X (Human)");
+                } else {
+                    const char* level_name = (loser_depth <= 2) ? "Easy" : (loser_depth <= 4) ? "Medium" : "Hard";
+                    snprintf(loser_str, sizeof(loser_str), "Loser: X (AI @ %s)", level_name);
+                }
+
+                printf("%s%s│ %-*s %s│\n", prefix, COLOR_RESET, box_width - 4, winner_str, COLOR_RESET);
+                printf("%s%s│ %-*s %s│\n", prefix, COLOR_RESET, box_width - 4, loser_str, COLOR_RESET);
                 break;
+            }
             case GAME_DRAW:
-                printf("%s%s│%s %-*s %s│\n", prefix, COLOR_RESET, COLOR_RESET, 
+                printf("%s%s│%s %-*s %s│\n", prefix, COLOR_RESET, COLOR_RESET,
                         control_width, "The Game is a draw!", COLOR_RESET);
                 break;
         }
