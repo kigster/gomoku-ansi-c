@@ -70,7 +70,7 @@ $(JSONC_LIB): submodules
 $(TARGET): $(JSONC_LIB) $(OBJECTS)
 		$(CC) $(OBJECTS) $(LDFLAGS) -o $(TARGET)
 
-src/%.o: src/%.c
+src/%.o: src/%.c | $(JSONC_LIB)
 		$(CC) $(CFLAGS) -c $< -o $@
 
 googletest: 	## Build GoogleTest framework (needed for running tests)
