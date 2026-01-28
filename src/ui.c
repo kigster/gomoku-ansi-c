@@ -81,10 +81,10 @@ void handle_input(game_state_t *game) {
             break;
         case KEY_SPACE:
         case KEY_ENTER:
-            if (game->current_player == AI_CELL_CROSSES && 
-                    is_valid_move(game->board, game->cursor_x, game->cursor_y, game->board_size)) {
+            // Allow move if it's valid, regardless of which player
+            if (is_valid_move(game->board, game->cursor_x, game->cursor_y, game->board_size)) {
                 double move_time = end_move_timer(game);
-                make_move(game, game->cursor_x, game->cursor_y, AI_CELL_CROSSES, move_time, 0);
+                make_move(game, game->cursor_x, game->cursor_y, game->current_player, move_time, 0);
             }
             break;
         case 'U':
@@ -153,23 +153,27 @@ void draw_game_history_sidebar(game_state_t *game, int start_row) {
     int display_start = max(0, game->move_history_count - 15); // Show last 15 moves
     for (int i = display_start; i < game->move_history_count; i++) {
         move_history_t move = game->move_history[i];
-        char player_symbol = (move.player == AI_CELL_CROSSES) ? 'x' : 'o';
+        char player_symbol = (move.player == AI_CELL_CROSSES) ? 'X' : 'O';
         const char* player_color = (move.player == AI_CELL_CROSSES) ? COLOR_RED : COLOR_BLUE;
 
+        // Determine if this was an AI or human move
+        int player_index = (move.player == AI_CELL_CROSSES) ? 0 : 1;
+        player_type_t move_player_type = game->player_type[player_index];
+
         char move_line[100];
-        if (move.player == AI_CELL_CROSSES) {
+        if (move_player_type == PLAYER_TYPE_HUMAN) {
             // Human move (convert to 1-based coordinates for display)
-            snprintf(move_line, sizeof(move_line), 
+            snprintf(move_line, sizeof(move_line),
                     "%s%2d | player %c moved to [%2d, %2d] (in %6.2fs)%s",
-                    player_color, i + 1, player_symbol, 
-                    board_to_display_coord(move.x), board_to_display_coord(move.y), 
+                    player_color, i + 1, player_symbol,
+                    board_to_display_coord(move.x), board_to_display_coord(move.y),
                     move.time_taken, COLOR_RESET);
         } else {
             // AI move (convert to 1-based coordinates for display)
-            snprintf(move_line, sizeof(move_line), 
+            snprintf(move_line, sizeof(move_line),
                     "%s%2d | player %c moved to [%2d, %2d] (in %6.2fs, %3d moves evaluated)%s",
-                    player_color, i + 1, player_symbol, 
-                    board_to_display_coord(move.x), board_to_display_coord(move.y), 
+                    player_color, i + 1, player_symbol,
+                    board_to_display_coord(move.x), board_to_display_coord(move.y),
                     move.time_taken, move.positions_evaluated, COLOR_RESET);
         }
 
@@ -272,12 +276,21 @@ void draw_status(game_state_t *game) {
     printf("┐%s\n", COLOR_RESET);
 
     // Current Player
+    int current_player_index = (game->current_player == AI_CELL_CROSSES) ? 0 : 1;
+    player_type_t current_type = game->player_type[current_player_index];
+    char player_symbol = (game->current_player == AI_CELL_CROSSES) ? 'X' : 'O';
+    const char* player_type_str = (current_type == PLAYER_TYPE_HUMAN) ? "Human" : "Computer";
+
     if (game->current_player == AI_CELL_CROSSES) {
+        char current_player_str[64];
+        snprintf(current_player_str, sizeof(current_player_str), "Current Player : %s (%c)", player_type_str, player_symbol);
         printf("%s│%s %-*s %s│%s%s\n", prefix, COLOR_YELLOW, action_width + control_width + 2,
-                "Current Player : You (X)", COLOR_RESET, COLOR_RESET, COLOR_YELLOW);
+                current_player_str, COLOR_RESET, COLOR_RESET, COLOR_YELLOW);
     } else {
+        char current_player_str[64];
+        snprintf(current_player_str, sizeof(current_player_str), "Current Player : %s (%c)", player_type_str, player_symbol);
         printf("%s│%s %-*s %s│%s%s\n", prefix, COLOR_BLUE, action_width + control_width + 2,
-                "Current Player : Computer (O)", COLOR_RESET, COLOR_RESET, COLOR_BLUE);
+                current_player_str, COLOR_RESET, COLOR_RESET, COLOR_BLUE);
     }
 
     // Position (convert to 1-based coordinates for display)
@@ -320,9 +333,19 @@ void draw_status(game_state_t *game) {
     snprintf(difficulty_str, sizeof(difficulty_str), "%sDifficulty     : %-*s", difficulty_color, action_width, difficulty_name);
     printf("%s%s│ %s %s  │\n", prefix, COLOR_RESET, difficulty_str, COLOR_RESET);
 
+    // Search Depth - show both depths if different
     memset(difficulty_str, 0, sizeof(difficulty_str));
-    snprintf(difficulty_str, sizeof(difficulty_str), "%sSearch Depth   : %-*d", difficulty_color, action_width, game->max_depth);
-    printf("%s%s│ %s %s  │%s\n", prefix, COLOR_RESET, difficulty_str, COLOR_RESET, COLOR_RESET);
+    if (game->depth_for_player[0] != game->depth_for_player[1]) {
+        snprintf(difficulty_str, sizeof(difficulty_str),
+                "%sSearch Depth   : X=%d, O=%d",
+                COLOR_MAGENTA,
+                game->depth_for_player[0], game->depth_for_player[1]);
+        printf("%s%s│ %s%-*s%s  │%s\n", prefix, COLOR_RESET, difficulty_str,
+               action_width, "", COLOR_RESET, COLOR_RESET);
+    } else {
+        snprintf(difficulty_str, sizeof(difficulty_str), "%sSearch Depth   : %-*d", difficulty_color, action_width, game->max_depth);
+        printf("%s%s│ %s %s  │%s\n", prefix, COLOR_RESET, difficulty_str, COLOR_RESET, COLOR_RESET);
+    }
 
     // Separator line
     printf("%s%s│ %-*s %s│%s\n", prefix, COLOR_RESET, box_width - 4, "", COLOR_RESET, COLOR_RESET);
@@ -390,10 +413,13 @@ void draw_status(game_state_t *game) {
 
         // Show timing summary
         char time_summary[100];
-        snprintf(time_summary, sizeof(time_summary), 
-                "Time: Human: %.1fs | AI: %.1fs", 
-                game->total_human_time, game->total_ai_time);
-        printf("%s%s│ %-*s %s│\n", prefix, COLOR_RESET, 
+        const char* x_label = (game->player_type[0] == PLAYER_TYPE_HUMAN) ? "Human(X)" : "AI(X)";
+        const char* o_label = (game->player_type[1] == PLAYER_TYPE_HUMAN) ? "Human(O)" : "AI(O)";
+        snprintf(time_summary, sizeof(time_summary),
+                "Time: %s: %.1fs | %s: %.1fs",
+                x_label, game->total_human_time,  // CROSSES time
+                o_label, game->total_ai_time);     // NAUGHTS time
+        printf("%s%s│ %-*s %s│\n", prefix, COLOR_RESET,
                 box_width - 4, time_summary, COLOR_RESET);
 
         printf("%s%s│ %-*s %s│\n", prefix, COLOR_RESET, 

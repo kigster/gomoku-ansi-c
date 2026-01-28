@@ -33,11 +33,20 @@ game_state_t *init_game(cli_config_t config) {
     game->board_size = config.board_size;
     game->cursor_x = config.board_size / 2;
     game->cursor_y = config.board_size / 2;
-    game->current_player = AI_CELL_CROSSES; // Human plays first
+    game->current_player = AI_CELL_CROSSES; // X always plays first
     game->game_state = GAME_RUNNING;
     game->max_depth = config.max_depth;
     game->move_timeout = config.move_timeout;
     game->config = config;
+
+    // Initialize player types (X=CROSSES=1, O=NAUGHTS=-1)
+    // Map X/O configuration to CROSSES/NAUGHTS
+    game->player_type[0] = config.player_x_type;  // CROSSES (X, plays first)
+    game->player_type[1] = config.player_o_type;  // NAUGHTS (O, plays second)
+
+    // Initialize depths
+    game->depth_for_player[0] = (config.depth_x >= 0) ? config.depth_x : config.max_depth;
+    game->depth_for_player[1] = (config.depth_o >= 0) ? config.depth_o : config.max_depth;
 
     // Initialize history
     game->move_history_count = 0;
@@ -127,8 +136,18 @@ int make_move(game_state_t *game, int x, int y, int player, double time_taken, i
 }
 
 int can_undo(game_state_t *game) {
-    // Need at least 2 moves to undo (human + AI)
-    return game->config.enable_undo && game->move_history_count >= 2;
+    if (!game->config.enable_undo) {
+        return 0;
+    }
+
+    // In Human vs Human mode, allow undo with at least 1 move
+    if (game->player_type[0] == PLAYER_TYPE_HUMAN &&
+        game->player_type[1] == PLAYER_TYPE_HUMAN) {
+        return game->move_history_count >= 1;
+    }
+
+    // In modes with AI, need at least 2 moves to undo a turn pair
+    return game->move_history_count >= 2;
 }
 
 void undo_last_moves(game_state_t *game) {
@@ -136,12 +155,35 @@ void undo_last_moves(game_state_t *game) {
         return;
     }
 
-    // Remove last two moves (AI move and human move) and update timing totals
-    for (int i = 0; i < 2; i++) {
+    // Determine how many moves to undo
+    int moves_to_undo = 2;  // Default: undo a pair (for AI modes)
+
+    // In Human vs Human mode, only undo the last move
+    if (game->player_type[0] == PLAYER_TYPE_HUMAN &&
+        game->player_type[1] == PLAYER_TYPE_HUMAN) {
+        moves_to_undo = 1;
+    }
+
+    // Make sure we don't undo more moves than we have
+    if (moves_to_undo > game->move_history_count) {
+        moves_to_undo = game->move_history_count;
+    }
+
+    // Track if we're undoing any AI moves (for AI history cleanup)
+    int ai_moves_undone = 0;
+
+    // Remove last move(s) and update timing totals
+    for (int i = 0; i < moves_to_undo; i++) {
         if (game->move_history_count > 0) {
             game->move_history_count--;
             move_history_t last_move = game->move_history[game->move_history_count];
             game->board[last_move.x][last_move.y] = AI_CELL_EMPTY;
+
+            // Check if this move was from an AI player
+            int player_index = (last_move.player == AI_CELL_CROSSES) ? 0 : 1;
+            if (game->player_type[player_index] == PLAYER_TYPE_AI) {
+                ai_moves_undone++;
+            }
 
             // Subtract time from totals
             if (last_move.player == AI_CELL_CROSSES) {
@@ -152,8 +194,8 @@ void undo_last_moves(game_state_t *game) {
         }
     }
 
-    // Remove last AI thinking entry
-    if (game->ai_history_count > 0) {
+    // Remove AI thinking entries for each AI move undone
+    for (int i = 0; i < ai_moves_undone && game->ai_history_count > 0; i++) {
         game->ai_history_count--;
     }
 
@@ -161,8 +203,13 @@ void undo_last_moves(game_state_t *game) {
     game->last_ai_move_x = -1;
     game->last_ai_move_y = -1;
 
-    // Reset to human turn (since we removed AI move last)
-    game->current_player = AI_CELL_CROSSES;
+    // Set current player to whoever should move next
+    if (game->move_history_count > 0) {
+        move_history_t last_move = game->move_history[game->move_history_count - 1];
+        game->current_player = other_player(last_move.player);
+    } else {
+        game->current_player = AI_CELL_CROSSES;  // Start of game, X plays first
+    }
 
     // Clear AI status message
     strcpy(game->ai_status_message, "");

@@ -104,6 +104,10 @@ typedef struct {
     int max_depth;         // AI search depth
     int move_timeout;      // Move timeout in seconds (0 = no timeout)
 
+    // Player configuration
+    player_type_t player_type[2];  // [0]=CROSSES/X, [1]=NAUGHTS/O
+    int depth_for_player[2];       // [0]=CROSSES depth, [1]=NAUGHTS depth
+
     // Move history
     move_history_t move_history[MAX_MOVE_HISTORY];
     int move_history_count;

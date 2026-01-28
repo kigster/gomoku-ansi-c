@@ -29,7 +29,12 @@ protected:
             .move_timeout = 0,             // No timeout
             .show_help = 0,                // Don't show help
             .invalid_args = 0,             // Valid arguments
-            .enable_undo = 1               // Enable undo for testing
+            .enable_undo = 1,              // Enable undo for testing
+            .skip_welcome = 1,             // Skip welcome screen
+            .player_x_type = PLAYER_TYPE_HUMAN,  // Default: human X
+            .player_o_type = PLAYER_TYPE_AI,     // Default: AI O
+            .depth_x = -1,                 // Use max_depth
+            .depth_o = -1                  // Use max_depth
         };
         
         // Create a test game state
@@ -467,7 +472,12 @@ static GameResult run_self_play_game(int board_size, int max_depth) {
         .move_timeout = 0,
         .show_help = 0,
         .invalid_args = 0,
-        .enable_undo = 0
+        .enable_undo = 0,
+        .skip_welcome = 1,
+        .player_x_type = PLAYER_TYPE_HUMAN,
+        .player_o_type = PLAYER_TYPE_AI,
+        .depth_x = -1,
+        .depth_o = -1
     };
 
     game_state_t *game = init_game(config);
@@ -596,6 +606,127 @@ TEST_F(GomokuTest, SelfPlayQuality) {
 
     // If we have decisive games, the winner should have played reasonably
     // (but draws are perfectly acceptable at low depth - they indicate good defense)
+}
+
+// Test: AI vs AI mode with new player configuration system
+TEST_F(GomokuTest, AIvsAI_CompletesSuccessfully) {
+    std::cout << "\n=== AI vs AI Mode Test ===" << std::endl;
+    std::cout << "Testing new player configuration system" << std::endl;
+
+    // Create configuration for AI vs AI mode
+    cli_config_t config = {
+        .board_size = 15,
+        .max_depth = 2,
+        .move_timeout = 0,
+        .show_help = 0,
+        .invalid_args = 0,
+        .enable_undo = 0,
+        .skip_welcome = 1,
+        .player_x_type = PLAYER_TYPE_AI,
+        .player_o_type = PLAYER_TYPE_AI,
+        .depth_x = 2,
+        .depth_o = 2
+    };
+
+    game_state_t *ai_game = init_game(config);
+    ASSERT_NE(ai_game, nullptr);
+    EXPECT_EQ(ai_game->player_type[0], PLAYER_TYPE_AI) << "Player X should be AI";
+    EXPECT_EQ(ai_game->player_type[1], PLAYER_TYPE_AI) << "Player O should be AI";
+    EXPECT_EQ(ai_game->depth_for_player[0], 2) << "Player X depth should be 2";
+    EXPECT_EQ(ai_game->depth_for_player[1], 2) << "Player O depth should be 2";
+
+    populate_threat_matrix();
+
+    // Play game until completion (max 225 moves for 15x15 board)
+    int moves = 0;
+    int max_moves = config.board_size * config.board_size;
+
+    while (ai_game->game_state == GAME_RUNNING && moves < max_moves) {
+        int x, y;
+
+        // Temporarily set max_depth to current player's depth
+        int current_index = (ai_game->current_player == AI_CELL_CROSSES) ? 0 : 1;
+        ai_game->max_depth = ai_game->depth_for_player[current_index];
+
+        find_best_ai_move(ai_game, &x, &y);
+
+        ASSERT_GE(x, 0) << "AI should find a valid move";
+        ASSERT_GE(y, 0) << "AI should find a valid move";
+        ASSERT_LT(x, config.board_size) << "Move should be within board";
+        ASSERT_LT(y, config.board_size) << "Move should be within board";
+
+        make_move(ai_game, x, y, ai_game->current_player, 0.0, 1);
+        moves++;
+    }
+
+    std::cout << "Game completed in " << moves << " moves" << std::endl;
+
+    // Verify game ended properly (not stuck in RUNNING state)
+    EXPECT_TRUE(ai_game->game_state == GAME_HUMAN_WIN ||
+                ai_game->game_state == GAME_AI_WIN ||
+                ai_game->game_state == GAME_DRAW)
+        << "Game should end with win or draw, not hang";
+
+    // Verify move count is reasonable
+    EXPECT_GT(moves, 0) << "Game should have at least one move";
+    EXPECT_LE(moves, max_moves) << "Game should not exceed board capacity";
+
+    const char* result_str = (ai_game->game_state == GAME_HUMAN_WIN) ? "X wins" :
+                             (ai_game->game_state == GAME_AI_WIN) ? "O wins" : "Draw";
+    std::cout << "Game result: " << result_str << std::endl;
+
+    cleanup_game(ai_game);
+}
+
+// Test: AI vs AI mode with asymmetric depths
+TEST_F(GomokuTest, AIvsAI_AsymmetricDepths) {
+    std::cout << "\n=== AI vs AI Asymmetric Depths Test ===" << std::endl;
+
+    // Create configuration with different depths for X and O
+    cli_config_t config = {
+        .board_size = 15,
+        .max_depth = 4,  // Max of both
+        .move_timeout = 0,
+        .show_help = 0,
+        .invalid_args = 0,
+        .enable_undo = 0,
+        .skip_welcome = 1,
+        .player_x_type = PLAYER_TYPE_AI,
+        .player_o_type = PLAYER_TYPE_AI,
+        .depth_x = 2,
+        .depth_o = 4
+    };
+
+    game_state_t *ai_game = init_game(config);
+    ASSERT_NE(ai_game, nullptr);
+    EXPECT_EQ(ai_game->depth_for_player[0], 2) << "Player X depth should be 2";
+    EXPECT_EQ(ai_game->depth_for_player[1], 4) << "Player O depth should be 4";
+
+    std::cout << "X plays at depth " << ai_game->depth_for_player[0] << std::endl;
+    std::cout << "O plays at depth " << ai_game->depth_for_player[1] << std::endl;
+
+    populate_threat_matrix();
+
+    // Play a few moves to verify depths are honored
+    for (int i = 0; i < 6 && ai_game->game_state == GAME_RUNNING; i++) {
+        int x, y;
+        int current_index = (ai_game->current_player == AI_CELL_CROSSES) ? 0 : 1;
+        int expected_depth = ai_game->depth_for_player[current_index];
+
+        ai_game->max_depth = expected_depth;
+        find_best_ai_move(ai_game, &x, &y);
+
+        ASSERT_GE(x, 0) << "AI should find valid move at move " << (i + 1);
+        ASSERT_GE(y, 0) << "AI should find valid move at move " << (i + 1);
+
+        make_move(ai_game, x, y, ai_game->current_player, 0.0, 1);
+
+        char player_symbol = (ai_game->current_player == AI_CELL_CROSSES) ? 'O' : 'X';  // Just moved
+        std::cout << "Move " << (i + 1) << ": " << player_symbol << " moved to ["
+                  << x << "," << y << "] at depth " << expected_depth << std::endl;
+    }
+
+    cleanup_game(ai_game);
 }
 
 int main(int argc, char **argv) {

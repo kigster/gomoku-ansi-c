@@ -8,6 +8,8 @@
 #ifndef CLI_H
 #define CLI_H
 
+#include "gomoku.h"
+
 //===============================================================================
 // CLI CONFIGURATION STRUCTURE
 //===============================================================================
@@ -23,6 +25,12 @@ typedef struct {
     int invalid_args;    // Whether invalid arguments were provided
     int enable_undo;     // Whether to enable undo feature
     int skip_welcome;    // Whether to skip the welcome screen
+
+    // Player configuration
+    player_type_t player_x_type;  // Type of player X (first player)
+    player_type_t player_o_type;  // Type of player O (second player)
+    int depth_x;                  // AI search depth for player X (-1 = use max_depth)
+    int depth_o;                  // AI search depth for player O (-1 = use max_depth)
 } cli_config_t;
 
 //===============================================================================
