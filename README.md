@@ -25,7 +25,6 @@
 
 Here is the screenshot of a game where a human player prevailed against the "AI Player" on a "hard mode" (with depth of 6).
 
-
 #### Game Example: Human vs AI
 
 As you'll see down below, the default gameplay is for a human to start with X, and AI player to respond with a O.
@@ -37,6 +36,10 @@ As you'll see down below, the default gameplay is for a human to start with X, a
 Using CLI flags you can make the game engine play against itself. Below is the screenshot of AI playing against itself, and both sides play on the same difficulty (i.e. they can scan the board into the same number of future possible moves — 6).
 
 <img src="doc/gomoku-ai-vs-ai.png" width="700" border="1" style="border-radius: 10px"/>
+
+#### Another Example: AI vs AI Resulting in a Draw
+
+<img src="doc/gomoku-draw.png" width="700" border="1" style="border-radius: 10px"/>
 
 ## Compiling the Game
 
@@ -82,12 +85,15 @@ See the following screenshot for an example:
 ### All Features
 
 - **Interactive Console Interface**: Unicode-based board display with keyboard controls
+- **Choose Human vs Human, Human vs AI, AI vs AI, or AI vs Human** — any permutation is supported.
 - **AI Opponent**: Intelligent AI using MiniMax algorithm with Alpha-Beta pruning
 - **Configurable Difficulty**: Easy, Medium, and Hard levels with different search depths
 - **Timeout Support**: Optional move time limits for both human and AI players
-- **Undo Functionality**: Undo the last move pair (human + AI)
+- **Undo Functionality**: Undo the last move pair (only works when at least one player is Human)
 - **Cross-platform**: Works on Linux, macOS, and other Unix-like systems
 - **Comprehensive Testing**: Full test suite using Google Test framework
+- **Save the Entire Game to a JSON file**: Complete information bout the game and its progress can be saved into a JSON file with `-j FILE` flag.
+- **Replay previously recorded game from a JSON file** which you can do by either manually advancing each move, or providing `-w SECS` (where SECS can be fractional) which is the delay between auto-playing of the moves.
 
 ### Game Rules
 
