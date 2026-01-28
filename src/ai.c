@@ -58,14 +58,15 @@ int generate_moves_optimized(game_state_t *game, int **board, move_t *moves, int
     unsigned char candidate[19][19];
     memset(candidate, 0, sizeof(candidate));
 
+    int radius = game->search_radius;
     for (int x = 0; x < size; x++) {
         for (int y = 0; y < size; y++) {
             if (board[x][y] == AI_CELL_EMPTY) {
                 continue;
             }
             // Mark all empty cells within radius as candidates
-            for (int dx = -MAX_RADIUS; dx <= MAX_RADIUS; dx++) {
-                for (int dy = -MAX_RADIUS; dy <= MAX_RADIUS; dy++) {
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dy = -radius; dy <= radius; dy++) {
                     int nx = x + dx;
                     int ny = y + dy;
                     if (nx < 0 || nx >= size || ny < 0 || ny >= size) {
@@ -301,18 +302,18 @@ int evaluate_threat_fast(int **board, int x, int y, int player, int board_size) 
 // MOVE EVALUATION AND ORDERING
 //===============================================================================
 
-int is_move_interesting(int **board, int x, int y, int stones_on_board, int board_size) {
+int is_move_interesting(int **board, int x, int y, int stones_on_board, int board_size, int radius) {
     // If there are no stones on board, only center area is interesting
     if (stones_on_board == 0) {
         int center = board_size / 2;
         return (abs(x - center) <= 2 && abs(y - center) <= 2);
     }
 
-    // Check if within 3 cells of any existing stone
-    for (int i = max(0, x - MAX_RADIUS); i <= min(board_size - 1, x + MAX_RADIUS); i++) {
-        for (int j = max(0, y - MAX_RADIUS); j <= min(board_size - 1, y + MAX_RADIUS); j++) {
+    // Check if within radius cells of any existing stone
+    for (int i = max(0, x - radius); i <= min(board_size - 1, x + radius); i++) {
+        for (int j = max(0, y - radius); j <= min(board_size - 1, y + radius); j++) {
             if (board[i][j] != AI_CELL_EMPTY) {
-                return 1; // Found a stone within 3 cells
+                return 1; // Found a stone within radius
             }
         }
     }

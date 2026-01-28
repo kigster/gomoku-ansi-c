@@ -31,6 +31,7 @@ protected:
             .invalid_args = 0,             // Valid arguments
             .enable_undo = 1,              // Enable undo for testing
             .skip_welcome = 1,             // Skip welcome screen
+            .search_radius = 2,            // Default search radius
             .player_x_type = PLAYER_TYPE_HUMAN,  // Default: human X
             .player_o_type = PLAYER_TYPE_AI,     // Default: AI O
             .depth_x = -1,                 // Use max_depth
@@ -193,13 +194,13 @@ TEST_F(GomokuTest, EvaluationWithWin) {
 
 // Test AI move evaluation
 TEST_F(GomokuTest, AIMoveEvaluation) {
-    // Test move interesting function
-    EXPECT_TRUE(is_move_interesting(board, 9, 9, 0, BOARD_SIZE)); // Center is interesting when empty
-    
+    // Test move interesting function (radius=2 is default)
+    EXPECT_TRUE(is_move_interesting(board, 9, 9, 0, BOARD_SIZE, 2)); // Center is interesting when empty
+
     // Place a stone and test nearby positions
     board[9][9] = AI_CELL_CROSSES;
-    EXPECT_TRUE(is_move_interesting(board, 9, 10, 1, BOARD_SIZE)); // Adjacent is interesting
-    EXPECT_FALSE(is_move_interesting(board, 0, 0, 1, BOARD_SIZE)); // Far away is not interesting
+    EXPECT_TRUE(is_move_interesting(board, 9, 10, 1, BOARD_SIZE, 2)); // Adjacent is interesting
+    EXPECT_FALSE(is_move_interesting(board, 0, 0, 1, BOARD_SIZE, 2)); // Far away is not interesting
     
     // Test winning move detection
     for (int i = 0; i < 4; i++) {
@@ -379,7 +380,7 @@ static void find_best_move_for_player(game_state_t *game, int player, int *best_
     for (int i = 0; i < game->board_size; i++) {
         for (int j = 0; j < game->board_size; j++) {
             if (game->board[i][j] != AI_CELL_EMPTY) continue;
-            if (!is_move_interesting(game->board, i, j, game->stones_on_board, game->board_size)) continue;
+            if (!is_move_interesting(game->board, i, j, game->stones_on_board, game->board_size, game->search_radius)) continue;
 
             // Check for immediate win
             if (is_winning_move(game->board, i, j, player, game->board_size)) {
@@ -406,7 +407,7 @@ static void find_best_move_for_player(game_state_t *game, int player, int *best_
     for (int i = 0; i < game->board_size; i++) {
         for (int j = 0; j < game->board_size; j++) {
             if (game->board[i][j] != AI_CELL_EMPTY) continue;
-            if (!is_move_interesting(game->board, i, j, game->stones_on_board, game->board_size)) continue;
+            if (!is_move_interesting(game->board, i, j, game->stones_on_board, game->board_size, game->search_radius)) continue;
 
             // Try the move
             game->board[i][j] = player;
@@ -474,6 +475,7 @@ static GameResult run_self_play_game(int board_size, int max_depth) {
         .invalid_args = 0,
         .enable_undo = 0,
         .skip_welcome = 1,
+        .search_radius = 2,
         .player_x_type = PLAYER_TYPE_HUMAN,
         .player_o_type = PLAYER_TYPE_AI,
         .depth_x = -1,
@@ -622,6 +624,7 @@ TEST_F(GomokuTest, AIvsAI_CompletesSuccessfully) {
         .invalid_args = 0,
         .enable_undo = 0,
         .skip_welcome = 1,
+        .search_radius = 2,
         .player_x_type = PLAYER_TYPE_AI,
         .player_o_type = PLAYER_TYPE_AI,
         .depth_x = 2,
@@ -691,6 +694,7 @@ TEST_F(GomokuTest, AIvsAI_AsymmetricDepths) {
         .invalid_args = 0,
         .enable_undo = 0,
         .skip_welcome = 1,
+        .search_radius = 2,
         .player_x_type = PLAYER_TYPE_AI,
         .player_o_type = PLAYER_TYPE_AI,
         .depth_x = 2,

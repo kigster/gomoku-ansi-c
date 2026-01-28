@@ -43,6 +43,7 @@ game_state_t *init_game(cli_config_t config) {
     game->game_state = GAME_RUNNING;
     game->max_depth = config.max_depth;
     game->move_timeout = config.move_timeout;
+    game->search_radius = config.search_radius;
     game->config = config;
 
     // Initialize player types (X=CROSSES=1, O=NAUGHTS=-1)
