@@ -216,13 +216,13 @@ TEST_F(GomokuTest, GameLogicFunctions) {
     double move_time = 1.5;
     int positions_evaluated = 10;
     
-    EXPECT_TRUE(make_move(game, 9, 9, AI_CELL_CROSSES, move_time, positions_evaluated));
+    EXPECT_TRUE(make_move(game, 9, 9, AI_CELL_CROSSES, move_time, positions_evaluated, 0, 0));
     EXPECT_EQ(game->board[9][9], AI_CELL_CROSSES);
     EXPECT_EQ(game->move_history_count, 1);
     EXPECT_EQ(game->current_player, AI_CELL_NAUGHTS); // Should switch players
-    
+
     // Test invalid move
-    EXPECT_FALSE(make_move(game, 9, 9, AI_CELL_NAUGHTS, move_time, positions_evaluated)); // Same position
+    EXPECT_FALSE(make_move(game, 9, 9, AI_CELL_NAUGHTS, move_time, positions_evaluated, 0, 0)); // Same position
     EXPECT_EQ(game->move_history_count, 1); // Should not increase
 }
 
@@ -232,8 +232,8 @@ TEST_F(GomokuTest, UndoFunctionality) {
     EXPECT_FALSE(can_undo(game));
     
     // Make two moves
-    make_move(game, 9, 9, AI_CELL_CROSSES, 1.0, 0);
-    make_move(game, 9, 10, AI_CELL_NAUGHTS, 1.0, 5);
+    make_move(game, 9, 9, AI_CELL_CROSSES, 1.0, 0, 0, 0);
+    make_move(game, 9, 10, AI_CELL_NAUGHTS, 1.0, 5, 0, 0);
 
     // Capture timing totals before undo
     double human_time = game->total_human_time;
@@ -658,7 +658,7 @@ TEST_F(GomokuTest, AIvsAI_CompletesSuccessfully) {
         ASSERT_LT(x, config.board_size) << "Move should be within board";
         ASSERT_LT(y, config.board_size) << "Move should be within board";
 
-        make_move(ai_game, x, y, ai_game->current_player, 0.0, 1);
+        make_move(ai_game, x, y, ai_game->current_player, 0.0, 1, 0, 0);
         moves++;
     }
 
@@ -723,7 +723,7 @@ TEST_F(GomokuTest, AIvsAI_AsymmetricDepths) {
         ASSERT_GE(x, 0) << "AI should find valid move at move " << (i + 1);
         ASSERT_GE(y, 0) << "AI should find valid move at move " << (i + 1);
 
-        make_move(ai_game, x, y, ai_game->current_player, 0.0, 1);
+        make_move(ai_game, x, y, ai_game->current_player, 0.0, 1, 0, 0);
 
         char player_symbol = (ai_game->current_player == AI_CELL_CROSSES) ? 'O' : 'X';  // Just moved
         std::cout << "Move " << (i + 1) << ": " << player_symbol << " moved to ["

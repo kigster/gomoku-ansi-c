@@ -28,6 +28,9 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
         .enable_undo = 0,
         .skip_welcome = 0,
         .search_radius = 2,    // Default search radius
+        .json_file = "",       // No JSON output by default
+        .replay_file = "",     // No replay by default
+        .replay_wait = 0,      // Wait for keypress by default
         .player_x_type = PLAYER_TYPE_HUMAN,  // X is human by default
         .player_o_type = PLAYER_TYPE_AI,     // O is AI by default
         .depth_x = -1,                       // -1 means use max_depth
@@ -41,6 +44,9 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
         {"timeout", required_argument, 0, 't'},
         {"board", required_argument, 0, 'b'},
         {"radius", required_argument, 0, 'r'},
+        {"json", required_argument, 0, 'j'},
+        {"replay", required_argument, 0, 'p'},
+        {"wait", required_argument, 0, 'w'},
         {"help", no_argument, 0, 'h'},
         {"undo", no_argument, 0, 'u'},
         {"skip-welcome", no_argument, 0, 's'},
@@ -52,7 +58,7 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
     int option_index = 0;
 
     // Parse command-line arguments using getopt_long
-    while ((c = getopt_long(argc, argv, "d:l:t:b:r:husx:o:", long_options, &option_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "d:l:t:b:r:j:p:w:husx:o:", long_options, &option_index)) != -1) {
         switch (c) {
             case 'd':
                 // Check for asymmetric depth format: "4:6"
@@ -134,6 +140,34 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
                 }
                 break;
 
+            case 'j':
+                if (strlen(optarg) >= sizeof(config.json_file)) {
+                    printf("Error: JSON file path too long\n");
+                    config.invalid_args = 1;
+                } else {
+                    strncpy(config.json_file, optarg, sizeof(config.json_file) - 1);
+                    config.json_file[sizeof(config.json_file) - 1] = '\0';
+                }
+                break;
+
+            case 'p':
+                if (strlen(optarg) >= sizeof(config.replay_file)) {
+                    printf("Error: Replay file path too long\n");
+                    config.invalid_args = 1;
+                } else {
+                    strncpy(config.replay_file, optarg, sizeof(config.replay_file) - 1);
+                    config.replay_file[sizeof(config.replay_file) - 1] = '\0';
+                }
+                break;
+
+            case 'w':
+                config.replay_wait = atof(optarg);
+                if (config.replay_wait < 0) {
+                    printf("Error: Wait time must be a positive number\n");
+                    config.invalid_args = 1;
+                }
+                break;
+
             case 'u':
                 config.enable_undo = 1;
                 break;
@@ -196,23 +230,41 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
 
 void print_help(const char* program_name) {
     printf("\n%sNAME%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
-    printf("  %s - an entertaining and engaging five-in-a-row version\n\n", program_name);
+    printf("  %s%s%s - an entertaining and engaging terminal game with sophisticated\n", COLOR_RED, program_name, COLOR_RESET);
+    printf("  computer algorithm that can play against a human player or itself.\n\n");
+    
+    printf("%sVERSION%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
+    printf("  %s%s%s\n\n", COLOR_YELLOW, GAME_VERSION, COLOR_RESET);
 
-    printf("%sFLAGS:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
+    
+    printf("%sGAMEPLAY FLAGS:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
+    printf("  %s-b, --board 15,19%s     Board size. Can be either 19 or 15.\n", COLOR_YELLOW, COLOR_RESET);
     printf("  %s-x, --player-x TYPE%s   Player X type: \"human\" or \"ai\" (default: human)\n", COLOR_YELLOW, COLOR_RESET);
     printf("  %s-o, --player-o TYPE%s   Player O type: \"human\" or \"ai\" (default: ai)\n", COLOR_YELLOW, COLOR_RESET);
-    printf("  %s-d, --depth N%s         The depth of search. Use N for both, or N:M for\n", COLOR_YELLOW, COLOR_RESET);
-    printf("                        asymmetric depths (X:O). Examples: '4' or '4:6'\n");
-    printf("  %s-l, --level M%s         Can be \"easy\", \"medium\", \"hard\"\n", COLOR_YELLOW, COLOR_RESET);
+    printf("  %s-u, --undo       %s     Enable the Undo feature (disabled by the default).\n", COLOR_YELLOW, COLOR_RESET);
+    printf("                        Applies only to when a human player is involved.\n");
+    printf("  %s-s, --skip-welcome%s    Skip the welcome screen.\n", COLOR_YELLOW, COLOR_RESET);
     printf("  %s-t, --timeout T%s       Timeout in seconds that AI (and human)\n", COLOR_YELLOW, COLOR_RESET);
     printf("                        have to make their move, otherwise AI must choose\n");
-    printf("                        the best move found so far, while human looses the game.\n");
-    printf("  %s-b, --board 15,19%s     Board size. Can be either 19 or 15.\n", COLOR_YELLOW, COLOR_RESET);
+    printf("                        the best move found so far, while human looses the game.\n\n");
+
+    printf("%sAI PLAYER(s) FLAGS:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
+
+    printf("  %s-d, --depth N%s         The depth of search. When both players are AI players,\n", COLOR_YELLOW, COLOR_RESET);
+    printf("                        use N for both, or N:M for asymmetric depths (X:0)\n");
+    printf("                        Examples: '4' or '4:6'\n");
+    printf("  %s-l, --level M%s         Can be \"easy\", \"medium\", \"hard\"\n", COLOR_YELLOW, COLOR_RESET);
+    printf("                        Maps to depth of 2, 4 and 6.\n");
     printf("  %s-r, --radius 1-5%s      Search radius for move generation (default: 2).\n", COLOR_YELLOW, COLOR_RESET);
-    printf("                        Higher values find more moves but run slower.\n");
-    printf("  %s-u, --undo       %s     Enable the Undo feature (disabled by the default).\n", COLOR_YELLOW, COLOR_RESET);
-    printf("  %s-s, --skip-welcome%s    Skip the welcome screen.\n", COLOR_YELLOW, COLOR_RESET);
-    printf("  %s-h, --help%s            Show this help message\n", COLOR_YELLOW, COLOR_RESET);
+    printf("                        Higher values find more moves but run slower.\n\n");
+    
+    printf("%sSPECIAL FLAGS:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
+    printf("  %s-j, --json FILE%s       Write game results to a JSON file, which can be replayed.\n", COLOR_YELLOW, COLOR_RESET);
+    printf("  %s-p, --replay FILE%s     Replay a previously recorded game from a JSON file.\n", COLOR_YELLOW, COLOR_RESET);
+    printf("                        By the default, each move requires a key-press.\n");
+    printf("  %s-w, --wait SECS%s       Disable manual key-press and auto-advance replay\n", COLOR_YELLOW, COLOR_RESET);
+    printf("                        after waiting SECS after each move.\n");
+    printf("  %s-h, --help%s            Show this help message\n\n", COLOR_YELLOW, COLOR_RESET);
 
     printf("\n%sEXAMPLES:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
     printf("  %s%s --level easy --board 15%s                # Human vs AI (easy)\n", COLOR_YELLOW, program_name, COLOR_RESET);
@@ -220,6 +272,8 @@ void print_help(const char* program_name) {
     printf("  %s%s -x ai -o human%s                         # AI vs Human (AI plays first)\n", COLOR_YELLOW, program_name, COLOR_RESET);
     printf("  %s%s -x ai -o ai -d 4:6 --skip-welcome%s      # AI vs AI (X depth 4, O depth 6)\n", COLOR_YELLOW, program_name, COLOR_RESET);
     printf("  %s%s -d 4 -t 30 -b 19%s                       # Custom depth and timeout\n", COLOR_YELLOW, program_name, COLOR_RESET);
+    printf("  %s%s -p game.json%s                           # Replay a recorded game\n", COLOR_YELLOW, program_name, COLOR_RESET);
+    printf("  %s%s -p game.json -w 0.5%s                    # Auto-replay with 0.5s delay\n", COLOR_YELLOW, program_name, COLOR_RESET);
 
     printf("\n%sDIFFICULTY LEVELS:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
     printf("  %seasy%s         - Search depth %d (quick moves, good for beginners)\n", COLOR_GREEN, COLOR_RESET, GAME_DEPTH_LEVEL_EASY);
@@ -273,6 +327,11 @@ int validate_config(const cli_config_t *config) {
         config->move_timeout > 0) {
         printf("Warning: Timeout is set for Human vs Human mode. ");
         printf("Humans will lose if they don't move within %d seconds.\n\n", config->move_timeout);
+    }
+
+    // Warn if -w is used without -p
+    if (config->replay_wait > 0 && strlen(config->replay_file) == 0) {
+        printf("Warning: --wait is ignored without --replay\n\n");
     }
 
     return 1;

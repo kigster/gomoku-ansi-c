@@ -122,16 +122,16 @@ Below is the screenshot of the help screen of the game, since it's a CLI/Termina
 
 ```bash
 # Run with default settings (Medium difficulty, 19x19 board)
-./gomoku
+gomoku
 
 # Run with easy difficulty on a 15x15 board
-./gomoku --level easy --board 15
+gomoku --level easy --board 15
 
 # Run with custom search depth and timeout
-./gomoku --depth 6 --timeout 30
+gomoku --depth 6 --timeout 30
 
 # Show all available options
-./gomoku --help
+gomoku --help
 ```
 
 ### Command Line Options

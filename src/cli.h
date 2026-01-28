@@ -26,6 +26,11 @@ typedef struct {
     int enable_undo;     // Whether to enable undo feature
     int skip_welcome;    // Whether to skip the welcome screen
     int search_radius;   // Search radius for move generation (1-5, default 2)
+    char json_file[256]; // Path to JSON output file (empty = no output)
+
+    // Replay mode
+    char replay_file[256]; // Path to JSON file to replay (empty = no replay)
+    double replay_wait;    // Seconds to wait between moves (0 = wait for keypress)
 
     // Player configuration
     player_type_t player_x_type;  // Type of player X (first player)

@@ -740,8 +740,8 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
         }
     }
 
-    if (blocking_move_count > 0 && max_opp_threat >= 100000) {
-        // Opponent can win immediately - we MUST block the highest threat
+    if (blocking_move_count > 0 && max_opp_threat >= 40000) {
+        // Opponent has dangerous threat (open four or better) - we MUST block
         // Find all moves that block the highest threat level
         int best_blocks_x[361];
         int best_blocks_y[361];
@@ -759,9 +759,84 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
         *best_x = best_blocks_x[selected];
         *best_y = best_blocks_y[selected];
         snprintf(game->ai_status_message, sizeof(game->ai_status_message),
-                "%s%c%s Blocking opponent's win!",
+                "%s%c%s Blocking opponent's threat!",
                 ai_color, ai_symbol, COLOR_RESET);
         add_ai_history_entry(game, blocking_move_count);
+        return;
+    }
+
+    // Check if we have a forcing move (four - open or closed)
+    // These create immediate pressure that must be answered
+    int forcing_moves_x[361];
+    int forcing_moves_y[361];
+    int forcing_move_count = 0;
+    int max_forcing_threat = 0;
+
+    for (int i = 0; i < move_count; i++) {
+        int my_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y, ai_player, game->board_size);
+        // A four (open >= 50000, closed >= 10000) is a forcing move
+        if (my_threat >= 10000) {
+            forcing_moves_x[forcing_move_count] = moves[i].x;
+            forcing_moves_y[forcing_move_count] = moves[i].y;
+            forcing_move_count++;
+            if (my_threat > max_forcing_threat) {
+                max_forcing_threat = my_threat;
+            }
+        }
+    }
+
+    // If we have a forcing move (four), play it - opponent must respond
+    if (forcing_move_count > 0) {
+        // Play the highest threat forcing move
+        for (int i = 0; i < move_count; i++) {
+            int my_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y, ai_player, game->board_size);
+            if (my_threat == max_forcing_threat) {
+                *best_x = moves[i].x;
+                *best_y = moves[i].y;
+                snprintf(game->ai_status_message, sizeof(game->ai_status_message),
+                        "%s%c%s Creating forcing threat!",
+                        ai_color, ai_symbol, COLOR_RESET);
+                add_ai_history_entry(game, forcing_move_count);
+                return;
+            }
+        }
+    }
+
+    // No forcing move for us - check if opponent has an open three that MUST be blocked
+    // Open three (threat 1500) becomes open four (threat 50000) if not blocked!
+    int open_three_blocks_x[361];
+    int open_three_blocks_y[361];
+    int open_three_block_count = 0;
+
+    for (int i = 0; i < move_count; i++) {
+        int opp_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y, opponent, game->board_size);
+        // Open three is threat 1500, we want to block threats that could become open fours
+        // Threshold: 1000+ catches open threes and similar dangerous patterns
+        if (opp_threat >= 1000 && opp_threat < 40000) {
+            open_three_blocks_x[open_three_block_count] = moves[i].x;
+            open_three_blocks_y[open_three_block_count] = moves[i].y;
+            open_three_block_count++;
+        }
+    }
+
+    if (open_three_block_count > 0) {
+        // Block the open three - pick the one that also gives us the best position
+        int best_block_idx = 0;
+        int best_block_own_threat = 0;
+        for (int i = 0; i < open_three_block_count; i++) {
+            int own_threat = evaluate_threat_fast(game->board, open_three_blocks_x[i], open_three_blocks_y[i],
+                                                   ai_player, game->board_size);
+            if (own_threat > best_block_own_threat) {
+                best_block_own_threat = own_threat;
+                best_block_idx = i;
+            }
+        }
+        *best_x = open_three_blocks_x[best_block_idx];
+        *best_y = open_three_blocks_y[best_block_idx];
+        snprintf(game->ai_status_message, sizeof(game->ai_status_message),
+                "%s%c%s Blocking opponent's open three!",
+                ai_color, ai_symbol, COLOR_RESET);
+        add_ai_history_entry(game, open_three_block_count);
         return;
     }
 

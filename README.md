@@ -72,7 +72,7 @@ make cmake-build cmake-test
 ### Help Screen
 
 ```bash
-./gomoku -h
+gomoku -h
 ```
 
 See the following screenshot for an example:
@@ -161,16 +161,16 @@ make cmake-rebuild
 ```bash
 # Run with default settings (Medium difficulty, 19x19 board)
 # Human is X, AI is O. 
-./gomoku
+gomoku
 
 # Run with easy difficulty on a 15x15 board
-./gomoku --level easy --board 15
+gomoku --level easy --board 15
 
 # Run with custom search depth and timeout
-./gomoku --depth 6 --timeout 30
+gomoku --depth 6 --timeout 30
 
 # Show all available options
-./gomoku --help
+gomoku --help
 ```
 
 ### Switching Players
@@ -186,11 +186,11 @@ To choose a non default configuration, use the `-x` and `-o` flags which can eac
 
 ```bash
 # make AI go first, and use search depth of 5
-./gomoku -x ai -o human -d 5
+gomoku -x ai -o human -d 5
 
 # oh watch AI play against itself, but give second AI that
 # will play naughts a slightly more look ahead power
-./gomoku -x ai -o ai -d 4:5 
+gomoku -x ai -o ai -d 4:5 
 ```
 
 ### Other CLI Flags Explained
@@ -206,10 +206,10 @@ Determines who plays as O (naughts). Use `human` for human player or `ai` for AI
 Examples:
 
 ```bash
-./gomoku -x human -o ai      # Human (X) vs AI (O) - default
-./gomoku -x human -o human   # Human vs Human
-./gomoku -x ai -o human      # AI (X) vs Human (O)
-./gomoku -x ai -o ai         # AI vs AI
+gomoku -x human -o ai      # Human (X) vs AI (O) - default
+gomoku -x human -o human   # Human vs Human
+gomoku -x ai -o human      # AI (X) vs Human (O)
+gomoku -x ai -o ai         # AI vs AI
 ```
 
 #### Difficulty & Search Depth
@@ -224,8 +224,8 @@ Examples:
 > - **hard**: Depth 6 - Slow but very challenging gameplay
 
 ```bash
-./gomoku --level easy    # Quick, beginner-friendly
-./gomoku --level hard    # Challenging for experienced players
+gomoku --level easy    # Quick, beginner-friendly
+gomoku --level hard    # Challenging for experienced players
 ```
 
 > [!TIP]
@@ -238,9 +238,9 @@ Manually set the search depth (overrides `--level` if both are specified).
 - Valid range: 1-10 (higher = stronger AI but slower)
 
 ```bash
-./gomoku -d 4            # Both players search to depth 4
-./gomoku -d 4:6          # X searches to depth 4, O to depth 6
-./gomoku -d 6 --level hard  # Depth 6 (depth overrides level)
+gomoku -d 4            # Both players search to depth 4
+gomoku -d 4:6          # X searches to depth 4, O to depth 6
+gomoku -d 6 --level hard  # Depth 6 (depth overrides level)
 ```
 
 #### Time Management
@@ -255,8 +255,8 @@ Set a maximum time limit (in seconds) for each move. Both human and AI players m
 Useful for preventing long wait times during deep AI searches.
 
 ```bash
-./gomoku -t 30           # 30-second time limit per move
-./gomoku -d 6 -t 5       # Deep search (depth 6) with 5-second limit
+gomoku -t 30           # 30-second time limit per move
+gomoku -d 6 -t 5       # Deep search (depth 6) with 5-second limit
 ```
 
 #### Board Configuration
@@ -266,8 +266,8 @@ Useful for preventing long wait times during deep AI searches.
 Choose the board size. The standard Gomoku board is 19x19, but 15x15 is also available for faster games.
 
 ```bash
-./gomoku --board 15      # Smaller board, faster games
-./gomoku --board 19      # Standard Gomoku board (default)
+gomoku --board 15      # Smaller board, faster games
+gomoku --board 19      # Standard Gomoku board (default)
 ```
 
 #### Features
@@ -277,8 +277,8 @@ Choose the board size. The standard Gomoku board is 19x19, but 15x15 is also ava
 Enable the undo feature, allowing players to undo the last move pair (human move + AI response). Disabled by default.
 
 ```bash
-./gomoku -u              # Enable undo feature
-./gomoku --level easy -u # Easy with undo enabled
+gomoku -u              # Enable undo feature
+gomoku --level easy -u # Easy with undo enabled
 ```
 
 **`-s, --skip-welcome`**
@@ -286,8 +286,8 @@ Enable the undo feature, allowing players to undo the last move pair (human move
 Skip the welcome screen and start the game immediately.
 
 ```bash
-./gomoku -s              # Skip welcome screen
-./gomoku -x ai -o ai -s  # AI vs AI without welcome
+gomoku -s              # Skip welcome screen
+gomoku -x ai -o ai -s  # AI vs AI without welcome
 ```
 
 **`-h, --help`**
@@ -295,7 +295,7 @@ Skip the welcome screen and start the game immediately.
 Display the help message and exit.
 
 ```bash
-./gomoku --help          # Show this help
+gomoku --help          # Show this help
 ```
 
 ### Game Controls
@@ -322,37 +322,37 @@ Display the help message and exit.
 **Beginner-friendly game:**
 
 ```bash
-./gomoku --level easy --board 15 -u
+gomoku --level easy --board 15 -u
 ```
 
 **Standard competitive game:**
 
 ```bash
-./gomoku --level medium
+gomoku --level medium
 ```
 
 **Challenge mode:**
 
 ```bash
-./gomoku --level hard --depth 8
+gomoku --level hard --depth 8
 ```
 
 **AI vs AI demonstration:**
 
 ```bash
-./gomoku -x ai -o ai -d 4:6 --skip-welcome
+gomoku -x ai -o ai -d 4:6 --skip-welcome
 ```
 
 **Testing with time constraints:**
 
 ```bash
-./gomoku -d 6 -t 10 --board 19
+gomoku -d 6 -t 10 --board 19
 ```
 
 **Human vs Human game:**
 
 ```bash
-./gomoku -x human -o human -u --board 15
+gomoku -x human -o human -u --board 15
 ```
 
 ---
