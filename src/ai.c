@@ -24,16 +24,28 @@
 //===============================================================================
 
 /**
- * Optimized move generation using cached interesting moves.
- * Uses game->stones_on_board and game->interesting_moves[] caches to avoid
- * scanning the entire board, reducing complexity from O(board_size^2) to O(candidates).
+ * Move generation that scans the board for candidates near occupied cells.
+ *
+ * NOTE: We cannot use the cached interesting_moves during minimax search because
+ * the cache only reflects the root position. During search, temporary moves are
+ * placed/removed on the board, and we need to find candidates near ALL occupied
+ * cells (including temporary ones) to properly evaluate defensive moves.
  */
 int generate_moves_optimized(game_state_t *game, int **board, move_t *moves, int current_player, int depth_remaining) {
     int size = game->board_size;
     int move_count = 0;
 
-    // Use cached stone count instead of scanning the board
-    if (game->stones_on_board == 0) {
+    // Quick check: count stones on board to detect empty board
+    int stones = 0;
+    for (int i = 0; i < size && stones == 0; i++) {
+        for (int j = 0; j < size && stones == 0; j++) {
+            if (board[i][j] != AI_CELL_EMPTY) {
+                stones = 1;  // Found at least one stone
+            }
+        }
+    }
+
+    if (stones == 0) {
         // Board is empty, play center
         moves[0].x = size / 2;
         moves[0].y = size / 2;
@@ -41,62 +53,43 @@ int generate_moves_optimized(game_state_t *game, int **board, move_t *moves, int
         return 1;
     }
 
-    // Use cached interesting moves instead of scanning the entire board
-    // This dramatically reduces move generation from O(n^2) to O(candidates)
-    for (int i = 0; i < game->interesting_move_count; i++) {
-        if (!game->interesting_moves[i].is_active) {
-            continue;
-        }
-        int x = game->interesting_moves[i].x;
-        int y = game->interesting_moves[i].y;
+    // Scan the board for candidates near all occupied cells
+    // This must scan the actual board (not cache) to find moves near temporary stones
+    unsigned char candidate[19][19];
+    memset(candidate, 0, sizeof(candidate));
 
-        // Verify the position is still empty (board may have changed during search)
-        if (board[x][y] != AI_CELL_EMPTY) {
-            continue;
+    for (int x = 0; x < size; x++) {
+        for (int y = 0; y < size; y++) {
+            if (board[x][y] == AI_CELL_EMPTY) {
+                continue;
+            }
+            // Mark all empty cells within radius as candidates
+            for (int dx = -MAX_RADIUS; dx <= MAX_RADIUS; dx++) {
+                for (int dy = -MAX_RADIUS; dy <= MAX_RADIUS; dy++) {
+                    int nx = x + dx;
+                    int ny = y + dy;
+                    if (nx < 0 || nx >= size || ny < 0 || ny >= size) {
+                        continue;
+                    }
+                    if (board[nx][ny] != AI_CELL_EMPTY) {
+                        continue;
+                    }
+                    candidate[nx][ny] = 1;
+                }
+            }
         }
-
-        moves[move_count].x = x;
-        moves[move_count].y = y;
-        moves[move_count].priority = get_move_priority_optimized(game, board, x, y, current_player, depth_remaining);
-        move_count++;
     }
 
-    // Fallback: if no interesting moves found (shouldn't happen), scan board
-    if (move_count == 0 && game->stones_on_board > 0) {
-        unsigned char candidate[19][19];
-        memset(candidate, 0, sizeof(candidate));
-
-        for (int x = 0; x < size; x++) {
-            for (int y = 0; y < size; y++) {
-                if (board[x][y] == AI_CELL_EMPTY) {
-                    continue;
-                }
-                for (int dx = -MAX_RADIUS; dx <= MAX_RADIUS; dx++) {
-                    for (int dy = -MAX_RADIUS; dy <= MAX_RADIUS; dy++) {
-                        int nx = x + dx;
-                        int ny = y + dy;
-                        if (nx < 0 || nx >= size || ny < 0 || ny >= size) {
-                            continue;
-                        }
-                        if (board[nx][ny] != AI_CELL_EMPTY) {
-                            continue;
-                        }
-                        candidate[nx][ny] = 1;
-                    }
-                }
+    // Collect candidates and compute priorities
+    for (int x = 0; x < size; x++) {
+        for (int y = 0; y < size; y++) {
+            if (!candidate[x][y]) {
+                continue;
             }
-        }
-
-        for (int x = 0; x < size; x++) {
-            for (int y = 0; y < size; y++) {
-                if (!candidate[x][y]) {
-                    continue;
-                }
-                moves[move_count].x = x;
-                moves[move_count].y = y;
-                moves[move_count].priority = get_move_priority_optimized(game, board, x, y, current_player, depth_remaining);
-                move_count++;
-            }
+            moves[move_count].x = x;
+            moves[move_count].y = y;
+            moves[move_count].priority = get_move_priority_optimized(game, board, x, y, current_player, depth_remaining);
+            move_count++;
         }
     }
 
