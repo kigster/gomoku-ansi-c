@@ -24,64 +24,79 @@
 //===============================================================================
 
 /**
- * Optimized move generation using cached interesting moves
+ * Optimized move generation using cached interesting moves.
+ * Uses game->stones_on_board and game->interesting_moves[] caches to avoid
+ * scanning the entire board, reducing complexity from O(board_size^2) to O(candidates).
  */
 int generate_moves_optimized(game_state_t *game, int **board, move_t *moves, int current_player, int depth_remaining) {
     int size = game->board_size;
     int move_count = 0;
 
-    // If the board is empty, play center.
-    int stones = 0;
-    for (int i = 0; i < size; i++) {
-        for (int j = 0; j < size; j++) {
-            if (board[i][j] != AI_CELL_EMPTY) {
-                stones++;
-            }
-        }
-    }
-    if (stones == 0) {
+    // Use cached stone count instead of scanning the board
+    if (game->stones_on_board == 0) {
+        // Board is empty, play center
         moves[0].x = size / 2;
         moves[0].y = size / 2;
         moves[0].priority = 1000;
         return 1;
     }
 
-    // Candidate map to avoid duplicates.
-    unsigned char candidate[19][19];
-    memset(candidate, 0, sizeof(candidate));
+    // Use cached interesting moves instead of scanning the entire board
+    // This dramatically reduces move generation from O(n^2) to O(candidates)
+    for (int i = 0; i < game->interesting_move_count; i++) {
+        if (!game->interesting_moves[i].is_active) {
+            continue;
+        }
+        int x = game->interesting_moves[i].x;
+        int y = game->interesting_moves[i].y;
 
-    int radius = MAX_RADIUS;
+        // Verify the position is still empty (board may have changed during search)
+        if (board[x][y] != AI_CELL_EMPTY) {
+            continue;
+        }
 
-    for (int x = 0; x < size; x++) {
-        for (int y = 0; y < size; y++) {
-            if (board[x][y] == AI_CELL_EMPTY) {
-                continue;
-            }
-            for (int dx = -radius; dx <= radius; dx++) {
-                for (int dy = -radius; dy <= radius; dy++) {
-                    int nx = x + dx;
-                    int ny = y + dy;
-                    if (nx < 0 || nx >= size || ny < 0 || ny >= size) {
-                        continue;
+        moves[move_count].x = x;
+        moves[move_count].y = y;
+        moves[move_count].priority = get_move_priority_optimized(game, board, x, y, current_player, depth_remaining);
+        move_count++;
+    }
+
+    // Fallback: if no interesting moves found (shouldn't happen), scan board
+    if (move_count == 0 && game->stones_on_board > 0) {
+        unsigned char candidate[19][19];
+        memset(candidate, 0, sizeof(candidate));
+
+        for (int x = 0; x < size; x++) {
+            for (int y = 0; y < size; y++) {
+                if (board[x][y] == AI_CELL_EMPTY) {
+                    continue;
+                }
+                for (int dx = -MAX_RADIUS; dx <= MAX_RADIUS; dx++) {
+                    for (int dy = -MAX_RADIUS; dy <= MAX_RADIUS; dy++) {
+                        int nx = x + dx;
+                        int ny = y + dy;
+                        if (nx < 0 || nx >= size || ny < 0 || ny >= size) {
+                            continue;
+                        }
+                        if (board[nx][ny] != AI_CELL_EMPTY) {
+                            continue;
+                        }
+                        candidate[nx][ny] = 1;
                     }
-                    if (board[nx][ny] != AI_CELL_EMPTY) {
-                        continue;
-                    }
-                    candidate[nx][ny] = 1;
                 }
             }
         }
-    }
 
-    for (int x = 0; x < size; x++) {
-        for (int y = 0; y < size; y++) {
-            if (!candidate[x][y]) {
-                continue;
+        for (int x = 0; x < size; x++) {
+            for (int y = 0; y < size; y++) {
+                if (!candidate[x][y]) {
+                    continue;
+                }
+                moves[move_count].x = x;
+                moves[move_count].y = y;
+                moves[move_count].priority = get_move_priority_optimized(game, board, x, y, current_player, depth_remaining);
+                move_count++;
             }
-            moves[move_count].x = x;
-            moves[move_count].y = y;
-            moves[move_count].priority = get_move_priority_optimized(game, board, x, y, current_player, depth_remaining);
-            move_count++;
         }
     }
 
@@ -563,16 +578,29 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
     int move_count = generate_moves_optimized(game, game->board, moves, ai_player, game->max_depth);
 
     // Check for immediate winning moves first
+    // Collect all winning moves and randomly select one for variety
+    int winning_moves_x[361];
+    int winning_moves_y[361];
+    int winning_move_count = 0;
+
     for (int i = 0; i < move_count; i++) {
         if (evaluate_threat_fast(game->board, moves[i].x, moves[i].y, ai_player, game->board_size) >= 100000) {
-            *best_x = moves[i].x;
-            *best_y = moves[i].y;
-            snprintf(game->ai_status_message, sizeof(game->ai_status_message),
-                    "%s%c%s It's a checkmate ;-)",
-                    ai_color, ai_symbol, COLOR_RESET);
-            add_ai_history_entry(game, 1); // Only checked 1 move
-            return;
+            winning_moves_x[winning_move_count] = moves[i].x;
+            winning_moves_y[winning_move_count] = moves[i].y;
+            winning_move_count++;
         }
+    }
+
+    if (winning_move_count > 0) {
+        // Randomly select from winning moves
+        int selected = rand() % winning_move_count;
+        *best_x = winning_moves_x[selected];
+        *best_y = winning_moves_y[selected];
+        snprintf(game->ai_status_message, sizeof(game->ai_status_message),
+                "%s%c%s It's a checkmate ;-)",
+                ai_color, ai_symbol, COLOR_RESET);
+        add_ai_history_entry(game, winning_move_count); // Checked winning_move_count moves
+        return;
     }
 
     // Sort moves by priority (best first)
@@ -593,8 +621,11 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
         }
 
         int depth_best_score = -WIN_SCORE - 1;
-        int depth_best_x = *best_x;
-        int depth_best_y = *best_y;
+
+        // Track all moves with the best score for random selection
+        int best_moves_x[361];
+        int best_moves_y[361];
+        int best_moves_count = 0;
 
         // Search all moves at current depth
         for (int m = 0; m < move_count; m++) {
@@ -623,20 +654,27 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
             game->board[i][j] = AI_CELL_EMPTY;
 
             if (score > depth_best_score) {
+                // New best score - reset the list
                 depth_best_score = score;
-                depth_best_x = i;
-                depth_best_y = j;
+                best_moves_x[0] = i;
+                best_moves_y[0] = j;
+                best_moves_count = 1;
 
                 // Early termination for very good moves
                 if (score >= WIN_SCORE - 1000) {
-                    snprintf(game->ai_status_message, sizeof(game->ai_status_message), 
-                            "%s%s%s Win (depth %d, %d moves).", 
+                    snprintf(game->ai_status_message, sizeof(game->ai_status_message),
+                            "%s%s%s Win (depth %d, %d moves).",
                             COLOR_BLUE, "O", COLOR_RESET, current_depth, moves_considered + 1);
-                    *best_x = depth_best_x;
-                    *best_y = depth_best_y;
+                    *best_x = i;
+                    *best_y = j;
                     add_ai_history_entry(game, moves_considered + 1);
                     return; // Exit function early
                 }
+            } else if (score == depth_best_score && best_moves_count < 361) {
+                // Equal score - add to the list for random selection
+                best_moves_x[best_moves_count] = i;
+                best_moves_y[best_moves_count] = j;
+                best_moves_count++;
             }
 
             moves_considered++;
@@ -651,10 +689,11 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
             }
         }
 
-        // If we completed this depth without timeout, use the result
-        if (!game->search_timed_out) {
-            *best_x = depth_best_x;
-            *best_y = depth_best_y;
+        // If we completed this depth without timeout, randomly select from best moves
+        if (!game->search_timed_out && best_moves_count > 0) {
+            int selected = rand() % best_moves_count;
+            *best_x = best_moves_x[selected];
+            *best_y = best_moves_y[selected];
         }
     }
 
