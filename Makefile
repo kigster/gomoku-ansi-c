@@ -10,6 +10,13 @@ VERSION         := $(shell grep VERSION src/gomoku.h | awk '{print $$3}' | tr -d
 TAG             := $(shell echo "v$(VERSION)")
 BRANCH          := $(shell git branch --show)
 
+# installation prefix (can override)
+PREFIX 		?= /usr/local
+PACKAGE 	= gomoku
+# directories
+BINDIR 		= $(PREFIX)/bin
+BINS 		= $(PACKAGE)
+
 CC               = gcc
 CXX              = g++
 CFLAGS           = -Wall -Wunused-parameter -Wextra -Wno-gnu-folding-constant -Wimplicit-function-declaration -Isrc -O3
@@ -31,7 +38,7 @@ GTEST_MAIN_LIB   = tests/googletest/build/lib/libgtest_main.a
 # CMake build directory
 BUILD_DIR = build
 
-.PHONY: clean test tag help cmake-build cmake-clean cmake-test
+.PHONY: clean test tag help cmake-build cmake-clean cmake-test install uninstall rebuild release
 
 help:		## Prints help message auto-generated from the comments.
 		@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[32m%-20s\033[35m %s\033[0\n", $$1, $$2}' | sed '/^$$/d' | sort
@@ -87,3 +94,10 @@ cmake-test: 	cmake-build ## Run tests using CMake
 
 cmake-rebuild: 	cmake-clean cmake-build ## Clean and rebuild using CMake
 
+install: build  ## Install the binary to the prefix
+		@echo "Installing to $(PREFIX)"
+		install -d $(BINDIR)
+		install -m 755 $(BINS) $(BINDIR)
+
+uninstall: 	## Uninstall the binary from the prefix
+		-rm -f $(BINDIR)/$(PACKAGE)
