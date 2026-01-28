@@ -12,7 +12,7 @@ BRANCH          := $(shell git branch --show)
 
 CC               = gcc
 CXX              = g++
-CFLAGS           = -Wall -Wunused-parameter -Wextra -Wimplicit-function-declaration -Isrc -O3
+CFLAGS           = -Wall -Wunused-parameter -Wextra -Wno-gnu-folding-constant -Wimplicit-function-declaration -Isrc -O3
 CXXFLAGS         = -Wall -Wunused-parameter -Wextra -std=c++17 -Isrc -Itests/googletest/googletest/include -Wimplicit-function-declaration -O2	
 LDFLAGS          = -lm
 
