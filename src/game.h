@@ -100,6 +100,7 @@ typedef struct {
     int game_state;        // Current game state (GAME_RUNNING, etc.)
     int max_depth;         // AI search depth
     int move_timeout;      // Move timeout in seconds (0 = no timeout)
+    int search_radius;     // Search radius for move generation (1-5)
 
     // Player configuration
     player_type_t player_type[2];  // [0]=CROSSES/X, [1]=NAUGHTS/O

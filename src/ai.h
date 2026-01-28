@@ -116,15 +116,16 @@ int evaluate_threat_fast(int **board, int x, int y, int player, int board_size);
 
 /**
  * Checks if a move position is "interesting" (within range of existing stones).
- * 
+ *
  * @param board The game board
  * @param x Row coordinate
  * @param y Column coordinate
  * @param stones_on_board Number of stones currently on board
  * @param board_size Size of the board
+ * @param radius Search radius to check around the position
  * @return 1 if interesting, 0 otherwise
  */
-int is_move_interesting(int **board, int x, int y, int stones_on_board, int board_size);
+int is_move_interesting(int **board, int x, int y, int stones_on_board, int board_size, int radius);
 
 /**
  * Checks if a move results in an immediate win.

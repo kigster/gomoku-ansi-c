@@ -25,6 +25,7 @@ typedef struct {
     int invalid_args;    // Whether invalid arguments were provided
     int enable_undo;     // Whether to enable undo feature
     int skip_welcome;    // Whether to skip the welcome screen
+    int search_radius;   // Search radius for move generation (1-5, default 2)
 
     // Player configuration
     player_type_t player_x_type;  // Type of player X (first player)

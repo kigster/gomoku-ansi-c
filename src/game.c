@@ -43,6 +43,7 @@ game_state_t *init_game(cli_config_t config) {
     game->game_state = GAME_RUNNING;
     game->max_depth = config.max_depth;
     game->move_timeout = config.move_timeout;
+    game->search_radius = config.search_radius;
     game->config = config;
 
     // Initialize player types (X=CROSSES=1, O=NAUGHTS=-1)
@@ -459,12 +460,19 @@ void init_transposition_table(game_state_t *game) {
     // Initialize transposition table
     memset(game->transposition_table, 0, sizeof(game->transposition_table));
 
-    // Initialize Zobrist keys with random values
-    srand(12345); // Use fixed seed for reproducible results
+    // Initialize Zobrist keys using a linear congruential generator with fixed seed
+    // This avoids calling srand() which would overwrite the time-based seed used
+    // for game randomization (e.g., random move selection among equal-weight moves)
+    uint64_t lcg_state = 12345ULL;
     for (int player = 0; player < 2; player++) {
         for (int pos = 0; pos < 361; pos++) {
-            game->zobrist_keys[player][pos] = 
-                ((uint64_t)rand() << 32) | rand();
+            // LCG: next = (a * state + c) mod m
+            // Using parameters from Numerical Recipes
+            lcg_state = lcg_state * 6364136223846793005ULL + 1442695040888963407ULL;
+            uint64_t high = lcg_state;
+            lcg_state = lcg_state * 6364136223846793005ULL + 1442695040888963407ULL;
+            uint64_t low = lcg_state;
+            game->zobrist_keys[player][pos] = (high & 0xFFFFFFFF00000000ULL) | (low >> 32);
         }
     }
 

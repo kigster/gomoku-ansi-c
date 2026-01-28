@@ -27,6 +27,7 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
         .invalid_args = 0,
         .enable_undo = 0,
         .skip_welcome = 0,
+        .search_radius = 2,    // Default search radius
         .player_x_type = PLAYER_TYPE_HUMAN,  // X is human by default
         .player_o_type = PLAYER_TYPE_AI,     // O is AI by default
         .depth_x = -1,                       // -1 means use max_depth
@@ -39,6 +40,7 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
         {"level", required_argument, 0, 'l'},
         {"timeout", required_argument, 0, 't'},
         {"board", required_argument, 0, 'b'},
+        {"radius", required_argument, 0, 'r'},
         {"help", no_argument, 0, 'h'},
         {"undo", no_argument, 0, 'u'},
         {"skip-welcome", no_argument, 0, 's'},
@@ -50,7 +52,7 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
     int option_index = 0;
 
     // Parse command-line arguments using getopt_long
-    while ((c = getopt_long(argc, argv, "d:l:t:b:husx:o:", long_options, &option_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "d:l:t:b:r:husx:o:", long_options, &option_index)) != -1) {
         switch (c) {
             case 'd':
                 // Check for asymmetric depth format: "4:6"
@@ -120,6 +122,14 @@ cli_config_t parse_arguments(int argc, char* argv[]) {
                 config.board_size = atoi(optarg);
                 if (config.board_size != 15 && config.board_size != 19) {
                     printf("Error: Board size must be either 15 or 19\n");
+                    config.invalid_args = 1;
+                }
+                break;
+
+            case 'r':
+                config.search_radius = atoi(optarg);
+                if (config.search_radius < 1 || config.search_radius > 5) {
+                    printf("Error: Search radius must be between 1 and 5\n");
                     config.invalid_args = 1;
                 }
                 break;
@@ -198,6 +208,8 @@ void print_help(const char* program_name) {
     printf("                        have to make their move, otherwise AI must choose\n");
     printf("                        the best move found so far, while human looses the game.\n");
     printf("  %s-b, --board 15,19%s     Board size. Can be either 19 or 15.\n", COLOR_YELLOW, COLOR_RESET);
+    printf("  %s-r, --radius 1-5%s      Search radius for move generation (default: 2).\n", COLOR_YELLOW, COLOR_RESET);
+    printf("                        Higher values find more moves but run slower.\n");
     printf("  %s-u, --undo       %s     Enable the Undo feature (disabled by the default).\n", COLOR_YELLOW, COLOR_RESET);
     printf("  %s-s, --skip-welcome%s    Skip the welcome screen.\n", COLOR_YELLOW, COLOR_RESET);
     printf("  %s-h, --help%s            Show this help message\n", COLOR_YELLOW, COLOR_RESET);
