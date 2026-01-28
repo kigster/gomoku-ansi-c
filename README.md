@@ -122,7 +122,11 @@ Below is the screenshot of the help screen of the game, since it's a CLI/Termina
 
 <img src="doc/gomoku-help.png" width="700" border="1" style="border-radius: 10px"/>
 
-### Running the Game
+---
+
+## USAGE
+
+### Quick Start
 
 ```bash
 # Run with default settings (Medium difficulty, 19x19 board)
@@ -138,23 +142,154 @@ Below is the screenshot of the help screen of the game, since it's a CLI/Termina
 ./gomoku --help
 ```
 
-### Command Line Options
+### Complete Help Output
 
-| Option             | Description                                | Example        |
-| ------------------ | ------------------------------------------ | -------------- |
-| `-l, --level M`    | Difficulty: `easy`, `medium`, `hard` | `--level hard` |
-| `-d, --depth N`    | Search depth (1-10) for AI algorithm       | `--depth 5`    |
-| `-t, --timeout T`  | Move timeout in seconds (optional)         | `--timeout 30` |
-| `-b, --board SIZE` | Board size: 15 or 19 (default: 19)         | `--board 15`   |
-| `-h, --help`       | Show help message                          | `--help`       |
+```
+NAME
+  ./gomoku - an entertaining and engaging five-in-a-row version
+
+FLAGS:
+  -x, --player-x TYPE   Player X type: "human" or "ai" (default: human)
+  -o, --player-o TYPE   Player O type: "human" or "ai" (default: ai)
+  -d, --depth N         The depth of search. Use N for both, or N:M for
+                        asymmetric depths (X:O). Examples: '4' or '4:6'
+  -l, --level M         Can be "easy", "medium", "hard"
+  -t, --timeout T       Timeout in seconds that AI (and human)
+                        have to make their move, otherwise AI must choose
+                        the best move found so far, while human looses the game.
+  -b, --board 15,19     Board size. Can be either 19 or 15.
+  -u, --undo            Enable the Undo feature (disabled by the default).
+  -s, --skip-welcome    Skip the welcome screen.
+  -h, --help            Show this help message
+
+EXAMPLES:
+  ./gomoku --level easy --board 15                # Human vs AI (easy)
+  ./gomoku -x human -o human                      # Human vs Human
+  ./gomoku -x ai -o human                         # AI vs Human (AI plays first)
+  ./gomoku -x ai -o ai -d 4:6 --skip-welcome      # AI vs AI (X depth 4, O depth 6)
+  ./gomoku -d 4 -t 30 -b 19                       # Custom depth and timeout
+
+DIFFICULTY LEVELS:
+  easy         - Search depth 2 (quick moves, good for beginners)
+  medium      - Search depth 4 (balanced gameplay, default setting)
+  hard         - Search depth 6 (advanced AI, challenging for experts)
+
+GAME SYMBOLS:
+  ✕ - Human player (crosses)
+  ○ - AI player (naughts)
+  ✕ - Current cursor (x on an empty cell)
+  ◼︎ - Current cursor on an occupied cell
+
+CONTROLS IN GAME:
+  Arrow Keys    - Move cursor
+  Space/Enter   - Place stone
+  U             - Undo last move pair
+  ?             - Show detailed game rules
+  ESC           - Quit game
+```
+
+### Command Line Options Explained
+
+#### Player Configuration
+
+**`-x, --player-x TYPE`** (default: `human`)
+Determines who plays as X (crosses). Use `human` for human player or `ai` for AI opponent.
+
+**`-o, --player-o TYPE`** (default: `ai`)
+Determines who plays as O (naughts). Use `human` for human player or `ai` for AI opponent.
+
+Examples:
+```bash
+./gomoku -x human -o ai      # Human (X) vs AI (O) - default
+./gomoku -x human -o human   # Human vs Human
+./gomoku -x ai -o human      # AI (X) vs Human (O)
+./gomoku -x ai -o ai         # AI vs AI
+```
+
+#### Difficulty & Search Depth
+
+**`-l, --level M`** (options: `easy`, `medium`, `hard`)
+Quick difficulty preset that sets the search depth:
+- **easy**: Depth 2 - Very fast, suitable for beginners
+- **medium**: Depth 4 - Balanced, default setting, moderately challenging
+- **hard**: Depth 6 - Slow but very challenging gameplay
+
+```bash
+./gomoku --level easy    # Quick, beginner-friendly
+./gomoku --level hard    # Challenging for experienced players
+```
+
+**`-d, --depth N`** or **`-d, --depth N:M`**
+Manually set the search depth (overrides `--level` if both are specified).
+- Single value: Both players use the same depth
+- N:M format: X uses depth N, O uses depth M (asymmetric)
+- Valid range: 1-10 (higher = stronger AI but slower)
+
+```bash
+./gomoku -d 4            # Both players search to depth 4
+./gomoku -d 4:6          # X searches to depth 4, O to depth 6
+./gomoku -d 6 --level hard  # Depth 6 (depth overrides level)
+```
+
+#### Time Management
+
+**`-t, --timeout T`**
+Set a maximum time limit (in seconds) for each move. Both human and AI players must make a move within this timeout. If the timeout is exceeded:
+- **AI**: Plays the best move found so far
+- **Human**: Loses the game (move is not made)
+
+Useful for preventing long wait times during deep AI searches.
+
+```bash
+./gomoku -t 30           # 30-second time limit per move
+./gomoku -d 6 -t 5       # Deep search (depth 6) with 5-second limit
+```
+
+#### Board Configuration
+
+**`-b, --board SIZE`** (options: `15`, `19`)
+Choose the board size. The standard Gomoku board is 19x19, but 15x15 is also available for faster games.
+
+```bash
+./gomoku --board 15      # Smaller board, faster games
+./gomoku --board 19      # Standard Gomoku board (default)
+```
+
+#### Features
+
+**`-u, --undo`**
+Enable the undo feature, allowing players to undo the last move pair (human move + AI response). Disabled by default.
+
+```bash
+./gomoku -u              # Enable undo feature
+./gomoku --level easy -u # Easy with undo enabled
+```
+
+**`-s, --skip-welcome`**
+Skip the welcome screen and start the game immediately.
+
+```bash
+./gomoku -s              # Skip welcome screen
+./gomoku -x ai -o ai -s  # AI vs AI without welcome
+```
+
+**`-h, --help`**
+Display the help message and exit.
+
+```bash
+./gomoku --help          # Show this help
+```
 
 ### Game Controls
 
-- **Arrow Keys**: Move cursor around the board
-- **Space/Enter**: Place a stone at cursor position
-- **U**: Undo last move pair (human + AI)
-- **?**: Show detailed game rules and help
-- **ESC/Q**: Quit the game
+| Key           | Action                                 |
+| ------------- | -------------------------------------- |
+| **Arrow Keys**| Move cursor around the board           |
+| **Space**     | Place a stone at cursor position       |
+| **Enter**     | Place a stone at cursor position       |
+| **U**         | Undo last move pair (human + AI)       |
+| **?**         | Show detailed game rules               |
+| **ESC**       | Quit the game                          |
 
 ### Difficulty Levels
 
@@ -163,6 +298,38 @@ Below is the screenshot of the help screen of the game, since it's a CLI/Termina
 | **Easy**         | 2            | < 0.1 seconds   | Beginners, casual play     |
 | **Intermediate** | 4            | 0.1-0.5 seconds | Default, balanced gameplay |
 | **Hard**         | 6            | 0.5-3 seconds   | Challenging, advanced play |
+
+### Common Usage Patterns
+
+**Beginner-friendly game:**
+```bash
+./gomoku --level easy --board 15 -u
+```
+
+**Standard competitive game:**
+```bash
+./gomoku --level medium
+```
+
+**Challenge mode:**
+```bash
+./gomoku --level hard --depth 8
+```
+
+**AI vs AI demonstration:**
+```bash
+./gomoku -x ai -o ai -d 4:6 --skip-welcome
+```
+
+**Testing with time constraints:**
+```bash
+./gomoku -d 6 -t 10 --board 19
+```
+
+**Human vs Human game:**
+```bash
+./gomoku -x human -o human -u --board 15
+```
 
 ---
 
