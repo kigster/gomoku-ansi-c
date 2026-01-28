@@ -9,8 +9,18 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 #include "game.h"
 #include "ai.h"
+#include "json.h"
+
+// Helper to create a JSON number string with exactly 3 decimal places for milliseconds
+static json_object *json_ms_from_seconds(double seconds) {
+    char buf[32];
+    double ms = round(seconds * 1000000.0) / 1000.0;  // Round to microseconds
+    snprintf(buf, sizeof(buf), "%.3f", ms);
+    return json_object_new_double_s(atof(buf), buf);
+}
 
 uint64_t compute_zobrist_hash(game_state_t *game);
 void invalidate_winner_cache(game_state_t *game);
@@ -44,6 +54,7 @@ game_state_t *init_game(cli_config_t config) {
     game->max_depth = config.max_depth;
     game->move_timeout = config.move_timeout;
     game->search_radius = config.search_radius;
+    game->replay_mode = 0;
     game->config = config;
 
     // Initialize player types (X=CROSSES=1, O=NAUGHTS=-1)
@@ -117,13 +128,33 @@ void check_game_state(game_state_t *game) {
     }
 }
 
-int make_move(game_state_t *game, int x, int y, int player, double time_taken, int positions_evaluated) {
+int make_move(game_state_t *game, int x, int y, int player, double time_taken, int positions_evaluated, int own_score, int opponent_score) {
     if (!is_valid_move(game->board, x, y, game->board_size)) {
         return 0;
     }
 
     // Record move in history before placing it
-    add_move_to_history(game, x, y, player, time_taken, positions_evaluated);
+    if (game->move_history_count < MAX_MOVE_HISTORY) {
+        move_history_t *move = &game->move_history[game->move_history_count];
+        move->x = x;
+        move->y = y;
+        move->player = player;
+        move->time_taken = time_taken;
+        move->positions_evaluated = positions_evaluated;
+        move->own_score = own_score;
+        move->opponent_score = opponent_score;
+        move->is_winner = 0;  // Will be set after checking game state
+        game->move_history_count++;
+
+        // Add to total time for each player
+        // Note: CROSSES (X) time goes to human_time, NAUGHTS (O) time goes to ai_time
+        // This convention is used for backwards compatibility with original code
+        if (player == AI_CELL_CROSSES) {
+            game->total_human_time += time_taken;
+        } else {
+            game->total_ai_time += time_taken;
+        }
+    }
 
     // Make the move
     game->board[x][y] = player;
@@ -133,6 +164,13 @@ int make_move(game_state_t *game, int x, int y, int player, double time_taken, i
 
     // Check for game end conditions
     check_game_state(game);
+
+    // Mark winning move (GAME_HUMAN_WIN = X won, GAME_AI_WIN = O won)
+    if (game->game_state == GAME_HUMAN_WIN || game->game_state == GAME_AI_WIN) {
+        if (game->move_history_count > 0) {
+            game->move_history[game->move_history_count - 1].is_winner = 1;
+        }
+    }
 
     // Switch to next player if game is still running
     if (game->game_state == GAME_RUNNING) {
@@ -682,4 +720,251 @@ int try_null_move_pruning(game_state_t *game, int depth, int beta, int ai_player
     }
 
     return 0; // No pruning
-} 
+}
+
+//===============================================================================
+// JSON EXPORT
+//===============================================================================
+
+int write_game_json(game_state_t *game, const char *filename) {
+    if (!filename || strlen(filename) == 0) {
+        return 0;
+    }
+
+    json_object *root = json_object_new_object();
+    if (!root) {
+        return 0;
+    }
+
+    // Player X configuration
+    json_object *player_x = json_object_new_object();
+    json_object_object_add(player_x, "player",
+        json_object_new_string(game->player_type[0] == PLAYER_TYPE_HUMAN ? "human" : "AI"));
+    if (game->player_type[0] == PLAYER_TYPE_AI) {
+        json_object_object_add(player_x, "depth",
+            json_object_new_int(game->depth_for_player[0]));
+    }
+    // Total time in milliseconds with 3 decimal places (microsecond precision)
+    json_object_object_add(player_x, "time_ms",
+        json_ms_from_seconds(game->total_human_time));
+    json_object_object_add(root, "X", player_x);
+
+    // Player O configuration
+    json_object *player_o = json_object_new_object();
+    json_object_object_add(player_o, "player",
+        json_object_new_string(game->player_type[1] == PLAYER_TYPE_HUMAN ? "human" : "AI"));
+    if (game->player_type[1] == PLAYER_TYPE_AI) {
+        json_object_object_add(player_o, "depth",
+            json_object_new_int(game->depth_for_player[1]));
+    }
+    // Total time in milliseconds with 3 decimal places (microsecond precision)
+    json_object_object_add(player_o, "time_ms",
+        json_ms_from_seconds(game->total_ai_time));
+    json_object_object_add(root, "O", player_o);
+
+    // Game parameters
+    json_object_object_add(root, "board", json_object_new_int(game->board_size));
+    json_object_object_add(root, "radius", json_object_new_int(game->search_radius));
+
+    if (game->move_timeout > 0) {
+        json_object_object_add(root, "timeout", json_object_new_int(game->move_timeout));
+    } else {
+        json_object_object_add(root, "timeout", json_object_new_string("none"));
+    }
+    json_object_object_add(root, "undo",
+        json_object_new_string(game->config.enable_undo ? "on" : "off"));
+
+    // Winner (GAME_HUMAN_WIN = X won, GAME_AI_WIN = O won)
+    const char *winner_str = "none";
+    if (game->game_state == GAME_HUMAN_WIN) {
+        winner_str = "X";
+    } else if (game->game_state == GAME_AI_WIN) {
+        winner_str = "O";
+    } else if (game->game_state == GAME_DRAW) {
+        winner_str = "draw";
+    }
+    json_object_object_add(root, "winner", json_object_new_string(winner_str));
+
+    // Final board state as array of row strings
+    json_object *board_array = json_object_new_array();
+    char *row_str = malloc(game->board_size + 1);
+    if (row_str) {
+        for (int row = 0; row < game->board_size; row++) {
+            for (int col = 0; col < game->board_size; col++) {
+                int cell = game->board[row][col];
+                if (cell == AI_CELL_CROSSES) {
+                    row_str[col] = 'X';
+                } else if (cell == AI_CELL_NAUGHTS) {
+                    row_str[col] = 'O';
+                } else {
+                    row_str[col] = '.';
+                }
+            }
+            row_str[game->board_size] = '\0';
+            json_object_array_add(board_array, json_object_new_string(row_str));
+        }
+        free(row_str);
+    }
+    json_object_object_add(root, "board_state", board_array);
+
+    // Moves array
+    json_object *moves_array = json_object_new_array();
+
+    for (int i = 0; i < game->move_history_count; i++) {
+        move_history_t *move = &game->move_history[i];
+        json_object *move_obj = json_object_new_object();
+
+        // Player identifier
+        const char *player_name;
+        int player_index = (move->player == AI_CELL_CROSSES) ? 0 : 1;
+        int is_ai = (game->player_type[player_index] == PLAYER_TYPE_AI);
+
+        if (move->player == AI_CELL_CROSSES) {
+            player_name = is_ai ? "X (AI)" : "X (human)";
+        } else {
+            player_name = is_ai ? "O (AI)" : "O (human)";
+        }
+
+        // Position array [x, y]
+        json_object *pos_array = json_object_new_array();
+        json_object_array_add(pos_array, json_object_new_int(move->x));
+        json_object_array_add(pos_array, json_object_new_int(move->y));
+        json_object_object_add(move_obj, player_name, pos_array);
+
+        // AI-specific fields
+        if (is_ai && move->positions_evaluated > 0) {
+            json_object_object_add(move_obj, "moves_searched",
+                json_object_new_int(move->positions_evaluated));
+        }
+        if (is_ai && move->own_score != 0) {
+            json_object_object_add(move_obj, "score",
+                json_object_new_int(move->own_score));
+        }
+        if (is_ai && move->opponent_score != 0) {
+            json_object_object_add(move_obj, "opponent",
+                json_object_new_int(move->opponent_score));
+        }
+
+        // Time taken in milliseconds (3 decimal places = microsecond precision)
+        json_object_object_add(move_obj, "time_ms",
+            json_ms_from_seconds(move->time_taken));
+
+        // Winner flag
+        if (move->is_winner) {
+            json_object_object_add(move_obj, "winner", json_object_new_boolean(1));
+        }
+
+        json_object_array_add(moves_array, move_obj);
+    }
+
+    json_object_object_add(root, "moves", moves_array);
+
+    // Write to file
+    FILE *fp = fopen(filename, "w");
+    if (!fp) {
+        json_object_put(root);
+        return 0;
+    }
+
+    const char *json_str = json_object_to_json_string_ext(root, JSON_C_TO_STRING_PRETTY);
+    fprintf(fp, "%s\n", json_str);
+    fclose(fp);
+
+    json_object_put(root);
+    return 1;
+}
+
+int load_game_json(const char *filename, replay_data_t *data) {
+    if (!filename || !data) {
+        return 0;
+    }
+
+    // Initialize data
+    memset(data, 0, sizeof(replay_data_t));
+    strcpy(data->winner, "none");
+
+    // Read and parse JSON file
+    json_object *root = json_object_from_file(filename);
+    if (!root) {
+        return 0;
+    }
+
+    // Get board size
+    json_object *board_obj;
+    if (json_object_object_get_ex(root, "board", &board_obj)) {
+        data->board_size = json_object_get_int(board_obj);
+    } else {
+        data->board_size = 19;  // Default
+    }
+
+    // Get winner
+    json_object *winner_obj;
+    if (json_object_object_get_ex(root, "winner", &winner_obj)) {
+        const char *winner_str = json_object_get_string(winner_obj);
+        if (winner_str) {
+            strncpy(data->winner, winner_str, sizeof(data->winner) - 1);
+        }
+    }
+
+    // Get moves array
+    json_object *moves_obj;
+    if (!json_object_object_get_ex(root, "moves", &moves_obj)) {
+        json_object_put(root);
+        return 0;
+    }
+
+    int num_moves = json_object_array_length(moves_obj);
+    if (num_moves > MAX_MOVE_HISTORY) {
+        num_moves = MAX_MOVE_HISTORY;
+    }
+
+    data->move_count = 0;
+    for (int i = 0; i < num_moves; i++) {
+        json_object *move_obj = json_object_array_get_idx(moves_obj, i);
+        if (!move_obj) continue;
+
+        move_history_t *move = &data->moves[data->move_count];
+        memset(move, 0, sizeof(move_history_t));
+
+        // The move object has a key like "X (AI)" or "O (human)" with position array
+        json_object_object_foreach(move_obj, key, val) {
+            // Check for position array (the player key)
+            if (json_object_is_type(val, json_type_array) && json_object_array_length(val) == 2) {
+                move->x = json_object_get_int(json_object_array_get_idx(val, 0));
+                move->y = json_object_get_int(json_object_array_get_idx(val, 1));
+
+                // Determine player from key
+                if (key[0] == 'X') {
+                    move->player = AI_CELL_CROSSES;
+                } else if (key[0] == 'O') {
+                    move->player = AI_CELL_NAUGHTS;
+                }
+            }
+            // Get time_ms
+            else if (strcmp(key, "time_ms") == 0) {
+                move->time_taken = json_object_get_double(val) / 1000.0;  // Convert ms to seconds
+            }
+            // Get positions evaluated
+            else if (strcmp(key, "moves_searched") == 0) {
+                move->positions_evaluated = json_object_get_int(val);
+            }
+            // Get own score
+            else if (strcmp(key, "score") == 0) {
+                move->own_score = json_object_get_int(val);
+            }
+            // Get opponent score
+            else if (strcmp(key, "opponent") == 0) {
+                move->opponent_score = json_object_get_int(val);
+            }
+            // Get winner flag
+            else if (strcmp(key, "winner") == 0 && json_object_is_type(val, json_type_boolean)) {
+                move->is_winner = json_object_get_boolean(val);
+            }
+        }
+
+        data->move_count++;
+    }
+
+    json_object_put(root);
+    return 1;
+}

@@ -16,6 +16,7 @@
 //===============================================================================
 
 #define GAME_NAME "Gomoku"
+#define GAME_BINARY "gomoku"
 #define GAME_VERSION "0.4.1"
 #define GAME_AUTHOR "Konstantin Gredeskoul"
 #define GAME_LICENSE "MIT License"

@@ -437,7 +437,7 @@ cd gomoku-ansi-c
 make build
 
 # Run game
-./gomoku
+gomoku
 
 # Run tests
 ./tests/setup  # First time only

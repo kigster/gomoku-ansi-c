@@ -34,6 +34,9 @@ typedef struct {
     int player;            // Player who made the move
     double time_taken;     // Time taken to make this move in seconds
     int positions_evaluated; // For AI moves, number of positions evaluated
+    int own_score;         // For AI moves, score of this position for the player
+    int opponent_score;    // For AI moves, score of this position for opponent
+    int is_winner;         // Whether this move won the game
 } move_history_t;
 
 /**
@@ -101,6 +104,7 @@ typedef struct {
     int max_depth;         // AI search depth
     int move_timeout;      // Move timeout in seconds (0 = no timeout)
     int search_radius;     // Search radius for move generation (1-5)
+    int replay_mode;       // Whether we're in replay mode (disables cursor)
 
     // Player configuration
     player_type_t player_type[2];  // [0]=CROSSES/X, [1]=NAUGHTS/O
@@ -198,7 +202,7 @@ void check_game_state(game_state_t *game);
  * @param positions_evaluated Number of positions evaluated (for AI moves)
  * @return 1 if move was successful, 0 if invalid
  */
-int make_move(game_state_t *game, int x, int y, int player, double time_taken, int positions_evaluated);
+int make_move(game_state_t *game, int x, int y, int player, double time_taken, int positions_evaluated, int own_score, int opponent_score);
 
 /**
  * Checks if undo is possible (need at least 2 moves).
@@ -440,10 +444,42 @@ void add_move_to_history(game_state_t *game, int x, int y, int player, double ti
 
 /**
  * Adds an AI thinking entry to the history.
- * 
+ *
  * @param game The game state
  * @param moves_evaluated Number of moves evaluated
  */
 void add_ai_history_entry(game_state_t *game, int moves_evaluated);
+
+//===============================================================================
+// JSON EXPORT/IMPORT
+//===============================================================================
+
+/**
+ * Writes game results to a JSON file.
+ *
+ * @param game The game state
+ * @param filename Path to the output JSON file
+ * @return 1 on success, 0 on failure
+ */
+int write_game_json(game_state_t *game, const char *filename);
+
+/**
+ * Structure to hold replay data loaded from JSON
+ */
+typedef struct {
+    int board_size;
+    int move_count;
+    move_history_t moves[MAX_MOVE_HISTORY];
+    char winner[8];  // "X", "O", "draw", or "none"
+} replay_data_t;
+
+/**
+ * Loads game data from a JSON file for replay.
+ *
+ * @param filename Path to the JSON file
+ * @param data Pointer to replay_data_t to fill
+ * @return 1 on success, 0 on failure
+ */
+int load_game_json(const char *filename, replay_data_t *data);
 
 #endif // GAME_H 

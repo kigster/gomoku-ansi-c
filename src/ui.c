@@ -84,7 +84,7 @@ void handle_input(game_state_t *game) {
             // Allow move if it's valid, regardless of which player
             if (is_valid_move(game->board, game->cursor_x, game->cursor_y, game->board_size)) {
                 double move_time = end_move_timer(game);
-                make_move(game, game->cursor_x, game->cursor_y, game->current_player, move_time, 0);
+                make_move(game, game->cursor_x, game->cursor_y, game->current_player, move_time, 0, 0, 0);
             }
             break;
         case 'U':
@@ -196,9 +196,9 @@ void draw_board(game_state_t *game) {
 
     int board_start_row = 0; // After header (4 lines) + column numbers (1 line) + buffer (1 line)
 
-    // Determine if current player is human (cursor only shown for human players)
+    // Determine if current player is human (cursor only shown for human players, not in replay mode)
     int current_player_index = (game->current_player == AI_CELL_CROSSES) ? 0 : 1;
-    int is_human_turn = (game->player_type[current_player_index] == PLAYER_TYPE_HUMAN);
+    int is_human_turn = !game->replay_mode && (game->player_type[current_player_index] == PLAYER_TYPE_HUMAN);
 
     // Find the last move position for highlighting (from move history)
     int last_move_x = -1, last_move_y = -1;
@@ -356,6 +356,13 @@ void draw_status(game_state_t *game) {
     printf(ESCAPE_MOVE_CURSOR_TO, 28, 42);
     printf("%s│%s\n", COLOR_RESET, COLOR_RESET);
 
+    // Search Radius
+    memset(difficulty_str, 0, sizeof(difficulty_str));
+    snprintf(difficulty_str, sizeof(difficulty_str), "%sSearch Radius  : %d", difficulty_color, game->search_radius);
+    printf("%s%s│ %s", prefix, COLOR_RESET, difficulty_str);
+    printf(ESCAPE_MOVE_CURSOR_TO, 29, 42);
+    printf("%s│%s\n", COLOR_RESET, COLOR_RESET);
+
     // Separator line
     printf("%s%s│ %-*s %s│%s\n", prefix, COLOR_RESET, box_width - 4, "", COLOR_RESET, COLOR_RESET);
 
@@ -402,8 +409,6 @@ void draw_status(game_state_t *game) {
     // Game state messages
     if (game->game_state != GAME_RUNNING) {
         printf("%s%s├%-*s┤%s\n", prefix, COLOR_RESET, box_width - 4, "──────────────────────────────────────", COLOR_RESET);
-        printf("%s%s│%s %-*s %s│\n", prefix, COLOR_RESET, COLOR_RESET, 
-                box_width - 4, "", COLOR_RESET);
 
         switch (game->game_state) {
             case GAME_HUMAN_WIN: {
@@ -424,10 +429,10 @@ void draw_status(game_state_t *game) {
                 }
 
                 if (loser_type == PLAYER_TYPE_HUMAN) {
-                    snprintf(loser_str, sizeof(loser_str), "Loser: O (Human)");
+                    snprintf(loser_str, sizeof(loser_str), "Loser : O (Human)");
                 } else {
                     const char* level_name = (loser_depth <= 2) ? "Easy" : (loser_depth <= 4) ? "Medium" : "Hard";
-                    snprintf(loser_str, sizeof(loser_str), "Loser: O (AI @ %s)", level_name);
+                    snprintf(loser_str, sizeof(loser_str), "Loser : O (AI @ %s)", level_name);
                 }
 
                 printf("%s%s│ %-*s %s│\n", prefix, COLOR_RESET, box_width - 4, winner_str, COLOR_RESET);
@@ -452,10 +457,10 @@ void draw_status(game_state_t *game) {
                 }
 
                 if (loser_type == PLAYER_TYPE_HUMAN) {
-                    snprintf(loser_str, sizeof(loser_str), "Loser: X (Human)");
+                    snprintf(loser_str, sizeof(loser_str), "Loser : X (Human)");
                 } else {
                     const char* level_name = (loser_depth <= 2) ? "Easy" : (loser_depth <= 4) ? "Medium" : "Hard";
-                    snprintf(loser_str, sizeof(loser_str), "Loser: X (AI @ %s)", level_name);
+                    snprintf(loser_str, sizeof(loser_str), "Loser : X (AI @ %s)", level_name);
                 }
 
                 printf("%s%s│ %-*s %s│\n", prefix, COLOR_RESET, box_width - 4, winner_str, COLOR_RESET);
@@ -463,8 +468,11 @@ void draw_status(game_state_t *game) {
                 break;
             }
             case GAME_DRAW:
-                printf("%s%s│%s %-*s %s│\n", prefix, COLOR_RESET, COLOR_RESET,
+                printf("%s%s│%s %-*s %s", prefix, COLOR_RESET, COLOR_RESET,
                         control_width, "The Game is a draw!", COLOR_RESET);
+                printf(ESCAPE_MOVE_CURSOR_TO, 40, 42);
+                printf("%s│%s\n", COLOR_RESET, COLOR_RESET);
+                printf("%s%s│ %-*s │%s\n", prefix, COLOR_RESET, box_width - 4, " ", COLOR_RESET);
                 break;
         }
 
@@ -473,13 +481,21 @@ void draw_status(game_state_t *game) {
         const char* x_label = (game->player_type[0] == PLAYER_TYPE_HUMAN) ? "Human(X)" : "AI(X)";
         const char* o_label = (game->player_type[1] == PLAYER_TYPE_HUMAN) ? "Human(O)" : "AI(O)";
         snprintf(time_summary, sizeof(time_summary),
-                "Time: %s: %.1fs | %s: %.1fs",
+                "%s%s: %.1fs %s|%s %s: %.1fs%s",
+                COLOR_BRIGHT_BLUE,
                 x_label, game->total_human_time,  // CROSSES time
-                o_label, game->total_ai_time);     // NAUGHTS time
-        printf("%s%s│ %-*s %s│\n", prefix, COLOR_RESET,
+                COLOR_RESET,
+                COLOR_BRIGHT_CYAN,
+                o_label, game->total_ai_time,
+                COLOR_RESET
+            );     // NAUGHTS time
+        printf("%s%s│ %-*s %s", prefix, COLOR_RESET,
                 box_width - 4, time_summary, COLOR_RESET);
 
-        printf("%s%s│ %-*s %s│\n", prefix, COLOR_RESET, 
+        printf(ESCAPE_MOVE_CURSOR_TO, 42, 42);
+        printf("%s│%s\n", COLOR_RESET, COLOR_RESET);
+
+        printf("%s%s│ %-*s %s│\n", prefix, COLOR_YELLOW, 
                 box_width - 4, "Press any key to exit...", COLOR_RESET);
     }
 
