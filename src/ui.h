@@ -89,9 +89,17 @@ void display_rules(void);
 
 /**
  * Refreshes the entire game display.
- * 
+ *
  * @param game The game state
  */
 void refresh_display(game_state_t *game);
+
+/**
+ * Positions the cursor on an empty cell near the last move.
+ * Called after AI moves when the next player is human.
+ *
+ * @param game The game state
+ */
+void position_cursor_near_last_move(game_state_t *game);
 
 #endif // UI_H 

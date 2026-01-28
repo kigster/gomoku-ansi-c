@@ -186,7 +186,7 @@ void draw_board(game_state_t *game) {
 
     // Column numbers with Unicode characters
     for (int j = 0; j < game->board_size; j++) {
-        if (j > 9) {    
+        if (j > 9) {
             printf("%s%2s%s ", COLOR_BLUE, get_coordinate_unicode(j - 10), COLOR_RESET);
         } else {
             printf("%s%2s%s ", COLOR_GREEN, get_coordinate_unicode(j), COLOR_RESET);
@@ -196,16 +196,20 @@ void draw_board(game_state_t *game) {
 
     int board_start_row = 0; // After header (4 lines) + column numbers (1 line) + buffer (1 line)
 
+    // Determine if current player is human (cursor only shown for human players)
+    int current_player_index = (game->current_player == AI_CELL_CROSSES) ? 0 : 1;
+    int is_human_turn = (game->player_type[current_player_index] == PLAYER_TYPE_HUMAN);
+
     for (int i = 0; i < game->board_size; i++) {
         printf("  ");
-        if (i > 9) {    
+        if (i > 9) {
             printf("%s%2s%s ", COLOR_BLUE, get_coordinate_unicode(i - 10), COLOR_RESET);
         } else {
             printf("%s%2s%s ", COLOR_GREEN, get_coordinate_unicode(i), COLOR_RESET);
         }
         for (int j = 0; j < game->board_size; j++) {
-            // Check if cursor is at this position
-            int is_cursor_here = (i == game->cursor_x && j == game->cursor_y);
+            // Only show cursor if it's a human player's turn
+            int is_cursor_here = is_human_turn && (i == game->cursor_x && j == game->cursor_y);
 
             printf(" "); // Always add the space before the symbol
 
@@ -221,7 +225,6 @@ void draw_board(game_state_t *game) {
             } else if (game->board[i][j] == AI_CELL_CROSSES) {
                 if (is_cursor_here) {
                     // Human stone with cursor: add grey background
-                    // printf("%s%s%s", COLOR_X_INVALID, UNICODE_CROSSES, COLOR_RESET);
                     printf("%s%s%s", COLOR_RESET, UNICODE_OCCUPIED, COLOR_RESET);
                 } else {
                     // Human stone without cursor: normal red
@@ -230,13 +233,7 @@ void draw_board(game_state_t *game) {
             } else { // AI_CELL_NAUGHTS
                 if (is_cursor_here) {
                     // AI stone with cursor: add grey background
-                    if (i == game->last_ai_move_x && j == game->last_ai_move_y) {
-                        //   printf("%s%s%s", COLOR_O_INVALID, UNICODE_NAUGHTS, COLOR_RESET);
-                        printf("%s%s%s", COLOR_RESET, UNICODE_OCCUPIED, COLOR_RESET);
-                    } else {
-                        // printf("%s%s%s", COLOR_O_INVALID, UNICODE_NAUGHTS, COLOR_RESET);
-                        printf("%s%s%s", COLOR_RESET, UNICODE_OCCUPIED, COLOR_RESET);
-                    }
+                    printf("%s%s%s", COLOR_RESET, UNICODE_OCCUPIED, COLOR_RESET);
                 } else {
                     // AI stone without cursor: normal highlighting
                     if (i == game->last_ai_move_x && j == game->last_ai_move_y) {
@@ -580,4 +577,62 @@ void refresh_display(game_state_t *game) {
     clear_screen();
     draw_board(game);
     draw_status(game);
+}
+
+void position_cursor_near_last_move(game_state_t *game) {
+    // Position cursor on an empty cell near the last move
+    // This is called after AI moves when the next player is human
+
+    int last_x = -1, last_y = -1;
+
+    // Find the last move position
+    if (game->move_history_count > 0) {
+        last_x = game->move_history[game->move_history_count - 1].x;
+        last_y = game->move_history[game->move_history_count - 1].y;
+    }
+
+    // If no moves yet, position at center
+    if (last_x < 0 || last_y < 0) {
+        game->cursor_x = game->board_size / 2;
+        game->cursor_y = game->board_size / 2;
+        return;
+    }
+
+    // Search in expanding radius for an empty cell
+    for (int radius = 1; radius <= 3; radius++) {
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -radius; dy <= radius; dy++) {
+                // Only check cells at exactly this radius (perimeter)
+                if (abs(dx) != radius && abs(dy) != radius) {
+                    continue;
+                }
+
+                int nx = last_x + dx;
+                int ny = last_y + dy;
+
+                // Check bounds
+                if (nx < 0 || nx >= game->board_size || ny < 0 || ny >= game->board_size) {
+                    continue;
+                }
+
+                // Check if empty
+                if (game->board[nx][ny] == AI_CELL_EMPTY) {
+                    game->cursor_x = nx;
+                    game->cursor_y = ny;
+                    return;
+                }
+            }
+        }
+    }
+
+    // Fallback: if no empty cell found nearby, search from last move position outward
+    for (int i = 0; i < game->board_size; i++) {
+        for (int j = 0; j < game->board_size; j++) {
+            if (game->board[i][j] == AI_CELL_EMPTY) {
+                game->cursor_x = i;
+                game->cursor_y = j;
+                return;
+            }
+        }
+    }
 } 

@@ -138,6 +138,14 @@ int main(int argc, char* argv[]) {
                 // Track AI's last move for highlighting
                 game->last_ai_move_x = ai_x;
                 game->last_ai_move_y = ai_y;
+
+                // If the next player is human, position cursor near the last move
+                if (game->game_state == GAME_RUNNING) {
+                    int next_player_index = (game->current_player == AI_CELL_CROSSES) ? 0 : 1;
+                    if (game->player_type[next_player_index] == PLAYER_TYPE_HUMAN) {
+                        position_cursor_near_last_move(game);
+                    }
+                }
             }
         }
     }
