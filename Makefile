@@ -58,7 +58,7 @@ src/%.o: src/%.c
 		$(CC) $(CFLAGS) -c $< -o $@
 
 googletest: 	## Build GoogleTest framework (needed for running tests)
-		bash -c "./tests-setup"
+		@bash -c "./tests-setup >/dev/null"
 
 $(TEST_TARGET): googletest tests/gomoku_test.o src/gomoku.o src/board.o src/game.o src/ai.o # Test targets
 		$(CXX) $(CXXFLAGS) tests/gomoku_test.o src/gomoku.o src/board.o src/game.o src/ai.o $(GTEST_LIB) $(GTEST_MAIN_LIB) -pthread -o $(TEST_TARGET)
@@ -67,7 +67,7 @@ tests/gomoku_test.o: googletest tests/gomoku_test.cpp src/gomoku.h src/board.h s
 		$(CXX) $(CXXFLAGS) -c tests/gomoku_test.cpp -o tests/gomoku_test.o
 
 test: 		$(TEST_TARGET) $(TARGET) ## Run all the unit tests
-		./$(TEST_TARGET)
+		GREP_COLOR=32 ./$(TEST_TARGET) | grep --color=always -E 'GomokuTest\.([A-Za-z_]*)|tests|results'
 
 tests: 		test
 

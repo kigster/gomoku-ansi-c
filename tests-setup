@@ -2,7 +2,7 @@
 # Basic setup for C/C++ dev environment
 # Run this script to check out the GoogleTest library and build it.
 
-set -xe
+set -e
 
 project_root=$(pwd -P)
 

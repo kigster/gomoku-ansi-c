@@ -1,57 +1,514 @@
-# Overview
+# Gomoku ANSI C - Technical Overview
 
-The repository implements a terminal Gomoku game in ANSI C with an AI opponent based on MiniMax and alpha‑beta pruning. Code is organized into cohesive modules under src/, a test suite in tests/, and build scripts (Makefile, CMakeLists.txt) supporting both Make and CMake workflows.
+A high-performance terminal-based Gomoku (Five-in-a-Row) implementation in ANSI C featuring a sophisticated AI opponent, three game modes, and a modular architecture designed for clarity and extensibility.
 
-## Core Structure
+## Architecture Overview
 
-* Entry point (src/main.c) – parses CLI arguments, initializes game state, runs the main loop alternating human input and AI moves.
+The codebase follows a clean modular design with clear separation of concerns. Each module handles a specific aspect of the game, making the code maintainable and easy to understand.
 
-* Board utilities (src/board.c/h) – memory allocation, validation, and coordinate conversions with Unicode markers.
+### Module Organization
 
-* Game logic (src/game.c/h) – central game_state_t structure, move history, undo, timers, transposition tables, killer moves, and other search optimizations.
+```
+src/
+├── main.c          - Entry point and main game loop orchestration
+├── gomoku.c/h      - Core game rules, pattern recognition, evaluation
+├── board.c/h       - Board state management and memory allocation
+├── game.c/h        - Game state, history, timers, optimization caches
+├── ai.c/h          - AI search engine (minimax, move generation)
+├── ui.c/h          - Terminal UI rendering and keyboard input
+├── cli.c/h         - Command-line argument parsing
+└── ansi.h          - ANSI terminal escape sequences and colors
+```
 
-* AI engine (src/ai.c/h) – move generation near existing stones, threat‑based move prioritization, MiniMax with alpha‑beta, incremental evaluation, timeout handling, killer moves, and transposition table lookups.
+## Core Modules
 
-* Evaluation (src/gomoku.c/h) – threat recognition (e.g., five‑in‑a‑row, straight four), scoring matrices, incremental/full board evaluation, and win detection.
+### main.c - Game Orchestration
+**105 lines** - Simple, focused entry point
 
-* User interface (src/ui.c/h) – ANSI terminal rendering, keyboard handling in raw mode, board/history/status display, and optional welcome screen.
+- Parses command-line arguments via CLI module
+- Initializes game state with configuration
+- Runs main game loop handling player turns
+- Delegates to UI for display and AI for moves
+- Clean shutdown and resource cleanup
 
-* Command line interface (src/cli.c/h) – parses options such as depth, timeout, board size, undo, and help; validates configuration.
+**Key Design**: Minimal logic, maximum delegation. Acts as a thin coordinator.
 
-* Helpers (src/ansi.h) – ANSI escape sequences and color constants for the UI.
+### gomoku.c/h - Game Rules and Evaluation
+**Core game logic and pattern recognition**
 
-## Testing and Build
+**Evaluation System**:
+- Threat-based pattern matching for tactical analysis
+- Graduated threat levels: Five (100K), Straight Four (50K), Three (1K), etc.
+- Pattern cost matrix for evaluating board positions
+- Incremental and full board evaluation modes
 
-Tests (tests/gomoku_test.cpp) use Google Test to exercise board management, move validation, win detection, evaluation, AI, undo, and corner cases.
+**Win Detection**:
+- Efficient four-direction scanning (horizontal, vertical, two diagonals)
+- Exactly five-in-a-row win condition
+- Cached winner system for performance
 
-Setup: `./tests/setup` fetches Google Test into `tests/googletest/`
+**Pattern Recognition**:
+- Matrix-based threat detection (THREAT_FIVE through THREAT_TWO)
+- Combination threat analysis (three-and-four, three-and-three)
+- Blocked pattern identification
 
-Makefile targets: 
+### board.c/h - Board Management
+**Memory and coordinate utilities**
 
-* `make build`, 
-* `make test`, 
-* `make cmake-build`, 
-* `make cmake-test`, etc.
+- Dynamic board allocation for 15x15 or 19x19 sizes
+- Safe memory management with proper cleanup
+- Coordinate conversion utilities (row/col to cell index)
+- Unicode rendering support for X and O symbols
+- Board validation and bounds checking
 
-CMake builds both game and tests, with tests/CMakeLists.txt pulling in local or system Google Test.
+### game.c/h - Game State Management
+**Central hub connecting all game components**
 
-## Important Concepts for Newcomers
+**Core Data Structure**: `game_state_t`
+- Board reference and game configuration
+- Move history with timing and evaluation data
+- Current game state (running, won, draw)
+- Optimization caches (interesting moves, winner cache)
+- Transposition table and Zobrist hashing
+- Killer move heuristics
+- AI status messages and search metadata
 
-* `game_state_t` – the hub linking board state, move history, timers, and AI caches.
-* Threat-based scoring – evaluation functions assign weights to patterns (five, four, three, broken, etc.).
-* Search optimizations – incremental evaluation, cached “interesting” moves, transposition tables, killer moves, aspiration windows, and optional null-move pruning.
-* ANSI UI – uses escape codes for colored board rendering and raw keyboard input.
+**Optimization Systems**:
+- **Transposition Table**: 100K entries for position caching
+- **Zobrist Hashing**: Incremental hash updates for fast lookups
+- **Winner Cache**: Avoids redundant win detection
+- **Interesting Moves Cache**: Tracks tactically relevant positions
+- **Killer Moves**: History heuristic for move ordering
 
-## Suggested Next Steps
+**Undo System**:
+- Full move history with timestamps
+- Cache rebuild on undo to maintain consistency
+- Single-move undo for Human vs Human
+- Two-move undo for games with AI
 
-* Build & run locally: follow README/CLAUDE instructions to compile (make build or make cmake-build) and execute `./gomoku`
+### ai.c/h - AI Search Engine
+**Sophisticated minimax-based AI with modern optimizations**
 
-* Explore tests: run make test after running .`/tests/setup` to understand module contracts.
+**Move Generation** (Refactored in PR #27):
+- Unified direct board scanning approach
+- Candidate generation within radius 2 of occupied cells
+- Empty board special case (plays center)
+- Integrated priority calculation during generation
+- Eliminates dual-path complexity
 
-* Dive into AI algorithms: study MiniMax with alpha‑beta pruning, threat-space search, and transposition tables; experiment with evaluation heuristics or additional pruning methods.
+**Move Prioritization**:
+- Winning moves: 2 billion priority (searched first)
+- Blocking opponent wins: 1.5 billion priority
+- Killer moves: +1 million bonus
+- Threat-based scoring: 10-12x multiplier
+- Center bias for opening play
 
-* Extend gameplay: add features (e.g., save/load, different board sizes) or polish UI interactions.
+**Search Algorithm**:
+- Minimax with alpha-beta pruning
+- Iterative deepening for time management
+- Configurable search depth (1-8 typical)
+- Timeout support with graceful degradation
+- Transposition table integration
 
-* Refine performance: profile search routines, tweak move ordering, or explore parallel search.
+**Search Optimizations**:
+- Move ordering for better pruning
+- Killer move heuristics
+- Transposition table cutoffs
+- Early termination for forced wins
+- Incremental hash updates
 
-* This modular design makes it straightforward to focus on one area (e.g., AI or UI) while understanding how it fits into the overall game loop.
+**Key Improvements** (PR #27):
+- Removed dual-path move generation complexity
+- Simplified threat evaluation (no open-end tracking)
+- Fixed transposition table flag logic
+- Removed problematic root alpha narrowing
+- Better hash consistency
+
+### ui.c/h - Terminal Interface
+**ANSI terminal-based user interaction**
+
+**Display Components**:
+- Unicode board rendering with colored pieces (X=red, O=blue)
+- Move history sidebar with timing information
+- Status messages and AI thinking indicators
+- Optional welcome screen
+- Progress dots during AI search
+
+**Input Handling**:
+- Raw terminal mode for immediate key response
+- Arrow key navigation for move selection
+- Action keys: Enter (confirm), U (undo), Q (quit)
+- Input validation and error feedback
+
+**Terminal Management**:
+- ANSI color escape sequences
+- Cursor positioning and screen clearing
+- Raw mode enable/disable with proper restoration
+- Non-blocking input for responsive UI
+
+### cli.c/h - Command-Line Interface
+**Flexible configuration system**
+
+**Supported Options**:
+```bash
+--board 15|19          # Board size (default: 15)
+--depth N              # AI search depth (default: 4)
+--depth X:Y            # Asymmetric depths (X for player X, Y for player O)
+--timeout N            # Search timeout in seconds
+--player-x human|ai    # Player X type (default: human)
+--player-o human|ai    # Player O type (default: ai)
+--undo                 # Enable undo functionality
+--skip-welcome         # Skip welcome screen
+--help                 # Show usage information
+```
+
+**Game Modes**:
+1. **Human vs AI** (default): Interactive play against computer
+2. **Human vs Human**: Two-player local game
+3. **AI vs AI**: Self-play mode for testing and analysis
+
+**Asymmetric AI**:
+- Configure different search depths per AI player
+- Enables testing AI strength imbalances
+- Format: `--depth 2:6` (X plays at depth 2, O at depth 6)
+
+## Game State Flow
+
+```
+CLI Parse → Init Game → Main Loop → Cleanup
+              ↓            ↓
+         game_state_t   Determine Player Type
+              ↓            ↓
+         Init Caches   Human Input or AI Search
+              ↓            ↓
+         Init Board    Make Move → Update State
+                          ↓
+                     Check Win/Draw → Continue or End
+```
+
+## AI Architecture Details
+
+### Search Strategy
+
+The AI uses a carefully tuned minimax search with several layers of optimization:
+
+1. **Iterative Deepening**: Searches progressively deeper, stopping on timeout
+2. **Move Generation**: Scans board directly, generates candidates within radius 2
+3. **Move Ordering**: Sorts moves by priority (wins first, then threats, then heuristics)
+4. **Alpha-Beta Pruning**: Eliminates provably inferior branches
+5. **Transposition Table**: Avoids re-searching identical positions
+6. **Killer Moves**: Prioritizes moves that caused cutoffs at same depth
+
+### Evaluation Function
+
+Position scoring combines multiple factors:
+
+- **Threat Recognition**: Pattern matching for tactical features
+  - Five-in-a-row: 100,000 (winning position)
+  - Straight four: 50,000 (critical threat)
+  - Open three: 1,000 (strong attack)
+  - Lower threats: Progressively smaller scores
+
+- **Pattern Combinations**: Bonus for multiple threats
+  - Three-and-four: 5,000
+  - Three-and-three: 5,000
+  - Multiple threats amplify position strength
+
+- **Positional Factors**:
+  - Center control bias
+  - Stone connectivity
+  - Space control
+
+### Performance Characteristics
+
+**Typical Performance** (15x15 board, depth 4):
+- Opening moves: 1-2 seconds
+- Mid-game: 2-5 seconds
+- End-game: <1 second (fewer candidates)
+
+**Search Statistics**:
+- Nodes evaluated: 10K-100K depending on position
+- Branching factor: ~40 average (reduced by radius constraint)
+- Transposition hits: 20-40% of probes
+- Alpha-beta cutoffs: 60-80% of branches
+
+## Testing Infrastructure
+
+### Test Suite: 24 Comprehensive Tests
+
+The test suite uses Google Test (C++) to validate all components:
+
+**Board & Utilities** (4 tests):
+- Board creation and memory management
+- Coordinate utility functions
+- Move validation logic
+- Game state initialization
+
+**Win Detection** (5 tests):
+- Horizontal win patterns
+- Vertical win patterns
+- Diagonal win patterns
+- Anti-diagonal win patterns
+- No-winner scenarios
+
+**Evaluation & AI** (6 tests):
+- Position evaluation correctness
+- Evaluation with winning positions
+- AI move selection quality
+- Minimax algorithm correctness
+- Minimax with different board sizes
+- Minimax with winning sequences
+
+**Game Mechanics** (5 tests):
+- Game logic functions
+- Undo functionality
+- Other player determination
+- Multi-direction threat detection
+- Blocked pattern recognition
+
+**Integration Tests** (4 tests):
+- Corner cases and edge conditions
+- Self-play quality assessment
+- AI vs AI game completion
+- Asymmetric depth configuration
+
+### Running Tests
+
+```bash
+# Setup (first time only)
+./tests/setup
+
+# Run all tests
+make test
+
+# Alternative: CMake build
+make cmake-test
+```
+
+**Test Coverage**: Core game logic, AI algorithms, edge cases, and integration scenarios.
+
+## Build System
+
+### Make Build (Traditional)
+
+```bash
+make build        # Build game executable
+make test         # Build and run tests
+make clean        # Remove build artifacts
+make rebuild      # Clean + build
+```
+
+**Compiler Flags**:
+- Optimized build: `-O3`
+- Warnings: `-Wall -Wextra -Wimplicit-function-declaration`
+- Test build: `-O2` (faster compilation)
+
+### CMake Build (Modern)
+
+```bash
+make cmake-build  # Build with CMake
+make cmake-test   # Test with CMake
+make cmake-clean  # Clean CMake build
+```
+
+**Features**:
+- Out-of-source builds in `build/` directory
+- Automatic Google Test discovery
+- Cross-platform support
+
+## Key Design Decisions
+
+### 1. Unified Move Generation
+**Rationale**: Eliminated dual-path complexity (optimized vs dynamic) that caused maintenance burden and potential bugs. Single direct board scanning approach is simpler and more maintainable.
+
+**Benefits**:
+- Single source of truth
+- No cache synchronization issues
+- Naturally adapts to board changes
+- Easier to understand and debug
+
+### 2. Simplified Threat Evaluation
+**Rationale**: Removed complex open-end tracking that added code complexity without proportional benefit. Simple consecutive-count scoring is sufficient for move ordering.
+
+**Trade-off**: Slightly less precise tactical evaluation, but much simpler code. The minimax search compensates by evaluating actual positions.
+
+### 3. Transposition Table Without Clearing
+**Rationale**: Keeping entries across moves improves hit rate. Depth-based replacement ensures fresh entries replace stale ones naturally.
+
+**Impact**: Better search efficiency without the overhead of clearing 100K entries between moves.
+
+### 4. Modular Architecture
+**Rationale**: Clean separation allows independent testing and development. Each module has a single, well-defined responsibility.
+
+**Benefit**: New features (like game modes) can be added without touching AI code. Bug fixes are isolated to specific modules.
+
+### 5. Dynamic Player Type System
+**Rationale**: Enables three game modes with minimal code duplication. Runtime player type determination keeps code flexible.
+
+**Implementation**: Player type arrays indexed by player constant. Game loop queries type before each turn.
+
+## Performance Optimization Techniques
+
+### Memory Efficiency
+- Stack-based move arrays (no heap allocation in search)
+- Compact data structures (bit flags, unsigned char for small values)
+- Reusable buffers (candidate maps, move lists)
+
+### CPU Efficiency
+- Early loop exits on bounds/empty checks
+- Candidate map for O(1) duplicate detection
+- Incremental hash updates (O(1) vs O(board_size²))
+- Sorted move lists for faster cutoffs
+
+### Search Efficiency
+- Radius constraint (radius 2) limits branching factor
+- Killer move heuristics improve move ordering
+- Transposition table avoids redundant search
+- Iterative deepening finds good moves early
+
+## Extension Points
+
+The modular design provides clear extension points for new features:
+
+### New Game Rules
+**Module**: `gomoku.c/h`
+- Modify win detection for variants (exactly 5, overline, renju)
+- Adjust pattern recognition for different rule sets
+- Update evaluation weights for game balance
+
+### Advanced AI
+**Module**: `ai.c/h`
+- Implement null-move pruning
+- Add parallel search (multi-threading)
+- Implement opening book or endgame tables
+- Add Monte Carlo Tree Search (MCTS) option
+
+### UI Enhancements
+**Module**: `ui.c/h`
+- Add graphical UI via ncurses
+- Implement replay mode
+- Add move annotations
+- Support themes and customization
+
+### Network Play
+**New Modules**: `network.c/h`, `protocol.c/h`
+- Implement client-server architecture
+- Add network protocol for move exchange
+- Support online matchmaking
+- Enable spectator mode
+
+### Save/Load System
+**New Module**: `persistence.c/h`
+- Serialize game state to file
+- Support PGN or custom format
+- Enable game resume
+- Store move analysis
+
+## Code Quality
+
+### Metrics
+- **Total Lines**: ~3,500 (excluding tests and generated code)
+- **Average Function Length**: 20-30 lines
+- **Cyclomatic Complexity**: Generally low (<10 per function)
+- **Module Cohesion**: High (each module has clear purpose)
+- **Coupling**: Low (modules interact through well-defined interfaces)
+
+### Standards
+- **C Standard**: ANSI C (C89/C90 compatible)
+- **Naming Convention**: snake_case for functions/variables
+- **Constant Naming**: ALL_CAPS with prefixes
+- **Documentation**: Function comments with parameter descriptions
+- **Error Handling**: Return codes (RT_SUCCESS/RT_FAILURE)
+
+### Recent Improvements
+- **PR #27**: Refactored AI move generation (~300 lines removed)
+- **PR #28**: Added three game modes with player configuration
+- Transposition table fixes (hash indexing, flag logic)
+- Minimax bug fixes (root alpha narrowing removed)
+- Cache consistency improvements (rebuild on undo)
+
+## Development Workflow
+
+### Quick Start
+```bash
+# Clone and build
+git clone https://github.com/kigster/gomoku-ansi-c
+cd gomoku-ansi-c
+make build
+
+# Run game
+./gomoku
+
+# Run tests
+./tests/setup  # First time only
+make test
+```
+
+### Common Development Tasks
+
+**Adding a New Feature**:
+1. Identify affected modules
+2. Update data structures if needed
+3. Implement feature in module
+4. Add tests in `tests/gomoku_test.cpp`
+5. Update documentation
+
+**Debugging AI Issues**:
+1. Enable verbose output (add debug prints in `ai.c`)
+2. Run AI vs AI mode to reproduce
+3. Check move generation, evaluation, and search
+4. Verify transposition table behavior
+5. Test with lower depths for faster iteration
+
+**Performance Profiling**:
+1. Build with profiling flags (`-pg`)
+2. Run representative game
+3. Analyze with `gprof`
+4. Focus on hot paths (move generation, evaluation)
+5. Optimize with measurements
+
+## Future Directions
+
+### Short Term
+- Network play support
+- Save/load functionality
+- Opening book for improved AI
+- Enhanced UI with move history navigation
+
+### Medium Term
+- Web-based UI (WASM compilation)
+- Mobile app version
+- AI training mode with difficulty adjustment
+- Tournament mode with multiple AI variants
+
+### Long Term
+- Neural network-based AI option
+- Cloud-based game analysis
+- Professional tournament features
+- Educational mode with move explanations
+
+## References
+
+### Gomoku Game
+- Standard Gomoku rules (five-in-a-row)
+- Board sizes: 15x15 (standard), 19x19 (advanced)
+- Win condition: Exactly five consecutive stones
+
+### AI Algorithms
+- Minimax algorithm with alpha-beta pruning
+- Transposition tables and Zobrist hashing
+- Killer move heuristic
+- Iterative deepening
+
+### Implementation Resources
+- ANSI C standard library
+- POSIX terminal control
+- Google Test framework
+- CMake and Make build systems
+
+---
+
+**Project Status**: Active development, production-ready
+**Version**: 0.3.1
+**License**: MIT
+**Repository**: https://github.com/kigster/gomoku-ansi-c

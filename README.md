@@ -1,51 +1,85 @@
-# Gomoku Game - C Implementation
+# Gomoku Terminal Game
 
 [![CI](https://github.com/kigster/gomoku-ansi-c/actions/workflows/ci.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/ci.yml)
 
-A C implementation of the Gomoku (Five-in-a-Row) game featuring an AI opponent using the MiniMax algorithm with Alpha-Beta pruning.
+> [!TIP]
+> This is an ANSI-C implementation of the Gomoku (Five-in-a-Row) game featuring gameplay against an AI opponent, AI vs AI, or Human vs Human.
+>
+> The AI algorithm supports flexible search depth and utilizes MiniMax algorithm with Alpha-Beta pruning, and many additional optimizations.
 
 > [!TIP]
-> This project was produced in collaboration with Claude-4-MAX, but the original **evaluation function** was written by the author. Also, when we say "playing with AI" we do not mean LLMs, we simply mean you are playing against the computer.
+> This game was popular in the former Soviet Union, but it was called "crosses and naughts" (крестики и нолики).
 
-You can read Claude's analysis of it in the [Overview](OVERVIEW.md) file.
+> [!IMPORTANT]
+> This project was developed in collaboration with Claude Code, OpenAI Codex, while the original **evaluation function** was written and heavily tuned by the author as early as 2010.
+
+> [!NOTE]
+> Any mention of "playing against the AI" does not imply gameplay against LLMs, or any other form of 'true' artificial intelligence. Here, by "AI Player" we simply mean that a given player is the computer algorithm.
+
+## Introduction
+
+> [!NOTE]
+> For detailed breakdown of the source files and their functions we refer to to the [Implementation  Overview](OVERVIEW.md) document.
 
 ### Completed Game Screenshot
 
-Here is the game where the human player prevailed, although it is exceedingly difficult to win even on Medium setting, which only looks ahead a few moves.
+Here is the screenshot of a game where a human player prevailed against the "AI Player" on a "hard mode" (with depth of 6).
 
-> [!NOTE]
-> This game was popular in the former Soviet Union, but it was called "crosses and naughts" (крестики и нолики).
 
-#### Game Example (Hard Mode, Human Wins)
+#### Game Example: Human vs AI
 
-> [!TIP]
-> These timings were possible only after additional optimizations were introduced in [this PR](https://github.com/kigster/gomoku-ansi-c/pull/4).
+As you'll see down below, the default gameplay is for a human to start with X, and AI player to respond with a O.
 
-<img src="doc/gomoku-play-on-hard.png" width="700" border="1" style="border-radius: 10px"/>
+<img src="doc/gomoku-human-vs-ai.png" width="700" border="1" style="border-radius: 10px"/>
 
-## Building the Game for the Impatient
+#### Game Example: AI vs AI
 
-Here is how to compile and run the game:
+Using CLI flags you can make the game engine play against itself. Below is the screenshot of AI playing against itself, and both sides play on the same difficulty (i.e. they can scan the board into the same number of future possible moves — 6).
+
+<img src="doc/gomoku-ai-vs-ai.png" width="700" border="1" style="border-radius: 10px"/>
+
+## Compiling the Game
+
+It should be trivial to compile the game on any system with a `make` utility and a `C` compiler:
 
 ```bash
+# Build the game
 make build -j 4
-./gomoku -h
+# Install `gomoku` binary into /usr/local/bin
+make install
 ```
 
-## Alternatively
+<img src="doc/gomoku-build.png" width="700" border="1" style="border-radius: 10px"/>
+
+### Running the Tests
+
+```bash
+make test
+```
+
+<img src="doc/gomoku-test.png" width="700" border="1" style="border-radius: 10px"/>
+
+### Alternatively — Using `cmake`
 
 Using CMake:
 
 ```bash
 make cmake-build cmake-test
+```
+
+## Game Features
+
+### Help Screen
+
+```bash
 ./gomoku -h
 ```
 
 See the following screenshot for an example:
 
-<img src="doc/gomoku-build.png" width="700" border="1" style="border-radius: 10px"/>
+<img src="doc/gomoku-help.png" width="700" border="1" style="border-radius: 10px"/>
 
-## Features
+### All Features
 
 - **Interactive Console Interface**: Unicode-based board display with keyboard controls
 - **AI Opponent**: Intelligent AI using MiniMax algorithm with Alpha-Beta pruning
@@ -55,7 +89,7 @@ See the following screenshot for an example:
 - **Cross-platform**: Works on Linux, macOS, and other Unix-like systems
 - **Comprehensive Testing**: Full test suite using Google Test framework
 
-## Game Rules
+### Game Rules
 
 Gomoku is a strategy game where players take turns placing stones on a board. The goal is to be the first to get five stones in a row (horizontally, vertically, or diagonally).
 
@@ -81,11 +115,13 @@ For first-time setup, run the automated setup script that installs dependencies 
 
 ```bash
 # Clone the repository
-git clone https://github.com/kigster/gomoku-ansi-c.git
+git clone \
+  https://github.com/kigster/gomoku-ansi-c.git
 cd gomoku-ansi-c
 
-# Run setup script (installs dependencies and Google Test)
-make test
+# Run the test setup script manually (not necessary)
+# This script is ran automatically via the Makefile
+./tests-setup
 ```
 
 ### Building the Game
@@ -116,15 +152,9 @@ make cmake-clean
 make cmake-rebuild
 ```
 
-### Help Screen
-
-Below is the screenshot of the help screen of the game, since it's a CLI/Terminal game.
-
-<img src="doc/gomoku-help.png" width="700" border="1" style="border-radius: 10px"/>
-
 ---
 
-## GAMEPLAY
+## Game Play
 
 ### Quick Start
 
@@ -147,12 +177,12 @@ Below is the screenshot of the help screen of the game, since it's a CLI/Termina
 
 This game supports all four permitations of who is playing what:
 
-1. (Default) Human starts as X, AI responds with O
-1. Human vs Human (taking turns controlling cursor)
-1. AI starts as X, human follows with O.
-1. AI plays as X, against AI as O. In this mode its possible to set different depth levels for each AI using the following syntax: --depth N:M where N is the search depth of X, and N is the search depth of O.
+1. **(Default) Human starts as X, AI responds with O**
+1. **Human vs Human (taking turns controlling cursor)**
+1. **AI starts as X, human follows with O.**
+1. **AI plays as X, against AI as O**. In this mode its possible to set different depth levels for each AI using the following syntax: --depth N:M where N is the search depth of X, and M is the search depth of O.
 
-To choose a non default configuration, simply pass:
+To choose a non default configuration, use the `-x` and `-o` flags which can each receive an argument of either `ai` or `human`.
 
 ```bash
 # make AI go first, and use search depth of 5
@@ -163,53 +193,7 @@ To choose a non default configuration, simply pass:
 ./gomoku -x ai -o ai -d 4:5 
 ```
 
-### Complete Help Output
-
-```
-NAME
-  ./gomoku - an entertaining and engaging five-in-a-row version
-
-FLAGS:
-  -x, --player-x TYPE   Player X type: "human" or "ai" (default: human)
-  -o, --player-o TYPE   Player O type: "human" or "ai" (default: ai)
-  -d, --depth N         The depth of search. Use N for both, or N:M for
-                        asymmetric depths (X:O). Examples: '4' or '4:6'
-  -l, --level M         Can be "easy", "medium", "hard"
-  -t, --timeout T       Timeout in seconds that AI (and human)
-                        have to make their move, otherwise AI must choose
-                        the best move found so far, while human looses the game.
-  -b, --board 15,19     Board size. Can be either 19 or 15.
-  -u, --undo            Enable the Undo feature (disabled by the default).
-  -s, --skip-welcome    Skip the welcome screen.
-  -h, --help            Show this help message
-
-EXAMPLES:
-  ./gomoku --level easy --board 15                # Human vs AI (easy)
-  ./gomoku -x human -o human                      # Human vs Human
-  ./gomoku -x ai -o human                         # AI vs Human (AI plays first)
-  ./gomoku -x ai -o ai -d 4:6 --skip-welcome      # AI vs AI (X depth 4, O depth 6)
-  ./gomoku -d 4 -t 30 -b 19                       # Custom depth and timeout
-
-DIFFICULTY LEVELS:
-  easy         - Search depth 2 (quick moves, good for beginners)
-  medium       - Search depth 4 (balanced gameplay, default setting)
-  hard         - Search depth 6 (advanced AI, challenging for experts)
-
-GAME SYMBOLS:
-  ✕ - Human player (crosses)
-  ○ - AI player (naughts)
-  ✕ - Current cursor (x on an empty cell)
-  ◼︎ - Current cursor on an occupied cell
-
-CONTROLS IN GAME:
-  Arrow Keys    - Move cursor
-  Space/Enter   - Place stone
-  U             - Undo last move pair
-  ?             - Show detailed game rules
-  ESC           - Quit game
-```
-
-### Command Line Options Explained
+### Other CLI Flags Explained
 
 #### Player Configuration
 
@@ -220,6 +204,7 @@ Determines who plays as X (crosses). Use `human` for human player or `ai` for AI
 Determines who plays as O (naughts). Use `human` for human player or `ai` for AI opponent.
 
 Examples:
+
 ```bash
 ./gomoku -x human -o ai      # Human (X) vs AI (O) - default
 ./gomoku -x human -o human   # Human vs Human
@@ -335,31 +320,37 @@ Display the help message and exit.
 ### Common Usage Patterns
 
 **Beginner-friendly game:**
+
 ```bash
 ./gomoku --level easy --board 15 -u
 ```
 
 **Standard competitive game:**
+
 ```bash
 ./gomoku --level medium
 ```
 
 **Challenge mode:**
+
 ```bash
 ./gomoku --level hard --depth 8
 ```
 
 **AI vs AI demonstration:**
+
 ```bash
 ./gomoku -x ai -o ai -d 4:6 --skip-welcome
 ```
 
 **Testing with time constraints:**
+
 ```bash
 ./gomoku -d 6 -t 10 --board 19
 ```
 
 **Human vs Human game:**
+
 ```bash
 ./gomoku -x human -o human -u --board 15
 ```
@@ -497,4 +488,5 @@ Contributions are welcome! Please feel free to submit issues, feature requests, 
 - Pattern recognition algorithms adapted from traditional Gomoku AI techniques
 - Google Test framework for comprehensive testing
 - Unicode characters for enhanced visual display
-- Claude-4-MAX for being a great pair programmer.
+- Claude (Sonet, Opus, Haiku) for being a great pair programmer.
+- OpenAI (codex) for fixing some performance bugs.
