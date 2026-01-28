@@ -12,6 +12,12 @@
 #include "game.h"
 #include "ai.h"
 
+uint64_t compute_zobrist_hash(game_state_t *game);
+void invalidate_winner_cache(game_state_t *game);
+static void rebuild_optimization_caches(game_state_t *game);
+
+
+
 //===============================================================================
 // GAME INITIALIZATION AND CLEANUP
 //===============================================================================
@@ -169,6 +175,9 @@ void undo_last_moves(game_state_t *game) {
 
     // Reset game state to running (in case it was won)
     game->game_state = GAME_RUNNING;
+
+
+    rebuild_optimization_caches(game);
 }
 
 //===============================================================================
@@ -276,15 +285,73 @@ void init_optimization_caches(game_state_t *game) {
     init_aspiration_windows(game);
 }
 
+
+static void rebuild_optimization_caches(game_state_t *game) {
+    int size = game->board_size;
+
+    game->stones_on_board = 0;
+    game->interesting_move_count = 0;
+    memset(game->interesting_moves, 0, sizeof(game->interesting_moves));
+
+    unsigned char candidate[19][19];
+    memset(candidate, 0, sizeof(candidate));
+
+    for (int x = 0; x < size; x++) {
+        for (int y = 0; y < size; y++) {
+            if (game->board[x][y] == AI_CELL_EMPTY) {
+                continue;
+            }
+            game->stones_on_board++;
+
+            for (int dx = -3; dx <= 3; dx++) {
+                for (int dy = -3; dy <= 3; dy++) {
+                    int nx = x + dx;
+                    int ny = y + dy;
+                    if (nx < 0 || nx >= size || ny < 0 || ny >= size) {
+                        continue;
+                    }
+                    if (game->board[nx][ny] != AI_CELL_EMPTY) {
+                        continue;
+                    }
+                    candidate[nx][ny] = 1;
+                }
+            }
+        }
+    }
+
+    for (int x = 0; x < size; x++) {
+        for (int y = 0; y < size; y++) {
+            if (!candidate[x][y]) {
+                continue;
+            }
+            game->interesting_moves[game->interesting_move_count].x = x;
+            game->interesting_moves[game->interesting_move_count].y = y;
+            game->interesting_moves[game->interesting_move_count].is_active = 1;
+            game->interesting_move_count++;
+        }
+    }
+
+    invalidate_winner_cache(game);
+    game->current_hash = compute_zobrist_hash(game);
+}
+
 void update_interesting_moves(game_state_t *game, int x, int y) {
     // Update stone count
     game->stones_on_board++;
+
+    // Update zobrist hash incrementally
+    int cell = game->board[x][y];
+    if (cell != AI_CELL_EMPTY) {
+        int player_index = (cell == AI_CELL_CROSSES) ? 0 : 1;
+        int pos = x * game->board_size + y;
+        game->current_hash ^= game->zobrist_keys[player_index][pos];
+    }
 
     // Invalidate winner cache
     invalidate_winner_cache(game);
 
     // Add new interesting moves around the placed stone
-    const int radius = 3; // MAX_RADIUS - matches ai.c
+    const int radius = 2; // MAX_RADIUS
 
     for (int i = max(0, x - radius); i <= min(game->board_size - 1, x + radius); i++) {
         for (int j = max(0, y - radius); j <= min(game->board_size - 1, y + radius); j++) {
@@ -341,35 +408,20 @@ int get_cached_winner(game_state_t *game, int player) {
 // TRANSPOSITION TABLE FUNCTIONS
 //===============================================================================
 
-// Simple 64-bit PRNG (splitmix64) for high-quality Zobrist keys
-static uint64_t splitmix64_state = 0;
-static uint64_t splitmix64_next(void) {
-    uint64_t z = (splitmix64_state += 0x9e3779b97f4a7c15ULL);
-    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
-    z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
-    return z ^ (z >> 31);
-}
-
 void init_transposition_table(game_state_t *game) {
     // Initialize transposition table
     memset(game->transposition_table, 0, sizeof(game->transposition_table));
 
-    // Initialize Zobrist keys with a proper 64-bit PRNG
-    // (rand() only provides 31 bits, giving poor hash distribution)
-    splitmix64_state = 0x12345678ABCDEF01ULL;
+    // Initialize Zobrist keys with random values
+    srand(12345); // Use fixed seed for reproducible results
     for (int player = 0; player < 2; player++) {
         for (int pos = 0; pos < 361; pos++) {
-            game->zobrist_keys[player][pos] = splitmix64_next();
+            game->zobrist_keys[player][pos] = 
+                ((uint64_t)rand() << 32) | rand();
         }
     }
 
     // Compute initial hash
-    game->current_hash = compute_zobrist_hash(game);
-}
-
-void clear_transposition_table(game_state_t *game) {
-    memset(game->transposition_table, 0, sizeof(game->transposition_table));
-    // Recompute current hash for the actual board position
     game->current_hash = compute_zobrist_hash(game);
 }
 
@@ -390,7 +442,7 @@ uint64_t compute_zobrist_hash(game_state_t *game) {
 }
 
 void store_transposition(game_state_t *game, uint64_t hash, int value, int depth, int flag, int best_x, int best_y) {
-    int index = hash & TRANSPOSITION_TABLE_MASK;
+    int index = hash % TRANSPOSITION_TABLE_SIZE;
     transposition_entry_t *entry = &game->transposition_table[index];
 
     // Replace if this entry is deeper or empty
@@ -405,7 +457,7 @@ void store_transposition(game_state_t *game, uint64_t hash, int value, int depth
 }
 
 int probe_transposition(game_state_t *game, uint64_t hash, int depth, int alpha, int beta, int *value) {
-    int index = hash & TRANSPOSITION_TABLE_MASK;
+    int index = hash % TRANSPOSITION_TABLE_SIZE;
     transposition_entry_t *entry = &game->transposition_table[index];
 
     if (entry->hash == hash && entry->depth >= depth) {

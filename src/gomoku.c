@@ -165,7 +165,7 @@ int has_winner(int **board, int size, int player) {
                         y -= dy;
                     }
 
-                    if (count >= 5) {
+                    if (count == 5) {
                         return 1; // Winner found
                     }
                 }
@@ -173,46 +173,6 @@ int has_winner(int **board, int size, int player) {
         }
     }
     return 0; // No winner
-}
-
-/**
- * Fast win detection checking only lines through position (x,y).
- * Only needs to check 4 directions through the given cell.
- * O(36) instead of O(board_size^2 * 4) for the full board scan.
- */
-int has_winner_at(int **board, int size, int player, int x, int y) {
-    if (board[x][y] != player) {
-        return 0;
-    }
-
-    int directions[4][2] = {{1,0}, {0,1}, {1,1}, {1,-1}};
-    for (int d = 0; d < 4; d++) {
-        int dx = directions[d][0];
-        int dy = directions[d][1];
-        int count = 1;
-
-        // Count in positive direction
-        int nx = x + dx, ny = y + dy;
-        while (nx >= 0 && nx < size && ny >= 0 && ny < size && board[nx][ny] == player) {
-            count++;
-            nx += dx;
-            ny += dy;
-        }
-
-        // Count in negative direction
-        nx = x - dx;
-        ny = y - dy;
-        while (nx >= 0 && nx < size && ny >= 0 && ny < size && board[nx][ny] == player) {
-            count++;
-            nx -= dx;
-            ny -= dy;
-        }
-
-        if (count >= 5) {
-            return 1;
-        }
-    }
-    return 0;
 }
 
 //===============================================================================
@@ -403,16 +363,16 @@ void populate_threat_matrix() {
     threat_cost[THREAT_NOTHING]                 = 0;
     threat_cost[THREAT_FIVE]                    = 100000;
     threat_cost[THREAT_STRAIGHT_FOUR]           = 50000;
-    threat_cost[THREAT_FOUR]                    = 10000;
-    threat_cost[THREAT_FOUR_BROKEN]             = 5000;
     threat_cost[THREAT_THREE]                   = 1000;
-    threat_cost[THREAT_THREE_BROKEN]            = 100;
+    threat_cost[THREAT_FOUR]                    = 300;
+    threat_cost[THREAT_FOUR_BROKEN]             = 150;
+    threat_cost[THREAT_THREE_BROKEN]            = 30;
     threat_cost[THREAT_TWO]                     = 20;
     threat_cost[THREAT_NEAR_ENEMY]              = 5;
 
     // Combination threats
-    threat_cost[THREAT_THREE_AND_FOUR]          = 10000;
-    threat_cost[THREAT_THREE_AND_THREE]         = 8000;
+    threat_cost[THREAT_THREE_AND_FOUR]          = 5000;
+    threat_cost[THREAT_THREE_AND_THREE]         = 5000;
     threat_cost[THREAT_THREE_AND_THREE_BROKEN]  = 300;    
 }
 
