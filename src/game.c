@@ -785,22 +785,38 @@ int write_game_json(game_state_t *game, const char *filename) {
     }
     json_object_object_add(root, "winner", json_object_new_string(winner_str));
 
-    // Final board state as array of row strings
+    // Final board state as array of row strings (space-separated)
     json_object *board_array = json_object_new_array();
-    char *row_str = malloc(game->board_size + 1);
+    const char *x_symbol = "✕";
+    const char *o_symbol = "○";
+    int board_size = game->board_size;
+    size_t x_len = strlen(x_symbol);
+    size_t o_len = strlen(o_symbol);
+    size_t max_sym_len = (x_len > o_len) ? x_len : o_len;
+    if (max_sym_len < 1) {
+        max_sym_len = 1;
+    }
+    size_t row_len = (board_size > 0) ? (board_size * max_sym_len + (size_t)(board_size - 1)) : 0;
+    char *row_str = malloc(row_len + 1);
     if (row_str) {
-        for (int row = 0; row < game->board_size; row++) {
-            for (int col = 0; col < game->board_size; col++) {
+        for (int row = 0; row < board_size; row++) {
+            int idx = 0;
+            for (int col = 0; col < board_size; col++) {
                 int cell = game->board[row][col];
                 if (cell == AI_CELL_CROSSES) {
-                    row_str[col] = 'X';
+                    memcpy(&row_str[idx], x_symbol, x_len);
+                    idx += (int)x_len;
                 } else if (cell == AI_CELL_NAUGHTS) {
-                    row_str[col] = 'O';
+                    memcpy(&row_str[idx], o_symbol, o_len);
+                    idx += (int)o_len;
                 } else {
-                    row_str[col] = '.';
+                    row_str[idx++] = '.';
+                }
+                if (col < board_size - 1) {
+                    row_str[idx++] = ' ';
                 }
             }
-            row_str[game->board_size] = '\0';
+            row_str[idx] = '\0';
             json_object_array_add(board_array, json_object_new_string(row_str));
         }
         free(row_str);
