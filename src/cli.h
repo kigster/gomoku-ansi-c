@@ -37,6 +37,8 @@ typedef struct {
     player_type_t player_o_type;  // Type of player O (second player)
     int depth_x;                  // AI search depth for player X (-1 = use max_depth)
     int depth_o;                  // AI search depth for player O (-1 = use max_depth)
+    int player_x_explicit;        // Was -x explicitly specified?
+    int player_o_explicit;        // Was -o explicitly specified?
 } cli_config_t;
 
 //===============================================================================

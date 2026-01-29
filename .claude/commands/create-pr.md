@@ -32,7 +32,7 @@ There may be several situations that we have to deal with:
 
 ### 1. Staged Files Only
 
-If there are staged files only, and we are already on the branch, we must first run the command `just check-all` from project's root, and verify that everything passes.
+If there are staged files only, and we are already on the branch, we must first run the command `make test` from project's root, and verify that everything passes. Then run `make format` to reformat all C files.
 
 If something doesn't pass, we must read and interpret its output, and ask the user whether they want us to fix the current issue, and if yes proceed accordingly, assuming that all non-destructive changes are auto-approved. We can also use permissions defined in the `settings.local.json` file.
 

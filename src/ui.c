@@ -20,6 +20,8 @@
 
 struct termios original_termios;
 
+int SHOW_LAST_MOVES = 35;
+
 void disable_raw_mode(void) {
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios);
 }
@@ -154,11 +156,11 @@ void draw_game_history_sidebar(game_state_t *game, int start_row) {
          COLOR_RESET);
 
   printf(ESCAPE_MOVE_CURSOR_TO, start_row + 2, sidebar_col);
-  printf("%s", "───────────────────────────────────────────────");
+  printf("%s", "────────────────────────────────────────────────────────");
 
   // Draw move history entries
   int display_start =
-      max(0, game->move_history_count - 15); // Show last 15 moves
+      max(0, game->move_history_count - SHOW_LAST_MOVES); // Show last 15 moves
   for (int i = display_start; i < game->move_history_count; i++) {
     move_history_t move = game->move_history[i];
     char player_symbol = (move.player == AI_CELL_CROSSES) ? 'X' : 'O';
@@ -173,14 +175,14 @@ void draw_game_history_sidebar(game_state_t *game, int start_row) {
     if (move_player_type == PLAYER_TYPE_HUMAN) {
       // Human move (convert to 1-based coordinates for display)
       snprintf(move_line, sizeof(move_line),
-               "%s%2d | player %c moved to [%2d, %2d] (in %6.2fs)%s",
+               "%s%3d | player %c moved to [%2d, %2d] (in %6.2fs)%s",
                player_color, i + 1, player_symbol,
                board_to_display_coord(move.x), board_to_display_coord(move.y),
                move.time_taken, COLOR_RESET);
     } else {
       // AI move (convert to 1-based coordinates for display)
       snprintf(move_line, sizeof(move_line),
-               "%s%2d | player %c moved to [%2d, %2d] (in %6.2fs, %3d moves "
+               "%s%3d | player %c moved to [%2d, %2d] (in %6.2fs, %3d moves "
                "evaluated)%s",
                player_color, i + 1, player_symbol,
                board_to_display_coord(move.x), board_to_display_coord(move.y),
@@ -242,16 +244,22 @@ void draw_board(game_state_t *game) {
       // Show appropriate symbol based on cell content
       if (game->board[i][j] == AI_CELL_EMPTY) {
         if (is_cursor_here) {
-          // Empty cell with cursor: show yellow blinking cursor (no background)
-          printf("%s%s%s", COLOR_X_CURSOR, UNICODE_CURSOR, COLOR_RESET);
+          // Empty cell with cursor: show yellow X or O based on current player
+          if (game->current_player == AI_CELL_CROSSES) {
+            printf("%s%s%s", COLOR_CURSOR, UNICODE_CROSSES, COLOR_RESET);
+          } else {
+            printf("%s%s%s", COLOR_CURSOR, UNICODE_NAUGHTS, COLOR_RESET);
+          }
         } else {
           // Empty cell without cursor: show normal grid intersection
           printf("%s%s%s", COLOR_RESET, UNICODE_EMPTY, COLOR_RESET);
         }
       } else if (game->board[i][j] == AI_CELL_CROSSES) {
         if (is_cursor_here) {
-          // X stone with cursor: add grey background
-          printf("%s%s%s", COLOR_RESET, UNICODE_OCCUPIED, COLOR_RESET);
+          // X stone with cursor: add yellow background (background must be
+          // last)
+          printf("%s%s%s%s", COLOR_X_NORMAL, COLOR_BG_CURSOR_OCCUPIED,
+                 UNICODE_CROSSES, COLOR_RESET);
         } else if (is_last_move) {
           // X stone that was the last move: highlight it
           printf("%s%s%s", COLOR_X_LAST_MOVE, UNICODE_CROSSES, COLOR_RESET);
@@ -261,8 +269,10 @@ void draw_board(game_state_t *game) {
         }
       } else { // AI_CELL_NAUGHTS
         if (is_cursor_here) {
-          // O stone with cursor: add grey background
-          printf("%s%s%s", COLOR_RESET, UNICODE_OCCUPIED, COLOR_RESET);
+          // O stone with cursor: add yellow background (background must be
+          // last)
+          printf("%s%s%s%s", COLOR_O_NORMAL, COLOR_BG_CURSOR_OCCUPIED,
+                 UNICODE_NAUGHTS, COLOR_RESET);
         } else if (is_last_move) {
           // O stone that was the last move: highlight it
           printf("%s%s%s", COLOR_O_LAST_MOVE, UNICODE_NAUGHTS, COLOR_RESET);
@@ -592,12 +602,10 @@ void display_rules(void) {
          COLOR_RED, UNICODE_CROSSES, COLOR_RESET);
   printf("   %s%s%s          — AI Player (Naughts) - Computer opponent\n",
          COLOR_BLUE, UNICODE_NAUGHTS, COLOR_RESET);
-  printf("   %s%s%s          — Current cursor position (available move)\n\n",
-         COLOR_BG_CELL_AVAILABLE, UNICODE_CURSOR, COLOR_RESET);
-  printf(
-      "   %s %s %s or %s %s %s — Current cursor position (occupied cell)\n\n",
-      COLOR_O_INVALID, UNICODE_NAUGHTS, COLOR_RESET, COLOR_X_INVALID,
-      UNICODE_CROSSES, COLOR_RESET);
+  printf("   %s%s%s          — Cursor (yellow, matches your piece)\n",
+         COLOR_CURSOR, UNICODE_CROSSES, COLOR_RESET);
+  printf("   %s%s%s%s          — Cursor on occupied cell\n\n", COLOR_X_NORMAL,
+         COLOR_BG_CURSOR_OCCUPIED, UNICODE_CROSSES, COLOR_RESET);
 
   // How to play
   printf("%sHOW TO PLAY%s\n", COLOR_BOLD_BLACK, COLOR_RESET);

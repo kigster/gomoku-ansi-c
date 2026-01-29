@@ -34,7 +34,9 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
       .player_x_type = PLAYER_TYPE_HUMAN, // X is human by default
       .player_o_type = PLAYER_TYPE_AI,    // O is AI by default
       .depth_x = -1,                      // -1 means use max_depth
-      .depth_o = -1                       // -1 means use max_depth
+      .depth_o = -1,                      // -1 means use max_depth
+      .player_x_explicit = 0,             // Track if -x was explicitly set
+      .player_o_explicit = 0              // Track if -o was explicitly set
   };
 
   // Command line options structure
@@ -181,6 +183,7 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
       break;
 
     case 'x':
+      config.player_x_explicit = 1;
       if (strcmp(optarg, "human") == 0) {
         config.player_x_type = PLAYER_TYPE_HUMAN;
       } else if (strcmp(optarg, "ai") == 0) {
@@ -193,6 +196,7 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
       break;
 
     case 'o':
+      config.player_o_explicit = 1;
       if (strcmp(optarg, "human") == 0) {
         config.player_o_type = PLAYER_TYPE_HUMAN;
       } else if (strcmp(optarg, "ai") == 0) {
@@ -227,6 +231,20 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
     }
     printf("\n\n");
     config.invalid_args = 1;
+  }
+
+  // If -o human was specified but -x was not, set X to AI
+  // This allows "gomoku -o human" to mean "I want to play as O against AI"
+  if (config.player_o_explicit && !config.player_x_explicit &&
+      config.player_o_type == PLAYER_TYPE_HUMAN) {
+    config.player_x_type = PLAYER_TYPE_AI;
+  }
+
+  // Similarly, if -x ai was specified but -o was not, set O to human
+  // This allows "gomoku -x ai" to mean "AI plays X, I play O"
+  if (config.player_x_explicit && !config.player_o_explicit &&
+      config.player_x_type == PLAYER_TYPE_AI) {
+    config.player_o_type = PLAYER_TYPE_HUMAN;
   }
 
   return config;
@@ -268,8 +286,9 @@ void print_help(const char *program_name) {
 
   printf("%sAI PLAYER(s) FLAGS:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
 
-  printf("  %s-d, --depth N%s         The depth of search, default is 3. When\n",
-    COLOR_YELLOW, COLOR_RESET);
+  printf(
+      "  %s-d, --depth N%s         The depth of search, default is 3. When\n",
+      COLOR_YELLOW, COLOR_RESET);
 
   printf("                        both players are AI players,\n");
   printf("                        use N for both, or N:M for asymmetric depths "
@@ -338,9 +357,10 @@ void print_help(const char *program_name) {
          COLOR_RESET);
   printf("  %s%s%s - AI player (naughts)\n", COLOR_BLUE, UNICODE_NAUGHTS,
          COLOR_RESET);
-  printf("  %s%s%s - Current cursor (x on an empty cell)\n", COLOR_X_CURSOR,
-         UNICODE_CURSOR, COLOR_RESET);
-  printf("  %s%s - Current cursor on an occupied cell\n", UNICODE_OCCUPIED,
+  printf("  %s%s%s - Cursor (yellow, matches your piece)\n", COLOR_CURSOR,
+         UNICODE_CROSSES, COLOR_RESET);
+  printf("  %s%s%s%s - Cursor on occupied cell (yellow background)\n",
+         COLOR_X_NORMAL, COLOR_BG_CURSOR_OCCUPIED, UNICODE_CROSSES,
          COLOR_RESET);
 
   printf("\n%sCONTROLS IN GAME:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
