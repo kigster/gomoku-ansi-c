@@ -28,12 +28,12 @@
 #define ESCAPE_CODE_STRIKE "\033[9m"
 #define ESCAPE_CODE_RESET "\033[0m"
 
-// What color is each cell?
-#define COLOR_BG_CELL_AVAILABLE "\033[0m" // Grey background for cursor on occupied cells
+// Cursor colors
+#define COLOR_BG_CURSOR_OCCUPIED "\033[43m" // Yellow background for cursor on occupied cells
+#define COLOR_CURSOR "\033[1;33m"           // Yellow color for cursor symbol
 
 #define COLOR_X_NORMAL "\033[0;31m"
 #define COLOR_X_LAST_MOVE "\033[1;31m"
-#define COLOR_X_CURSOR "\033[1;33m"
 
 #define COLOR_O_NORMAL "\033[0m\033[0;34m"
 #define COLOR_O_LAST_MOVE "\033[0m\033[1;36m"

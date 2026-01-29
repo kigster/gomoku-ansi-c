@@ -100,8 +100,6 @@ typedef enum {
 #define UNICODE_EMPTY "·"
 #define UNICODE_CROSSES "✕"
 #define UNICODE_NAUGHTS "○"
-#define UNICODE_CURSOR "✕"
-#define UNICODE_OCCUPIED "\033[0;33m◼︎"
 #define UNICODE_CORNER_TL "┌"
 #define UNICODE_CORNER_TR "┐"
 #define UNICODE_CORNER_BL "└"

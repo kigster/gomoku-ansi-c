@@ -32,10 +32,15 @@ protected:
         .enable_undo = 1,                   // Enable undo for testing
         .skip_welcome = 1,                  // Skip welcome screen
         .search_radius = 2,                 // Default search radius
+        .json_file = "",                    // No JSON output
+        .replay_file = "",                  // No replay
+        .replay_wait = 0.0,                 // No replay wait
         .player_x_type = PLAYER_TYPE_HUMAN, // Default: human X
         .player_o_type = PLAYER_TYPE_AI,    // Default: AI O
         .depth_x = -1,                      // Use max_depth
-        .depth_o = -1                       // Use max_depth
+        .depth_o = -1,                      // Use max_depth
+        .player_x_explicit = 0,             // Not explicitly set
+        .player_o_explicit = 0              // Not explicitly set
     };
 
     // Create a test game state
@@ -496,10 +501,15 @@ static GameResult run_self_play_game(int board_size, int max_depth) {
                          .enable_undo = 0,
                          .skip_welcome = 1,
                          .search_radius = 2,
+                         .json_file = "",
+                         .replay_file = "",
+                         .replay_wait = 0.0,
                          .player_x_type = PLAYER_TYPE_HUMAN,
                          .player_o_type = PLAYER_TYPE_AI,
                          .depth_x = -1,
-                         .depth_o = -1};
+                         .depth_o = -1,
+                         .player_x_explicit = 0,
+                         .player_o_explicit = 0};
 
   game_state_t *game = init_game(config);
   if (!game)
@@ -663,10 +673,15 @@ TEST_F(GomokuTest, AIvsAI_CompletesSuccessfully) {
                          .enable_undo = 0,
                          .skip_welcome = 1,
                          .search_radius = 2,
+                         .json_file = "",
+                         .replay_file = "",
+                         .replay_wait = 0.0,
                          .player_x_type = PLAYER_TYPE_AI,
                          .player_o_type = PLAYER_TYPE_AI,
                          .depth_x = 2,
-                         .depth_o = 2};
+                         .depth_o = 2,
+                         .player_x_explicit = 0,
+                         .player_o_explicit = 0};
 
   game_state_t *ai_game = init_game(config);
   ASSERT_NE(ai_game, nullptr);
@@ -732,10 +747,15 @@ TEST_F(GomokuTest, AIvsAI_AsymmetricDepths) {
                          .enable_undo = 0,
                          .skip_welcome = 1,
                          .search_radius = 2,
+                         .json_file = "",
+                         .replay_file = "",
+                         .replay_wait = 0.0,
                          .player_x_type = PLAYER_TYPE_AI,
                          .player_o_type = PLAYER_TYPE_AI,
                          .depth_x = 2,
-                         .depth_o = 4};
+                         .depth_o = 4,
+                         .player_x_explicit = 0,
+                         .player_o_explicit = 0};
 
   game_state_t *ai_game = init_game(config);
   ASSERT_NE(ai_game, nullptr);
