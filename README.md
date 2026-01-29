@@ -6,9 +6,12 @@
 > This is an ANSI-C implementation of the Gomoku (Five-in-a-Row) game featuring gameplay against an AI opponent, AI vs AI, or Human vs Human.
 >
 > The AI algorithm supports flexible search depth and utilizes MiniMax algorithm with Alpha-Beta pruning, and many additional optimizations.
+>
+> If you are interested in a theory of Gomoku game-play and various approaches to algorithmic AI, we refer you to the [summary of various scientific publications on the subject](.artifacts/README.md).
 
-> [!TIP]
-> This game was popular in the former Soviet Union, but it was called "crosses and naughts" (крестики и нолики).
+This game was popular in the former Soviet Union, but it was called "crosses and naughts" (крестики и нолики). Other variations exist called [Renju](https://en.wikipedia.org/wiki/Renju), which attempt to balance the well known fact of the first move advantage in Gomoku.
+
+In this implementation, the default first player is a human, so you will have a default advantage unless you swap with AI using `-x` and `-o` flags.
 
 > [!IMPORTANT]
 > This project was developed in collaboration with Claude Code, OpenAI Codex, while the original **evaluation function** was written and heavily tuned by the author as early as 2010.
