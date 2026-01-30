@@ -127,8 +127,12 @@ $(TEST_TARGET): googletest $(JSONC_LIB) tests/gomoku_test.o src/gomoku.o src/boa
 tests/gomoku_test.o: googletest tests/gomoku_test.cpp src/gomoku.h src/board.h src/game.h src/ai.h
 		$(CXX) $(CXXFLAGS) -c tests/gomoku_test.cpp -o tests/gomoku_test.o
 
-test: 		$(TEST_TARGET) $(TARGET) ## Run all the unit tests
-		GREP_COLOR=32 ./$(TEST_TARGET) | grep --color=always -E 'GomokuTest\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
+test: 		$(TEST_TARGET) $(DAEMON_TEST_TARGET) $(TARGET) ## Run all unit tests (game + daemon)
+		@echo "=== Running Game Tests ==="
+		@GREP_COLOR=32 ./$(TEST_TARGET) | grep --color=always -E 'GomokuTest\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
+		@echo ""
+		@echo "=== Running Daemon Tests ==="
+		@GREP_COLOR=32 ./$(DAEMON_TEST_TARGET) | grep --color=always -E 'Daemon[A-Za-z]*Test\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
 
 tests: 		test
 
