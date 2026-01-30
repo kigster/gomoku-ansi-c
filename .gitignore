@@ -82,6 +82,7 @@ Temporary Items
 
 # Generated files
 bin/
+!bin/tests-setup
 gen/
 out/
 #  Uncomment the following line in case you need and you don't have the release build type files in your app
@@ -445,7 +446,6 @@ fabric.properties
 
 ##### Eclipse
 .metadata
-bin/
 tmp/
 *.tmp
 *.bak

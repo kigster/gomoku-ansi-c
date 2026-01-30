@@ -119,7 +119,7 @@ src/%.o: src/%.c | $(JSONC_LIB)
 		$(CC) $(CFLAGS) -c $< -o $@
 
 googletest: 	## Build GoogleTest framework (needed for running tests)
-		@bash -c "./bin/tests-setup >/dev/null"
+		@bash -c "./bin/tests-setup"
 
 $(TEST_TARGET): googletest $(JSONC_LIB) tests/gomoku_test.o src/gomoku.o src/board.o src/game.o src/ai.o # Test targets
 		$(CXX) $(CXXFLAGS) tests/gomoku_test.o src/gomoku.o src/board.o src/game.o src/ai.o $(GTEST_LIB) $(GTEST_MAIN_LIB) $(JSONC_LIB) -pthread -o $(TEST_TARGET)
