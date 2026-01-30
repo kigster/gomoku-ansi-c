@@ -1,0 +1,8 @@
+{
+  "X": { "player": "human", "time_ms": 0.000 },
+  "O": { "player": "AI", "depth": 4, "time_ms": 0.000 },
+  "radius": 2,
+  "timeout": "none",
+  "winner": "none",
+  "moves": []
+}

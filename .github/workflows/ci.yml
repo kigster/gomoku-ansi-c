@@ -30,7 +30,7 @@ jobs:
 
     - name: Build Google Test
       run: |
-        bash tests-setup
+        make googletest
 
     - name: Verify Google Test libraries
       run: |
