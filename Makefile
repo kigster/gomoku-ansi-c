@@ -13,9 +13,10 @@ BRANCH          := $(shell git branch --show)
 # installation prefix (can override)
 PREFIX 		?= /usr/local
 PACKAGE 	= gomoku
+DAEMON_PACKAGE  = gomoku-http-daemon
 # directories
 BINDIR 		= $(PREFIX)/bin
-BINS 		= $(PACKAGE)
+BINS 		= $(PACKAGE) $(DAEMON_PACKAGE)
 
 CC               = gcc
 CXX              = g++
@@ -65,7 +66,7 @@ LOGC_OBJ = lib/log.c/src/log.o
 # CMake build directory
 BUILD_DIR = build
 
-.PHONY: all clean test tag help cmake-build cmake-clean cmake-test install uninstall rebuild release json-c gomoku-http-daemon test-daemon submodules-daemon test-gomoku-http
+.PHONY: all clean test tag help cmake-build cmake-clean cmake-test install uninstall rebuild release json-c gomoku-http-daemon test-daemon submodules-daemon test-gomoku-http test-client
 
 help:		## Prints help message auto-generated from the comments.
 		@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[32m%-20s\033[35m %s\033[0\n", $$1, $$2}' | sed '/^$$/d' | sort
@@ -111,12 +112,14 @@ src/net/%.o: src/net/%.c | $(JSONC_LIB) submodules-daemon
 $(TEST_HTTP_CLIENT): $(TEST_HTTP_SRC) ## Build HTTP test client
 		$(CC) $(CFLAGS) $(TEST_HTTP_SRC) -o $(TEST_HTTP_CLIENT)
 
+test-client: 	$(TEST_HTTP_CLIENT) ## Alias for building the HTTP test client
+
 # Generic src rule (must come after src/net/%.o rule)
 src/%.o: src/%.c | $(JSONC_LIB)
 		$(CC) $(CFLAGS) -c $< -o $@
 
 googletest: 	## Build GoogleTest framework (needed for running tests)
-		@bash -c "./tests-setup >/dev/null"
+		@bash -c "./bin/tests-setup >/dev/null"
 
 $(TEST_TARGET): googletest $(JSONC_LIB) tests/gomoku_test.o src/gomoku.o src/board.o src/game.o src/ai.o # Test targets
 		$(CXX) $(CXXFLAGS) tests/gomoku_test.o src/gomoku.o src/board.o src/game.o src/ai.o $(GTEST_LIB) $(GTEST_MAIN_LIB) $(JSONC_LIB) -pthread -o $(TEST_TARGET)
@@ -164,14 +167,13 @@ cmake-test: 	cmake-build ## Run tests using CMake
 
 cmake-rebuild: 	cmake-clean cmake-build ## Clean and rebuild using CMake
 
-install: gomoku  ## Install the binary to the prefix
+install: gomoku  gomoku-http-daemon ## Install the binary to the prefix
 		@echo "Installing to $(PREFIX)"
 		install -d $(BINDIR)
 		install -m 755 $(BINS) $(BINDIR)
 
 uninstall: 	## Uninstall the binary from the prefix
 		-rm -f $(BINDIR)/$(PACKAGE)
-
 
 format: 	## Format all source and test files using clang-format
 		find src -maxdepth 2 -name '*.c**'   | xargs clang-format -i
