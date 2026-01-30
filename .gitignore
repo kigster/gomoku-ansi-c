@@ -1,5 +1,6 @@
 gomoku*
 test_gomoku
+test_daemon
 test-gomoku*
 ##### Windows
 # Windows thumbnail cache files
