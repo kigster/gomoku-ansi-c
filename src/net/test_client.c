@@ -367,8 +367,8 @@ static void print_usage(const char *program) {
   printf("OPTIONS:\n");
   printf("  -h, --host <host>     Server host (default: %s)\n", DEFAULT_HOST);
   printf("  -p, --port <port>     Server port (default: %d)\n", DEFAULT_PORT);
-  printf("  -d, --depth <n>       AI search depth 1-4 (default: 2)\n");
-  printf("  -r, --radius <n>      Search radius 1-3 (default: 2)\n");
+  printf("  -d, --depth <n>       AI search depth 1-6 (default: 2)\n");
+  printf("  -r, --radius <n>      Search radius 1-4 (default: 2)\n");
   printf("  -b, --board <n>       Board size 15 or 19 (default: 15)\n");
   printf("  -j, --json <file>     Save game to JSON file when finished\n");
   printf("  -v, --verbose         Show game state after each move\n");
@@ -412,15 +412,15 @@ int main(int argc, char *argv[]) {
       break;
     case 'd':
       depth = atoi(optarg);
-      if (depth < 1 || depth > 4) {
-        fprintf(stderr, "Error: Depth must be 1-4\n");
+      if (depth < 1 || depth > 6) {
+        fprintf(stderr, "Error: Depth must be 1-6\n");
         return 1;
       }
       break;
     case 'r':
       radius = atoi(optarg);
-      if (radius < 1 || radius > 3) {
-        fprintf(stderr, "Error: Radius must be 1-3\n");
+      if (radius < 1 || radius > 4) {
+        fprintf(stderr, "Error: Radius must be 1-4\n");
         return 1;
       }
       break;

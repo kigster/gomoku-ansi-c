@@ -108,7 +108,7 @@ Make an AI move in a Gomoku game.
 
 **Behavior:**
 1. Parses the JSON game state
-2. Caps AI depth to 4 and radius to 3 (for performance)
+2. Caps AI depth to 6 and radius to 4 (for performance)
 3. If game already has a winner, returns unchanged
 4. Determines which player AI should be (opposite of last move)
 5. Computes best move using minimax with alpha-beta pruning
@@ -193,11 +193,11 @@ The game state JSON format:
 |-------|------|-------------|
 | `X` | object | Player X configuration |
 | `X.player` | string | "human" or "AI" |
-| `X.depth` | int | AI search depth (1-4, only if AI) |
+| `X.depth` | int | AI search depth (1-6, only if AI) |
 | `X.time_ms` | float | Total time spent by this player |
 | `O` | object | Player O configuration (same structure as X) |
 | `board` | int | Board size: 15 or 19 |
-| `radius` | int | AI search radius (1-3) |
+| `radius` | int | AI search radius (1-4) |
 | `timeout` | string | Move timeout: "none" or seconds |
 | `winner` | string | "none", "X", "O", or "draw" |
 | `board_state` | array | Visual board representation (optional, regenerated) |
@@ -306,8 +306,8 @@ The client plays as X (human) using a simple spiral strategy while the server's 
 |------|-----------|-------------|---------|
 | `-h` | `--host` | Server host | 127.0.0.1 |
 | `-p` | `--port` | Server port | 3000 |
-| `-d` | `--depth` | AI search depth (1-4) | 2 |
-| `-r` | `--radius` | AI search radius (1-3) | 2 |
+| `-d` | `--depth` | AI search depth (1-6) | 2 |
+| `-r` | `--radius` | AI search radius (1-4) | 2 |
 | `-b` | `--board` | Board size (15 or 19) | 15 |
 | `-j` | `--json` | Save final game to JSON file | - |
 | `-v` | `--verbose` | Show full game state after each move | No |

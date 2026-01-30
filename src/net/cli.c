@@ -222,7 +222,7 @@ void daemon_print_help(const char *program_name) {
          program_name);
 
   printf("CONSTRAINTS:\n");
-  printf("  Max AI depth: %d\n", 4);
-  printf("  Max search radius: %d\n", 3);
+  printf("  Max AI depth: %d\n", 6);
+  printf("  Max search radius: %d\n", 4);
   printf("  Single-threaded (one request at a time)\n");
 }

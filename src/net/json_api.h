@@ -15,8 +15,8 @@
 //===============================================================================
 
 #define API_VERSION "1.0.0"
-#define API_MAX_DEPTH 4
-#define API_MAX_RADIUS 3
+#define API_MAX_DEPTH 6
+#define API_MAX_RADIUS 4
 
 //===============================================================================
 // GAME STATE PARSING
