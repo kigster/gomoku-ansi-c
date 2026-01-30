@@ -157,6 +157,46 @@ static const char *get_winner(const char *json) {
 }
 
 /**
+ * Print the board state from JSON response.
+ */
+static void print_board(const char *json) {
+  const char *board_state = strstr(json, "\"board_state\"");
+  if (!board_state)
+    return;
+
+  // Find the opening bracket of the array
+  const char *arr_start = strchr(board_state, '[');
+  if (!arr_start)
+    return;
+
+  // Find the closing bracket
+  const char *arr_end = strchr(arr_start, ']');
+  if (!arr_end)
+    return;
+
+  printf("\nFinal board:\n");
+
+  // Parse each line in the array
+  const char *p = arr_start + 1;
+  while (p < arr_end) {
+    // Find the opening quote of the string
+    const char *quote_start = strchr(p, '"');
+    if (!quote_start || quote_start >= arr_end)
+      break;
+
+    // Find the closing quote
+    const char *quote_end = strchr(quote_start + 1, '"');
+    if (!quote_end || quote_end >= arr_end)
+      break;
+
+    // Print the line content
+    printf("  %.*s\n", (int)(quote_end - quote_start - 1), quote_start + 1);
+
+    p = quote_end + 1;
+  }
+}
+
+/**
  * Check if a position is occupied on the board.
  * Simple parser - looks for the position in moves array.
  * Handles both compact [9, 9] and expanded JSON formats.
@@ -482,6 +522,9 @@ int main(int argc, char *argv[]) {
     // Check for winner after AI move
     winner = get_winner(game_state);
   }
+
+  // Print the final board
+  print_board(game_state);
 
   printf("\n");
   if (strcmp(winner, "X") == 0) {
