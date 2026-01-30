@@ -352,11 +352,32 @@ Move 4: O plays [7, 9]
 Move 5: X plays [6, 7]
 Move 6: O plays [6, 8]
 Move 7: X plays [7, 6]
-Move 8: O plays [5, 8]
-Move 9: X plays [8, 7]
+Move 8: O plays [5, 7]
+Move 9: X plays [7, 8]
+Move 10: O plays [5, 6]
+Move 11: X plays [8, 6]
+Move 12: O plays [4, 6]
+Move 13: X plays [8, 7]
+
+Final board:
+  . . . . . . . . . . . . . . .
+  . . . . . . . . . . . . . . .
+  . . . . . . . . . . . . . . .
+  . . . . . O . . . . . . . . .
+  . . . . . . O . . . . . . . .
+  . . . . . . O O . . . . . . .
+  . . . . . . X X O . . . . . .
+  . . . . . . X X X O . . . . .
+  . . . . . . X X O . . . . . .
+  . . . . . . . . . . . . . . .
+  . . . . . . . . . . . . . . .
+  . . . . . . . . . . . . . . .
+  . . . . . . . . . . . . . . .
+  . . . . . . . . . . . . . . .
+  . . . . . . . . . . . . . . .
 
 Game over: O (AI) wins!
-Total moves: 9
+Total moves: 13
 Game saved to: game_result.json
 ```
 
