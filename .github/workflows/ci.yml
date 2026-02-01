@@ -40,6 +40,7 @@ jobs:
 
     - name: Build project
       run: |
+        git submodule update --init --recursive
         make -j 4 all
 
     - name: Run tests
