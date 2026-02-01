@@ -80,7 +80,7 @@ all: 		submodules $(TARGET) $(DAEMON_TARGET) $(DAEMON_CLIENT_TARGET) ## Build bo
 rebuild: 	clean $(TARGET) ## Clean and rebuild the game
 
 submodules: 	googletest ## Initialize and update git submodules
-		@git submodule update --init --recursive $(JSONC_DIR)
+		@git submodule update --init --recursive $(JSONC_DIR) $(HTTPSERVER_DIR) $(LOGC_DIR)
 
 json-c: 	$(JSONC_LIB)
 
@@ -96,8 +96,7 @@ $(TARGET): $(JSONC_LIB) $(OBJECTS) ## Build the terminal game
 		$(CC) $(OBJECTS) $(LDFLAGS) -o $(TARGET)
 
 # Daemon targets (must come before generic src/%.o rule)
-submodules-daemon: ## Initialize daemon submodules (httpserver.h, log.c)
-		@git submodule update --init --recursive $(HTTPSERVER_DIR) $(LOGC_DIR)
+submodules-daemon: submodules ## Initialize daemon submodules (depends on submodules)
 
 $(LOGC_OBJ): submodules-daemon
 		$(CC) $(CFLAGS) -I$(LOGC_DIR)/src -c $(LOGC_SRC) -o $(LOGC_OBJ)
