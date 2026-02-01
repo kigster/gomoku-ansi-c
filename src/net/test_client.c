@@ -17,7 +17,7 @@
 #include <unistd.h>
 
 #define DEFAULT_HOST "127.0.0.1"
-#define DEFAULT_PORT 3000
+#define DEFAULT_PORT 9900
 #define BUFFER_SIZE 65536
 #define BOARD_SIZE 19
 

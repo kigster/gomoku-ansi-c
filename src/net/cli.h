@@ -1,6 +1,6 @@
 //
 //  cli.h
-//  gomoku-http-daemon - CLI configuration for network daemon
+//  gomoku-httpd - CLI configuration for network daemon
 //
 
 #ifndef NET_CLI_H

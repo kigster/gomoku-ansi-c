@@ -11,52 +11,52 @@ TAG             := $(shell echo "v$(VERSION)")
 BRANCH          := $(shell git branch --show)
 
 # installation prefix (can override)
-PREFIX 		?= /usr/local
-PACKAGE 	= gomoku
-DAEMON_PACKAGE  = gomoku-http-daemon
-# directories
-BINDIR 		= $(PREFIX)/bin
-BINS 		= $(PACKAGE) $(DAEMON_PACKAGE)
+PREFIX 			?= /usr/local
+PACKAGE 		= gomoku
+DAEMON_PACKAGE  	= gomoku-httpd
+DAEMON_CLIENT  		= gomoku-http-client
+# directories	
+BINDIR 			= $(PREFIX)/bin
+BINS 			= $(PACKAGE) $(DAEMON_PACKAGE) $(DAEMON_CLIENT)
 
-CC               = gcc
-CXX              = g++
-JSONC_DIR        = lib/json-c
-JSONC_BUILD      = $(JSONC_DIR)/build
-JSONC_LIB        = $(JSONC_BUILD)/libjson-c.a
-CFLAGS           = -Wall -Wunused-parameter -Wextra -Wno-gnu-folding-constant -Wimplicit-function-declaration -Isrc -I$(JSONC_BUILD) -I$(JSONC_DIR) -O3
-CXXFLAGS         = -Wall -Wunused-parameter -Wextra -std=c++17 -Isrc -Itests/googletest/googletest/include -I$(JSONC_BUILD) -I$(JSONC_DIR) -Wimplicit-function-declaration -O2
-LDFLAGS          = -lm $(JSONC_LIB)
+CC               	= gcc
+CXX              	= g++
+JSONC_DIR        	= lib/json-c
+JSONC_BUILD      	= $(JSONC_DIR)/build
+JSONC_LIB        	= $(JSONC_BUILD)/libjson-c.a
+CFLAGS           	= -Wall -Wunused-parameter -Wextra -Wno-gnu-folding-constant -Wimplicit-function-declaration -Isrc -I$(JSONC_BUILD) -I$(JSONC_DIR) -O3
+CXXFLAGS         	= -Wall -Wunused-parameter -Wextra -std=c++17 -Isrc -Itests/googletest/googletest/include -I$(JSONC_BUILD) -I$(JSONC_DIR) -Wimplicit-function-declaration -O2
+LDFLAGS          	= -lm $(JSONC_LIB)
 
-TARGET           = gomoku
-SOURCES          = src/main.c src/gomoku.c src/board.c src/game.c src/ai.c src/ui.c src/cli.c
-OBJECTS          = $(SOURCES:.c=.o)
+TARGET           	= $(PACKAGE)
+SOURCES          	= src/main.c src/gomoku.c src/board.c src/game.c src/ai.c src/ui.c src/cli.c
+OBJECTS          	= $(SOURCES:.c=.o)
 
 # Daemon configuration
-DAEMON_TARGET    = gomoku-http-daemon
-DAEMON_CORE      = src/gomoku.o src/board.o src/game.o src/ai.o
-DAEMON_NET       = src/net/main.o src/net/cli.o src/net/handlers.o src/net/json_api.o
-LOGC_DIR         = lib/log.c
-LOGC_SRC         = $(LOGC_DIR)/src/log.c
-HTTPSERVER_DIR   = lib/httpserver.h
+DAEMON_TARGET    	= $(DAEMON_PACKAGE)
+DAEMON_CORE      	= src/gomoku.o src/board.o src/game.o src/ai.o
+DAEMON_NET       	= src/net/main.o src/net/cli.o src/net/handlers.o src/net/json_api.o
+LOGC_DIR         	= lib/log.c
+LOGC_SRC         	= $(LOGC_DIR)/src/log.c
+HTTPSERVER_DIR   	= lib/httpserver.h
 # Platform-specific flags for httpserver.h
 ifeq ($(OS),darwin)
-HTTPSERVER_PLATFORM = -DKQUEUE
+HTTPSERVER_PLATFORM 	= -DKQUEUE
 else
-HTTPSERVER_PLATFORM = -DEPOLL
+HTTPSERVER_PLATFORM	= -DEPOLL
 endif
-DAEMON_CFLAGS    = $(CFLAGS) -I$(HTTPSERVER_DIR) -I$(HTTPSERVER_DIR)/src -I$(LOGC_DIR)/src $(HTTPSERVER_PLATFORM)
+DAEMON_CFLAGS    	= $(CFLAGS) -I$(HTTPSERVER_DIR) -I$(HTTPSERVER_DIR)/src -I$(LOGC_DIR)/src $(HTTPSERVER_PLATFORM)
 
 # Test HTTP client
-TEST_HTTP_CLIENT = test-gomoku-http
-TEST_HTTP_SRC    = src/net/test_client.c
+DAEMON_CLIENT_TARGET 	= $(DAEMON_CLIENT)
+TEST_HTTP_SRC    	= src/net/test_client.c
 
 # Test configuration
-TEST_TARGET      = test_gomoku
-TEST_SOURCES     = tests/gomoku_test.cpp src/gomoku.c src/board.c src/game.c src/ai.c
-TEST_OBJECTS     = $(TEST_SOURCES:.cpp=.o)
-TEST_OBJECTS    := $(TEST_OBJECTS:.c=.o)
-GTEST_LIB        = tests/googletest/build/lib/libgtest.a
-GTEST_MAIN_LIB   = tests/googletest/build/lib/libgtest_main.a
+TEST_TARGET     	= test_gomoku
+TEST_SOURCES    	= tests/gomoku_test.cpp src/gomoku.c src/board.c src/game.c src/ai.c
+TEST_OBJECTS    	= $(TEST_SOURCES:.cpp=.o)
+GTEST_LIB       	= tests/googletest/build/lib/libgtest.a
+GTEST_MAIN_LIB  	= tests/googletest/build/lib/libgtest_main.a
 
 # Daemon test configuration
 DAEMON_TEST_TARGET = test_daemon
@@ -66,7 +66,7 @@ LOGC_OBJ = lib/log.c/src/log.o
 # CMake build directory
 BUILD_DIR = build
 
-.PHONY: all clean test tag help cmake-build cmake-clean cmake-test install uninstall rebuild release json-c gomoku-http-daemon test-daemon submodules-daemon test-gomoku-http test-client
+.PHONY: all clean test tag help cmake-build cmake-clean cmake-test install uninstall rebuild release json-c gomoku-httpd test-daemon submodules-daemon test-gomoku-http test-client
 
 help:		## Prints help message auto-generated from the comments.
 		@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[32m%-20s\033[35m %s\033[0\n", $$1, $$2}' | sed '/^$$/d' | sort
@@ -75,7 +75,7 @@ version:        ## Prints the current version and tag
 	        @echo "Version is $(VERSION)"
 		@echo "The tag is $(TAG)"
 
-all: 		$(TARGET) gomoku-http-daemon ## Build both the game and HTTP daemon
+all: 		$(TARGET) $(DAEMON_TARGET) $(DAEMON_CLIENT_TARGET) ## Build both the game and HTTP daemon
 
 rebuild: 	clean $(TARGET) ## Clean and rebuild the game
 
@@ -102,24 +102,24 @@ submodules-daemon: ## Initialize daemon submodules (httpserver.h, log.c)
 $(LOGC_OBJ): submodules-daemon
 		$(CC) $(CFLAGS) -I$(LOGC_DIR)/src -c $(LOGC_SRC) -o $(LOGC_OBJ)
 
-gomoku-http-daemon: submodules-daemon $(JSONC_LIB) $(DAEMON_CORE) $(DAEMON_NET) $(LOGC_OBJ) ## Build the HTTP daemon
+gomoku-httpd: submodules-daemon $(JSONC_LIB) $(DAEMON_CORE) $(DAEMON_NET) $(LOGC_OBJ) ## Build the HTTP daemon
 		$(CC) $(DAEMON_CORE) $(DAEMON_NET) $(LOGC_OBJ) $(LDFLAGS) -o $(DAEMON_TARGET)
 
 src/net/%.o: src/net/%.c | $(JSONC_LIB) submodules-daemon
 		$(CC) $(DAEMON_CFLAGS) -c $< -o $@
 
 # HTTP test client
-$(TEST_HTTP_CLIENT): $(TEST_HTTP_SRC) ## Build HTTP test client
-		$(CC) $(CFLAGS) $(TEST_HTTP_SRC) -o $(TEST_HTTP_CLIENT)
+$(DAEMON_CLIENT_TARGET): $(TEST_HTTP_SRC) ## Build HTTP test client
+		$(CC) $(CFLAGS) $(TEST_HTTP_SRC) -o $(DAEMON_CLIENT_TARGET)
 
-test-client: 	$(TEST_HTTP_CLIENT) ## Alias for building the HTTP test client
+test-client: 	$(DAEMON_CLIENT_TARGET) ## Alias for building the HTTP test client
 
 # Generic src rule (must come after src/net/%.o rule)
 src/%.o: src/%.c | $(JSONC_LIB)
 		$(CC) $(CFLAGS) -c $< -o $@
 
 googletest: 	## Build GoogleTest framework (needed for running tests)
-		@bash -c "./bin/tests-setup"
+		@bash -c "./tests/tests-setup"
 
 $(TEST_TARGET): googletest $(JSONC_LIB) tests/gomoku_test.o src/gomoku.o src/board.o src/game.o src/ai.o # Test targets
 		$(CXX) $(CXXFLAGS) tests/gomoku_test.o src/gomoku.o src/board.o src/game.o src/ai.o $(GTEST_LIB) $(GTEST_MAIN_LIB) $(JSONC_LIB) -pthread -o $(TEST_TARGET)
@@ -149,7 +149,7 @@ test-daemon: 	$(DAEMON_TEST_TARGET) ## Run daemon unit tests
 clean:  	## Clean up all the intermediate objects
 		rm -f $(TARGET) $(TEST_TARGET) $(OBJECTS) tests/gomoku_test.o
 		rm -f $(DAEMON_TARGET) $(DAEMON_TEST_TARGET) $(DAEMON_NET) tests/daemon_test.o $(LOGC_OBJ)
-		rm -f $(TEST_HTTP_CLIENT)
+		rm -f $(DAEMON_CLIENT_TARGET)
 
 tag:    	## Tag the current git version with the tag equal to the VERSION constant
 		git tag $(TAG) -f
@@ -171,7 +171,7 @@ cmake-test: 	cmake-build ## Run tests using CMake
 
 cmake-rebuild: 	cmake-clean cmake-build ## Clean and rebuild using CMake
 
-install: gomoku  gomoku-http-daemon ## Install the binary to the prefix
+install: 	all ## Install the binaries to the prefix
 		@echo "Installing to $(PREFIX)"
 		install -d $(BINDIR)
 		install -m 755 $(BINS) $(BINDIR)

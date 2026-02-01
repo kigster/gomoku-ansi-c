@@ -1,6 +1,6 @@
 //
 //  cli.c
-//  gomoku-http-daemon - CLI argument parsing for network daemon
+//  gomoku-httpd - CLI argument parsing for network daemon
 //
 
 #include "cli.h"
@@ -188,7 +188,7 @@ int daemon_validate_config(const daemon_config_t *config) {
 }
 
 void daemon_print_help(const char *program_name) {
-  printf("gomoku-http-daemon v%s - Gomoku AI HTTP Server\n\n", DAEMON_VERSION);
+  printf("gomoku-httpd v%s - Gomoku AI HTTP Server\n\n", DAEMON_VERSION);
 
   printf("USAGE:\n");
   printf("  %s -b <host:port> [options]\n\n", program_name);

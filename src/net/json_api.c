@@ -1,6 +1,6 @@
 //
 //  json_api.c
-//  gomoku-http-daemon - JSON parsing and serialization for HTTP API
+//  gomoku-httpd - JSON parsing and serialization for HTTP API
 //
 
 #include "json_api.h"

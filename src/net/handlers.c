@@ -1,6 +1,6 @@
 //
 //  handlers.c
-//  gomoku-http-daemon - HTTP endpoint handlers
+//  gomoku-httpd - HTTP endpoint handlers
 //
 
 #define HTTPSERVER_IMPL

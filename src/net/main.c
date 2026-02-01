@@ -1,6 +1,6 @@
 //
 //  main.c
-//  gomoku-http-daemon - HTTP server entry point
+//  gomoku-httpd - HTTP server entry point
 //
 
 #include "cli.h"
@@ -267,7 +267,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  log_info("gomoku-http-daemon v%s starting", DAEMON_VERSION);
+  log_info("gomoku-httpd v%s starting", DAEMON_VERSION);
 
   // Start listening
   int result;

@@ -1,6 +1,6 @@
 //
 //  handlers.h
-//  gomoku-http-daemon - HTTP endpoint handlers
+//  gomoku-httpd - HTTP endpoint handlers
 //
 
 #ifndef NET_HANDLERS_H

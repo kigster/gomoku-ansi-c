@@ -28,8 +28,8 @@ A stateless HTTP server that provides a REST API for playing Gomoku games. The d
 Build both the daemon and test client:
 
 ```bash
-make all                    # Build gomoku and gomoku-http-daemon
-make gomoku-http-daemon     # Build only the HTTP daemon
+make all                    # Build gomoku and gomoku-httpd
+make gomoku-httpd     # Build only the HTTP daemon
 make test-gomoku-http       # Build the test client
 ```
 
@@ -46,7 +46,7 @@ make clean
 ### Usage
 
 ```
-gomoku-http-daemon -b <host:port> [options]
+gomoku-httpd -b <host:port> [options]
 ```
 
 The daemon runs as a foreground process by default. Use `-d` to daemonize.
@@ -66,27 +66,27 @@ The daemon runs as a foreground process by default. Use `-d` to daemonize.
 Start daemon on localhost port 3000:
 
 ```bash
-./gomoku-http-daemon -b 127.0.0.1:3000
+./gomoku-httpd -b 127.0.0.1:3000
 ```
 
 Start daemon on all interfaces with debug logging:
 
 ```bash
-./gomoku-http-daemon -b 0.0.0.0:8080 -L DEBUG
+./gomoku-httpd -b 0.0.0.0:8080 -L DEBUG
 ```
 
 Run as background daemon with log file:
 
 ```bash
-./gomoku-http-daemon -d -b 0.0.0.0:3000 -l /var/log/gomoku.log
+./gomoku-httpd -d -b 0.0.0.0:3000 -l /var/log/gomoku.log
 ```
 
 Stop the daemon:
 
 ```bash
-pkill gomoku-http-daemon
+pkill gomoku-httpd
 # or send SIGTERM
-kill $(pgrep gomoku-http-daemon)
+kill $(pgrep gomoku-httpd)
 ```
 
 ---
@@ -342,7 +342,7 @@ Play with verbose output to see full game state:
 ### Sample Output
 
 ```
-Connecting to gomoku-http-daemon at 127.0.0.1:3000
+Connecting to gomoku-httpd at 127.0.0.1:3000
 Playing as X (human) against O (AI depth=2, radius=2, board=15)
 
 Move 1: X plays [7, 7]

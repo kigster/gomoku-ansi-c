@@ -40,11 +40,11 @@ jobs:
 
     - name: Build project
       run: |
-        make -j 4 build
+        make -j 4 all
 
     - name: Run tests
       run: |
-        make test
+        make tests
 
     - name: Test binary execution
       run: |
