@@ -75,11 +75,11 @@ version:        ## Prints the current version and tag
 	        @echo "Version is $(VERSION)"
 		@echo "The tag is $(TAG)"
 
-all: 		$(TARGET) $(DAEMON_TARGET) $(DAEMON_CLIENT_TARGET) ## Build both the game and HTTP daemon
+all: 		submodules $(TARGET) $(DAEMON_TARGET) $(DAEMON_CLIENT_TARGET) ## Build both the game and HTTP daemon
 
 rebuild: 	clean $(TARGET) ## Clean and rebuild the game
 
-submodules: 	## Initialize and update git submodules
+submodules: 	googletest ## Initialize and update git submodules
 		@git submodule update --init --recursive lib/json-c
 
 json-c: 	$(JSONC_LIB)
