@@ -792,48 +792,10 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
     return;
   }
 
-  // Check if we have a forcing move (four - open or closed)
-  // These create immediate pressure that must be answered
-  int forcing_moves_x[361];
-  int forcing_moves_y[361];
-  int forcing_move_count = 0;
-  int max_forcing_threat = 0;
-
-  for (int i = 0; i < move_count; i++) {
-    int my_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
-                                         ai_player, game->board_size);
-    // A four (open >= 50000, closed >= 10000) is a forcing move
-    if (my_threat >= 10000) {
-      forcing_moves_x[forcing_move_count] = moves[i].x;
-      forcing_moves_y[forcing_move_count] = moves[i].y;
-      forcing_move_count++;
-      if (my_threat > max_forcing_threat) {
-        max_forcing_threat = my_threat;
-      }
-    }
-  }
-
-  // If we have a forcing move (four), play it - opponent must respond
-  if (forcing_move_count > 0) {
-    // Play the highest threat forcing move
-    for (int i = 0; i < move_count; i++) {
-      int my_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
-                                           ai_player, game->board_size);
-      if (my_threat == max_forcing_threat) {
-        *best_x = moves[i].x;
-        *best_y = moves[i].y;
-        snprintf(game->ai_status_message, sizeof(game->ai_status_message),
-                 "%s%c%s Creating forcing threat!", ai_color, ai_symbol,
-                 COLOR_RESET);
-        add_ai_history_entry(game, forcing_move_count);
-        return;
-      }
-    }
-  }
-
-  // No forcing move for us - check if opponent has an open three that MUST be
-  // blocked Open three (threat 1500) becomes open four (threat 50000) if not
-  // blocked!
+  // IMPORTANT: Check for opponent's open threes BEFORE making our own forcing
+  // moves! An open three becomes an open four (unstoppable win) if not blocked.
+  // Even if we have a forcing move (closed four), opponent can block it and
+  // then make their open four on the next turn.
   int open_three_blocks_x[361];
   int open_three_blocks_y[361];
   int open_three_block_count = 0;
@@ -871,6 +833,48 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
              COLOR_RESET);
     add_ai_history_entry(game, open_three_block_count);
     return;
+  }
+
+  // Now check if we have a forcing move (four - open or closed)
+  // This comes AFTER blocking opponent's open threes because:
+  // - If we make a four, opponent blocks it (one move)
+  // - Then they can still make their open four from the three
+  // - But if we blocked their three first, they can't make an open four
+  int forcing_moves_x[361];
+  int forcing_moves_y[361];
+  int forcing_move_count = 0;
+  int max_forcing_threat = 0;
+
+  for (int i = 0; i < move_count; i++) {
+    int my_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
+                                         ai_player, game->board_size);
+    // A four (open >= 50000, closed >= 10000) is a forcing move
+    if (my_threat >= 10000) {
+      forcing_moves_x[forcing_move_count] = moves[i].x;
+      forcing_moves_y[forcing_move_count] = moves[i].y;
+      forcing_move_count++;
+      if (my_threat > max_forcing_threat) {
+        max_forcing_threat = my_threat;
+      }
+    }
+  }
+
+  // If we have a forcing move (four), play it - opponent must respond
+  if (forcing_move_count > 0) {
+    // Play the highest threat forcing move
+    for (int i = 0; i < move_count; i++) {
+      int my_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
+                                           ai_player, game->board_size);
+      if (my_threat == max_forcing_threat) {
+        *best_x = moves[i].x;
+        *best_y = moves[i].y;
+        snprintf(game->ai_status_message, sizeof(game->ai_status_message),
+                 "%s%c%s Creating forcing threat!", ai_color, ai_symbol,
+                 COLOR_RESET);
+        add_ai_history_entry(game, forcing_move_count);
+        return;
+      }
+    }
   }
 
   // Sort moves by priority (best first)
