@@ -80,7 +80,8 @@ all: 		submodules $(TARGET) $(DAEMON_TARGET) $(DAEMON_CLIENT_TARGET) ## Build bo
 rebuild: 	clean $(TARGET) ## Clean and rebuild the game
 
 submodules: 	googletest ## Initialize and update git submodules
-		@git submodule update --init --recursive lib/json-c
+		@git submodule init || true
+		@git submodule update
 
 json-c: 	$(JSONC_LIB)
 
