@@ -27,6 +27,7 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
       .invalid_args = 0,
       .enable_undo = 0,
       .skip_welcome = 0,
+      .headless = 0,                      // Not headless by default
       .search_radius = 3,                 // Default search radius
       .json_file = "",                    // No JSON output by default
       .replay_file = "",                  // No replay by default

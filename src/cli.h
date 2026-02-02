@@ -25,6 +25,7 @@ typedef struct {
     int invalid_args;    // Whether invalid arguments were provided
     int enable_undo;     // Whether to enable undo feature
     int skip_welcome;    // Whether to skip the welcome screen
+    int headless;        // Whether to suppress all stdout output (for daemon mode)
     int search_radius;   // Search radius for move generation (1-5, default 2)
     char json_file[256]; // Path to JSON output file (empty = no output)
 

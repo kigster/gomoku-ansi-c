@@ -1,0 +1,12 @@
+{
+  "X": { "player": "human", "time_ms": 0.000 },
+  "O": { "player": "AI", "depth": 4, "time_ms": 0.000 },
+  "board": 19,
+  "radius": 2,
+  "timeout": "none",
+  "winner": "none",
+  "moves": [
+    { "X (human)": [9, 9], "time_ms": 0.000 },
+    { "O (AI)": [9, 9], "time_ms": 0.000 }
+  ]
+}

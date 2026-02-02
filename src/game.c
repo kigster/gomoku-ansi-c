@@ -321,6 +321,9 @@ void add_move_to_history(game_state_t *game, int x, int y, int player,
 }
 
 void add_ai_history_entry(game_state_t *game, int moves_evaluated) {
+  // Store for easy access by callers (e.g., for JSON output)
+  game->last_ai_moves_evaluated = moves_evaluated;
+
   if (game->ai_history_count >= MAX_AI_HISTORY) {
     // Shift history up to make room
     for (int i = 0; i < MAX_AI_HISTORY - 1; i++) {
@@ -881,7 +884,7 @@ int write_game_json(game_state_t *game, const char *filename) {
 
     // AI-specific fields
     if (is_ai && move->positions_evaluated > 0) {
-      json_object_object_add(move_obj, "moves_searched",
+      json_object_object_add(move_obj, "moves_evaluated",
                              json_object_new_int(move->positions_evaluated));
     }
     if (is_ai && move->own_score != 0) {
@@ -998,7 +1001,7 @@ int load_game_json(const char *filename, replay_data_t *data) {
             json_object_get_double(val) / 1000.0; // Convert ms to seconds
       }
       // Get positions evaluated
-      else if (strcmp(key, "moves_searched") == 0) {
+      else if (strcmp(key, "moves_evaluated") == 0) {
         move->positions_evaluated = json_object_get_int(val);
       }
       // Get own score

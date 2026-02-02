@@ -1,3 +1,9 @@
 [submodule "lib/json-c"]
 	path = lib/json-c
 	url = https://github.com/json-c/json-c.git
+[submodule "lib/httpserver.h"]
+	path = lib/httpserver.h
+	url = https://github.com/jeremycw/httpserver.h
+[submodule "lib/c-logger"]
+	path = lib/c-logger
+	url = https://github.com/yksz/c-logger.git

@@ -118,6 +118,7 @@ typedef struct {
     char ai_history[MAX_AI_HISTORY][50];
     int ai_history_count;
     char ai_status_message[256];
+    int last_ai_moves_evaluated;  // Number of moves evaluated in last AI search
 
     // Last AI move for highlighting
     int last_ai_move_x, last_ai_move_y;
