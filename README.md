@@ -5,8 +5,8 @@
 ## Table of Contents
 
 1. This document: GamePlay, Terminal Usage, Building, CLI.
-2. [Implementation details, modules, and code organization](doc/OVERVIEW.md)
-3. []
+2. [HTTPD Game Server and the Test Client](doc/HTTPD.md)
+3. [Implementation details, modules, and code organization](doc/DEVELOPER.md)
 
 > [!TIP]
 > This is an ANSI-C implementation of the Gomoku (Five-in-a-Row) game featuring gameplay against an AI opponent, AI vs AI, or Human vs Human.
