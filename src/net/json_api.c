@@ -106,26 +106,45 @@ game_state_t *json_api_parse_game(const char *json_str, char *error_msg,
     return NULL;
   }
 
-  // Parse player configurations
+  // Parse player configurations (required)
   player_type_t player_x_type = PLAYER_TYPE_HUMAN;
   player_type_t player_o_type = PLAYER_TYPE_AI;
   int depth_x = -1;
   int depth_o = -1;
 
   json_object *x_obj, *o_obj;
-  if (json_object_object_get_ex(root, "X", &x_obj)) {
-    if (!parse_player_config(x_obj, &player_x_type, &depth_x, error_msg,
-                             error_msg_len)) {
-      json_object_put(root);
-      return NULL;
-    }
+  if (!json_object_object_get_ex(root, "X", &x_obj)) {
+    snprintf(error_msg, error_msg_len, "Missing required field: X");
+    json_object_put(root);
+    return NULL;
   }
-  if (json_object_object_get_ex(root, "O", &o_obj)) {
-    if (!parse_player_config(o_obj, &player_o_type, &depth_o, error_msg,
-                             error_msg_len)) {
-      json_object_put(root);
-      return NULL;
-    }
+  if (!json_object_object_get_ex(root, "O", &o_obj)) {
+    snprintf(error_msg, error_msg_len, "Missing required field: O");
+    json_object_put(root);
+    return NULL;
+  }
+
+  json_object *player_type_obj;
+  if (!json_object_object_get_ex(x_obj, "player", &player_type_obj)) {
+    snprintf(error_msg, error_msg_len, "Missing required field: X.player");
+    json_object_put(root);
+    return NULL;
+  }
+  if (!json_object_object_get_ex(o_obj, "player", &player_type_obj)) {
+    snprintf(error_msg, error_msg_len, "Missing required field: O.player");
+    json_object_put(root);
+    return NULL;
+  }
+
+  if (!parse_player_config(x_obj, &player_x_type, &depth_x, error_msg,
+                           error_msg_len)) {
+    json_object_put(root);
+    return NULL;
+  }
+  if (!parse_player_config(o_obj, &player_o_type, &depth_o, error_msg,
+                           error_msg_len)) {
+    json_object_put(root);
+    return NULL;
   }
 
   // Parse radius (cap to API_MAX_RADIUS)
@@ -168,6 +187,7 @@ game_state_t *json_api_parse_game(const char *json_str, char *error_msg,
       .invalid_args = 0,
       .enable_undo = 0,
       .skip_welcome = 1,
+      .headless = 1, // Daemon mode - no stdout output
       .search_radius = radius,
       .json_file = "",
       .replay_file = "",
@@ -221,7 +241,9 @@ game_state_t *json_api_parse_game(const char *json_str, char *error_msg,
           }
         } else if (strcmp(key, "time_ms") == 0) {
           time_taken = json_object_get_double(val) / 1000.0;
-        } else if (strcmp(key, "moves_searched") == 0) {
+        } else if (strcmp(key, "moves_evaluated") == 0 ||
+                   strcmp(key, "moves_searched") == 0) {
+          // Accept both new and old field names for backwards compatibility
           positions_evaluated = json_object_get_int(val);
         } else if (strcmp(key, "score") == 0) {
           own_score = json_object_get_int(val);
@@ -381,7 +403,7 @@ char *json_api_serialize_game(game_state_t *game) {
 
     // AI-specific fields
     if (is_ai && move->positions_evaluated > 0) {
-      json_object_object_add(move_obj, "moves_searched",
+      json_object_object_add(move_obj, "moves_evaluated",
                              json_object_new_int(move->positions_evaluated));
     }
     if (is_ai && move->own_score != 0) {

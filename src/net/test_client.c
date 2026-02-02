@@ -16,10 +16,11 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "test_client_utils.h"
+
 #define DEFAULT_HOST "127.0.0.1"
 #define DEFAULT_PORT 9900
 #define BUFFER_SIZE 65536
-#define BOARD_SIZE 19
 
 //===============================================================================
 // HTTP CLIENT
@@ -156,10 +157,16 @@ static const char *get_winner(const char *json) {
   return "none";
 }
 
+// ANSI color codes
+#define COLOR_RED "\033[31m"
+#define COLOR_BLUE "\033[34m"
+#define COLOR_RESET "\033[0m"
+
 /**
- * Print the board state from JSON response.
+ * Print the board state from JSON response with colored pieces.
+ * X is displayed in red, O is displayed in blue.
  */
-static void print_board(const char *json) {
+static void print_board_with_padding(const char *json, int padding) {
   const char *board_state = strstr(json, "\"board_state\"");
   if (!board_state)
     return;
@@ -174,7 +181,16 @@ static void print_board(const char *json) {
   if (!arr_end)
     return;
 
-  printf("\nFinal board:\n");
+  if (padding < 0) {
+    padding = 0;
+  }
+
+  // Clear screen and move cursor to top-left before printing the board
+  printf("\033[2J\033[H");
+
+  for (int i = 0; i < padding; i++) {
+    printf("\n");
+  }
 
   // Parse each line in the array
   const char *p = arr_start + 1;
@@ -189,156 +205,23 @@ static void print_board(const char *json) {
     if (!quote_end || quote_end >= arr_end)
       break;
 
-    // Print the line content
-    printf("  %.*s\n", (int)(quote_end - quote_start - 1), quote_start + 1);
+    // Print padding
+    printf("%*s", padding, "");
+
+    // Print line content with colors for X and O
+    for (const char *c = quote_start + 1; c < quote_end; c++) {
+      if (*c == 'X') {
+        printf("%sX%s", COLOR_RED, COLOR_RESET);
+      } else if (*c == 'O') {
+        printf("%sO%s", COLOR_BLUE, COLOR_RESET);
+      } else {
+        putchar(*c);
+      }
+    }
+    printf("\n");
 
     p = quote_end + 1;
   }
-}
-
-/**
- * Check if a position is occupied on the board.
- * Simple parser - looks for the position in moves array.
- * Handles both compact [9, 9] and expanded JSON formats.
- */
-static int is_position_taken(const char *json, int x, int y) {
-  char pattern1[32], pattern2[64];
-
-  // Try compact format: [9, 9]
-  snprintf(pattern1, sizeof(pattern1), "[%d, %d]", x, y);
-  if (strstr(json, pattern1) != NULL) {
-    return 1;
-  }
-
-  // Try expanded format from json-c:
-  // [\n        9,\n        9\n      ]
-  snprintf(pattern2, sizeof(pattern2), "[\n        %d,\n        %d\n      ]", x,
-           y);
-  if (strstr(json, pattern2) != NULL) {
-    return 1;
-  }
-
-  return 0;
-}
-
-/**
- * Find a valid move for the human player.
- * Uses a simple strategy: play near the center or near existing moves.
- */
-static int find_human_move(const char *json, int board_sz, int *out_x,
-                           int *out_y) {
-  int center = board_sz / 2;
-
-  // Try center first
-  if (!is_position_taken(json, center, center)) {
-    *out_x = center;
-    *out_y = center;
-    return 1;
-  }
-
-  // Spiral out from center
-  for (int r = 1; r < board_sz; r++) {
-    for (int dx = -r; dx <= r; dx++) {
-      for (int dy = -r; dy <= r; dy++) {
-        if (abs(dx) != r && abs(dy) != r)
-          continue;
-
-        int x = center + dx;
-        int y = center + dy;
-
-        if (x >= 0 && x < board_sz && y >= 0 && y < board_sz) {
-          if (!is_position_taken(json, x, y)) {
-            *out_x = x;
-            *out_y = y;
-            return 1;
-          }
-        }
-      }
-    }
-  }
-
-  return 0;
-}
-
-/**
- * Add a human move to the JSON game state.
- * Returns new JSON string (caller must free) or NULL on error.
- */
-static char *add_human_move(const char *json, int x, int y) {
-  // Find the moves array end
-  const char *moves_end = strstr(json, "\"moves\"");
-  if (!moves_end)
-    return NULL;
-
-  // Find the closing bracket of moves array
-  const char *bracket = strrchr(moves_end, ']');
-  if (!bracket)
-    return NULL;
-
-  // Calculate position
-  size_t prefix_len = (size_t)(bracket - json);
-  size_t suffix_len = strlen(bracket);
-
-  // Check if moves array is empty
-  const char *moves_start = strchr(moves_end, '[');
-  int is_empty = 1;
-  if (moves_start) {
-    for (const char *p = moves_start + 1; p < bracket; p++) {
-      if (*p != ' ' && *p != '\n' && *p != '\r' && *p != '\t') {
-        is_empty = 0;
-        break;
-      }
-    }
-  }
-
-  // Build new move JSON
-  char move_json[128];
-  if (is_empty) {
-    snprintf(move_json, sizeof(move_json),
-             "\n    { \"X (human)\": [%d, %d], \"time_ms\": 0.000 }\n  ", x, y);
-  } else {
-    snprintf(move_json, sizeof(move_json),
-             ",\n    { \"X (human)\": [%d, %d], \"time_ms\": 0.000 }\n  ", x,
-             y);
-  }
-
-  // Build new JSON
-  size_t new_len = prefix_len + strlen(move_json) + suffix_len + 1;
-  char *new_json = malloc(new_len);
-  if (!new_json)
-    return NULL;
-
-  memcpy(new_json, json, prefix_len);
-  strcpy(new_json + prefix_len, move_json);
-  strcat(new_json, bracket);
-
-  return new_json;
-}
-
-//===============================================================================
-// INITIAL GAME STATE
-//===============================================================================
-
-static char *create_initial_game_state(int board_size, int depth, int radius) {
-  char *json = malloc(512);
-  if (!json)
-    return NULL;
-
-  snprintf(
-      json, 512,
-      "{\n"
-      "  \"X\": { \"player\": \"human\", \"time_ms\": 0.000 },\n"
-      "  \"O\": { \"player\": \"AI\", \"depth\": %d, \"time_ms\": 0.000 },\n"
-      "  \"board\": %d,\n"
-      "  \"radius\": %d,\n"
-      "  \"timeout\": \"none\",\n"
-      "  \"winner\": \"none\",\n"
-      "  \"board_state\": [],\n"
-      "  \"moves\": []\n"
-      "}\n",
-      depth, board_size, radius);
-
-  return json;
 }
 
 //===============================================================================
@@ -444,13 +327,16 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  // Disable output buffering for real-time display
+  setvbuf(stdout, NULL, _IONBF, 0);
+
   printf("Connecting to gomoku-http-daemon at %s:%d\n", host, port);
-  printf(
-      "Playing as X (human) against O (AI depth=%d, radius=%d, board=%d)\n\n",
-      depth, radius, board_size);
+  printf("Server plays both sides (depth=%d, radius=%d, board=%d)\n\n", depth,
+         radius, board_size);
 
   // Start with initial game state - human makes first move
-  char *game_state = create_initial_game_state(board_size, depth, radius);
+  char *game_state =
+      test_client_create_initial_game_state(board_size, depth, radius);
   if (!game_state) {
     fprintf(stderr, "Error: Memory allocation failed\n");
     return 1;
@@ -460,25 +346,6 @@ int main(int argc, char *argv[]) {
   const char *winner = "none";
 
   while (strcmp(winner, "none") == 0) {
-    move_num++;
-
-    // Find and add human move
-    int hx, hy;
-    if (!find_human_move(game_state, board_size, &hx, &hy)) {
-      printf("No valid moves available - game is a draw\n");
-      break;
-    }
-
-    char *with_move = add_human_move(game_state, hx, hy);
-    free(game_state);
-    if (!with_move) {
-      fprintf(stderr, "Error: Failed to add move\n");
-      return 1;
-    }
-    game_state = with_move;
-
-    printf("Move %d: X plays [%d, %d]\n", move_num, hx, hy);
-
     // Send to server
     char *response = http_post(host, port, "/gomoku/play", game_state);
     if (!response) {
@@ -490,57 +357,46 @@ int main(int argc, char *argv[]) {
     free(game_state);
     game_state = response;
 
+    // Always print the board with padding
+    print_board_with_padding(game_state, 3);
+
+    move_num++;
+    const char *label = NULL;
+    int x = 0, y = 0;
+    // Print move info below the board (with left padding to match)
+    if (test_client_get_last_move(game_state, &label, &x, &y)) {
+      printf("\n%*sMove %d: %s plays [%d, %d]\n", 3, "", move_num, label, x, y);
+    } else {
+      printf("\n%*sMove %d: (unable to parse last move)\n", 3, "", move_num);
+    }
+
     if (verbose) {
-      printf("Server response:\n%s\n", game_state);
+      // Additional debug info in verbose mode could go here
     }
 
-    // Check for winner after human move
-    winner = get_winner(game_state);
-    if (strcmp(winner, "none") != 0) {
-      break;
-    }
-
-    // Server made AI move, extract and display it
-    // Look for the last O move
-    const char *last_o = game_state;
-    const char *found;
-    while ((found = strstr(last_o + 1, "\"O (AI)\"")) != NULL) {
-      last_o = found;
-    }
-    if (last_o != game_state) {
-      // Parse position
-      const char *pos = strchr(last_o, '[');
-      if (pos) {
-        int ox, oy;
-        if (sscanf(pos, "[%d, %d]", &ox, &oy) == 2) {
-          move_num++;
-          printf("Move %d: O plays [%d, %d]\n", move_num, ox, oy);
-        }
-      }
-    }
-
-    // Check for winner after AI move
+    // Check for winner after move
     winner = get_winner(game_state);
   }
 
-  // Print the final board
-  print_board(game_state);
+  // Print the final board (already printed in loop, but print again for
+  // clarity)
+  print_board_with_padding(game_state, 3);
 
   printf("\n");
   if (strcmp(winner, "X") == 0) {
-    printf("Game over: X (human) wins!\n");
+    printf("%*sGame over: X wins!\n", 3, "");
   } else if (strcmp(winner, "O") == 0) {
-    printf("Game over: O (AI) wins!\n");
+    printf("%*sGame over: O wins!\n", 3, "");
   } else if (strcmp(winner, "draw") == 0) {
-    printf("Game over: Draw!\n");
+    printf("%*sGame over: Draw!\n", 3, "");
   }
 
-  printf("Total moves: %d\n", move_num);
+  printf("%*sTotal moves: %d\n", 3, "", move_num);
 
   // Save game to JSON file if specified
   if (json_file) {
     if (save_game_json(json_file, game_state)) {
-      printf("Game saved to: %s\n", json_file);
+      printf("%*sGame saved to: %s\n", 3, "", json_file);
     }
   }
 

@@ -11,6 +11,7 @@ extern "C" {
 #include "gomoku.h"
 #include "net/cli.h"
 #include "net/json_api.h"
+#include "net/test_client_utils.h"
 }
 
 // Helper function to read fixture file
@@ -64,6 +65,57 @@ TEST_F(DaemonJsonTest, ParseValidGameStart) {
   EXPECT_EQ(game->current_player, AI_CELL_NAUGHTS);
 
   cleanup_game(game);
+}
+
+//===============================================================================
+// TEST CLIENT UTIL TESTS
+//===============================================================================
+
+TEST_F(DaemonJsonTest, TestClientInitialGameStateSetsBothAI) {
+  char *json = test_client_create_initial_game_state(15, 3, 2);
+  ASSERT_NE(json, nullptr);
+
+  char error[256] = {0};
+  game_state_t *game = json_api_parse_game(json, error, sizeof(error));
+  ASSERT_NE(game, nullptr) << "Parse failed: " << error;
+
+  EXPECT_EQ(game->board_size, 15);
+  EXPECT_EQ(game->search_radius, 2);
+  EXPECT_EQ(game->move_history_count, 0);
+  EXPECT_EQ(game->player_type[0], PLAYER_TYPE_AI);
+  EXPECT_EQ(game->player_type[1], PLAYER_TYPE_AI);
+  EXPECT_EQ(game->depth_for_player[0], 3);
+  EXPECT_EQ(game->depth_for_player[1], 3);
+  EXPECT_EQ(game->current_player, AI_CELL_CROSSES);
+
+  cleanup_game(game);
+  free(json);
+}
+
+TEST_F(DaemonJsonTest, TestClientParsesLastMove) {
+  const char *json =
+      "{\n"
+      "  \"X\": { \"player\": \"AI\", \"depth\": 2, \"time_ms\": 0.000 },\n"
+      "  \"O\": { \"player\": \"AI\", \"depth\": 2, \"time_ms\": 0.000 },\n"
+      "  \"board\": 15,\n"
+      "  \"radius\": 2,\n"
+      "  \"timeout\": \"none\",\n"
+      "  \"winner\": \"none\",\n"
+      "  \"board_state\": [],\n"
+      "  \"moves\": [\n"
+      "    { \"X (AI)\": [7, 7], \"time_ms\": 0.000 },\n"
+      "    { \"O (AI)\": [7, 8], \"time_ms\": 0.000 },\n"
+      "    { \"X (AI)\": [8, 8], \"time_ms\": 0.000 }\n"
+      "  ]\n"
+      "}\n";
+
+  const char *label = nullptr;
+  int x = -1;
+  int y = -1;
+  EXPECT_EQ(test_client_get_last_move(json, &label, &x, &y), 1);
+  EXPECT_STREQ(label, "X (AI)");
+  EXPECT_EQ(x, 8);
+  EXPECT_EQ(y, 8);
 }
 
 // Test parsing valid game in mid-game state

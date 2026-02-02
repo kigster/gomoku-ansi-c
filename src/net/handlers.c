@@ -11,7 +11,7 @@
 #include "gomoku.h"
 #include "httpserver.h"
 #include "json_api.h"
-#include "log.h"
+#include "logger.h"
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -77,7 +77,7 @@ static void send_json_response(struct http_request_s *request, int status,
   // Log request completion
   double elapsed_ms =
       (get_current_time() - current_request.start_time) * 1000.0;
-  log_info("%s %s %d %.3fms", current_request.client_ip,
+  LOG_INFO("%s %s %d %.3fms", current_request.client_ip,
            current_request.path ? current_request.path : "/unknown", status,
            elapsed_ms);
 }
@@ -131,7 +131,7 @@ void handlers_init(void) {
   // Record start time for uptime calculation
   daemon_start_time = time(NULL);
 
-  log_info("Handlers initialized");
+  LOG_INFO("Handlers initialized");
 }
 
 //===============================================================================
@@ -156,7 +156,7 @@ void handle_request(struct http_request_s *request) {
   path_buf[path_len] = '\0';
   current_request.path = path_buf;
 
-  log_debug("Request: %.*s %.*s from %s", (int)method.len, method.buf,
+  LOG_DEBUG("Request: %.*s %.*s from %s", (int)method.len, method.buf,
             (int)target.len, target.buf, current_request.client_ip);
 
   // Handle CORS preflight
@@ -173,7 +173,7 @@ void handle_request(struct http_request_s *request) {
     // Log CORS preflight
     double elapsed_ms =
         (get_current_time() - current_request.start_time) * 1000.0;
-    log_info("%s %s 204 %.3fms", current_request.client_ip, path_buf,
+    LOG_INFO("%s %s 204 %.3fms", current_request.client_ip, path_buf,
              elapsed_ms);
     return;
   }
@@ -204,7 +204,7 @@ void handle_health(struct http_request_s *request) {
   char *response_json = json_api_health_response(daemon_start_time);
 
   if (response_json) {
-    log_debug("Health check OK");
+    LOG_DEBUG("Health check OK");
     send_json_response(request, 200, response_json);
     free(response_json);
   } else {
@@ -217,7 +217,7 @@ void handle_play(struct http_request_s *request) {
   struct http_string_s body = http_request_body(request);
 
   if (body.len == 0) {
-    log_warn("Empty request body");
+    LOG_WARN("Empty request body");
     handle_bad_request(request, "Request body is required");
     return;
   }
@@ -231,7 +231,7 @@ void handle_play(struct http_request_s *request) {
   memcpy(body_str, body.buf, body.len);
   body_str[body.len] = '\0';
 
-  log_debug("Received game state: %zu bytes", body.len);
+  LOG_DEBUG("Received game state: %zu bytes", body.len);
 
   // Parse game state
   char error_msg[256] = {0};
@@ -240,14 +240,14 @@ void handle_play(struct http_request_s *request) {
   free(body_str);
 
   if (!game) {
-    log_warn("Failed to parse game: %s", error_msg);
+    LOG_WARN("Failed to parse game: %s", error_msg);
     handle_bad_request(request, error_msg);
     return;
   }
 
   // Check if game already has a winner
   if (json_api_has_winner(game)) {
-    log_debug("Game already finished, returning unchanged");
+    LOG_DEBUG("Game already finished, returning unchanged");
     char *response_json = json_api_serialize_game(game);
     cleanup_game(game);
 
@@ -260,13 +260,24 @@ void handle_play(struct http_request_s *request) {
     return;
   }
 
-  // Determine which player the AI should play as
-  int ai_player = json_api_determine_ai_player(game);
-  game->current_player = ai_player;
+  // Ensure the next player to move is AI
+  int ai_player = game->current_player;
+  int player_index = (ai_player == AI_CELL_CROSSES) ? 0 : 1;
+  if (game->player_type[player_index] != PLAYER_TYPE_AI) {
+    cleanup_game(game);
+    handle_bad_request(
+        request,
+        "Next player is human; server only accepts AI to-move positions");
+    return;
+  }
 
-  log_debug("AI playing as %s, move %d",
+  // Set player-specific depth for AI search (same pattern as main.c)
+  int saved_depth = game->max_depth;
+  game->max_depth = game->depth_for_player[player_index];
+
+  LOG_DEBUG("AI playing as %s, move %d (depth=%d, radius=%d)",
             (ai_player == AI_CELL_CROSSES) ? "X" : "O",
-            game->move_history_count + 1);
+            game->move_history_count + 1, game->max_depth, game->search_radius);
 
   // Start timing
   double start_time = get_current_time();
@@ -275,42 +286,55 @@ void handle_play(struct http_request_s *request) {
 
   // Find best move
   int best_x = -1, best_y = -1;
+  const char *move_type = "minimax";
 
   if (game->move_history_count == 0) {
     // First move of game - play center
     best_x = game->board_size / 2;
     best_y = game->board_size / 2;
+    move_type = "center";
   } else if (game->move_history_count == 1) {
     // Second move - play adjacent to first
     find_first_ai_move(game, &best_x, &best_y);
+    move_type = "adjacent";
   } else {
     // Use minimax
     find_best_ai_move(game, &best_x, &best_y);
   }
 
+  // Restore original max_depth
+  game->max_depth = saved_depth;
+
   double elapsed_time = get_current_time() - start_time;
 
   // Make the move
   if (best_x < 0 || best_y < 0) {
-    log_error("AI failed to find valid move");
+    LOG_ERROR("AI failed to find valid move after %.3fs", elapsed_time);
     cleanup_game(game);
     handle_internal_error(request, "AI failed to find a valid move");
     return;
   }
 
-  // Get move scores for logging
-  int own_score = evaluate_position(game->board, game->board_size, ai_player);
-  int opp_score = evaluate_position(game->board, game->board_size, -ai_player);
+  // Get threat scores for the specific move position
+  // own_score: what threat does this move create for AI?
+  // opp_score: what threat would opponent have had by playing here?
+  int own_score = evaluate_threat_fast(game->board, best_x, best_y, ai_player,
+                                       game->board_size);
+  int opp_score = evaluate_threat_fast(game->board, best_x, best_y, -ai_player,
+                                       game->board_size);
+  int moves_evaluated = game->last_ai_moves_evaluated;
 
-  if (!make_move(game, best_x, best_y, ai_player, elapsed_time, 0, own_score,
-                 opp_score)) {
-    log_error("Failed to make move at [%d, %d]", best_x, best_y);
+  if (!make_move(game, best_x, best_y, ai_player, elapsed_time, moves_evaluated,
+                 own_score, opp_score)) {
+    LOG_ERROR("Failed to make move at [%d, %d]", best_x, best_y);
     cleanup_game(game);
     handle_internal_error(request, "Failed to apply AI move");
     return;
   }
 
-  log_debug("AI move: [%d, %d] in %.3fs", best_x, best_y, elapsed_time);
+  LOG_DEBUG("AI move [%d,%d] via %s: %.3fs, %d evals, score=%d, opp=%d", best_x,
+            best_y, move_type, elapsed_time, moves_evaluated, own_score,
+            opp_score);
 
   // Check for winner after move
   check_game_state(game);
@@ -327,8 +351,16 @@ void handle_play(struct http_request_s *request) {
     } else if (game->game_state == GAME_AI_WIN) {
       winner = "O";
     }
-    log_info("Game over: %s wins", winner);
+    LOG_INFO("Game over: %s wins after %d moves", winner,
+             game->move_history_count);
   }
+
+  // Log move details at INFO level
+  int player_depth = game->depth_for_player[player_index];
+  LOG_INFO("Move %d: %s [%d,%d] depth=%d radius=%d evals=%d time=%.3fs",
+           game->move_history_count, (ai_player == AI_CELL_CROSSES) ? "X" : "O",
+           best_x, best_y, player_depth, game->search_radius, moves_evaluated,
+           elapsed_time);
 
   // Serialize and return
   char *response_json = json_api_serialize_game(game);
@@ -343,7 +375,7 @@ void handle_play(struct http_request_s *request) {
 }
 
 void handle_not_found(struct http_request_s *request) {
-  log_debug("Not found");
+  LOG_DEBUG("Not found");
   char *error_json = json_api_error_response("Not found");
   if (error_json) {
     send_json_response(request, 404, error_json);
@@ -354,7 +386,7 @@ void handle_not_found(struct http_request_s *request) {
 }
 
 void handle_method_not_allowed(struct http_request_s *request) {
-  log_debug("Method not allowed");
+  LOG_DEBUG("Method not allowed");
   char *error_json = json_api_error_response("Method not allowed");
   if (error_json) {
     send_json_response(request, 405, error_json);
@@ -366,7 +398,7 @@ void handle_method_not_allowed(struct http_request_s *request) {
 
 void handle_bad_request(struct http_request_s *request,
                         const char *error_message) {
-  log_warn("Bad request: %s", error_message);
+  LOG_WARN("Bad request: %s", error_message);
   char *error_json = json_api_error_response(error_message);
   if (error_json) {
     send_json_response(request, 400, error_json);
@@ -378,7 +410,7 @@ void handle_bad_request(struct http_request_s *request,
 
 void handle_internal_error(struct http_request_s *request,
                            const char *error_message) {
-  log_error("Internal error: %s", error_message);
+  LOG_ERROR("Internal error: %s", error_message);
   char *error_json = json_api_error_response(error_message);
   if (error_json) {
     send_json_response(request, 500, error_json);

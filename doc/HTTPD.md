@@ -4,22 +4,36 @@ A stateless HTTP server that provides a REST API for playing Gomoku games. The d
 
 ## Table of Contents
 
-- [Building](#building)
-- [HTTP Daemon](#http-daemon)
-  - [Usage](#usage)
-  - [CLI Options](#cli-options)
-  - [Examples](#daemon-examples)
-- [HTTP API](#http-api)
-  - [POST /gomoku/play](#post-gomokuplay)
-  - [GET /health](#get-health)
-  - [Error Responses](#error-responses)
-- [JSON Game Format](#json-game-format)
-- [Testing with curl](#testing-with-curl)
-- [Test Client](#test-client)
-  - [Usage](#test-client-usage)
-  - [CLI Options](#test-client-options)
-  - [Examples](#test-client-examples)
-- [Logging](#logging)
+- [Gomoku HTTP Daemon](#gomoku-http-daemon)
+  - [Table of Contents](#table-of-contents)
+  - [Building](#building)
+  - [HTTP Daemon](#http-daemon)
+    - [Usage](#usage)
+    - [CLI Options](#cli-options)
+    - [Daemon Examples](#daemon-examples)
+  - [HTTP API](#http-api)
+    - [POST /gomoku/play](#post-gomokuplay)
+    - [GET /health](#get-health)
+    - [Error Responses](#error-responses)
+  - [JSON Game Format](#json-game-format)
+    - [Field Descriptions](#field-descriptions)
+    - [Move Format](#move-format)
+  - [Testing with curl](#testing-with-curl)
+    - [Start a New Game](#start-a-new-game)
+    - [Continue a Game](#continue-a-game)
+    - [Health Check](#health-check)
+    - [Test Different AI Depths](#test-different-ai-depths)
+  - [Test Client](#test-client)
+    - [Test Client Usage](#test-client-usage)
+    - [Test Client Options](#test-client-options)
+    - [Test Client Examples](#test-client-examples)
+    - [Sample Output](#sample-output)
+  - [Logging](#logging)
+    - [Log Format](#log-format)
+    - [Log Levels](#log-levels)
+    - [Signal Handling](#signal-handling)
+  - [Architecture](#architecture)
+  - [Stateful vs Stateless](#stateful-vs-stateless)
 
 ---
 
@@ -29,8 +43,8 @@ Build both the daemon and test client:
 
 ```bash
 make all                    # Build gomoku and gomoku-httpd
-make gomoku-httpd     # Build only the HTTP daemon
-make test-gomoku-http       # Build the test client
+make gomoku-httpd           # Build only the HTTP daemon
+make test-client            # Build the test client (gomoku-http-client)
 ```
 
 Clean build artifacts:
@@ -98,15 +112,18 @@ kill $(pgrep gomoku-httpd)
 Make an AI move in a Gomoku game.
 
 **Request:**
+
 - Method: `POST`
 - Content-Type: `application/json`
 - Body: JSON game state (see [JSON Game Format](#json-game-format))
 
 **Response:**
+
 - Content-Type: `application/json`
 - Body: Updated JSON game state with AI's move appended
 
 **Behavior:**
+
 1. Parses the JSON game state
 2. Caps AI depth to 6 and radius to 4 (for performance)
 3. If game already has a winner, returns unchanged
@@ -121,9 +138,11 @@ Make an AI move in a Gomoku game.
 Health check endpoint.
 
 **Request:**
+
 - Method: `GET`
 
 **Response:**
+
 ```json
 {
   "status": "ok",
@@ -142,6 +161,7 @@ Health check endpoint.
 | 500 | Internal Server Error - AI failed to compute move |
 
 Error response format:
+
 ```json
 {
   "error": "Error message describing the problem"
@@ -266,6 +286,7 @@ curl http://127.0.0.1:3000/health
 ```
 
 Output:
+
 ```json
 {"status":"ok","version":"1.0.0","uptime":"5m 30s"}
 ```
@@ -273,6 +294,7 @@ Output:
 ### Test Different AI Depths
 
 Depth 1 (fastest, weakest):
+
 ```bash
 curl -X POST http://127.0.0.1:3000/gomoku/play \
   -H "Content-Type: application/json" \
@@ -280,6 +302,7 @@ curl -X POST http://127.0.0.1:3000/gomoku/play \
 ```
 
 Depth 4 (slowest, strongest):
+
 ```bash
 curl -X POST http://127.0.0.1:3000/gomoku/play \
   -H "Content-Type: application/json" \
@@ -295,7 +318,7 @@ An automated test client that plays complete games against the HTTP daemon.
 ### Test Client Usage
 
 ```
-test-gomoku-http [options]
+gomoku-http-client [options]
 ```
 
 The client plays as X (human) using a simple spiral strategy while the server's AI plays as O.
@@ -305,7 +328,7 @@ The client plays as X (human) using a simple spiral strategy while the server's 
 | Flag | Long Form | Description | Default |
 |------|-----------|-------------|---------|
 | `-h` | `--host` | Server host | 127.0.0.1 |
-| `-p` | `--port` | Server port | 3000 |
+| `-p` | `--port` | Server port | 9900 |
 | `-d` | `--depth` | AI search depth (1-6) | 2 |
 | `-r` | `--radius` | AI search radius (1-4) | 2 |
 | `-b` | `--board` | Board size (15 or 19) | 15 |
@@ -315,69 +338,72 @@ The client plays as X (human) using a simple spiral strategy while the server's 
 
 ### Test Client Examples
 
-Play a game with default settings:
+Play a game with default settings (connects to 127.0.0.1:9900):
 
 ```bash
-./test-gomoku-http -h 127.0.0.1 -p 3000
+./gomoku-http-client
+```
+
+Connect to a server on a different port:
+
+```bash
+./gomoku-http-client -p 3000
 ```
 
 Play with stronger AI (depth 4):
 
 ```bash
-./test-gomoku-http -p 3000 -d 4 -r 3
+./gomoku-http-client -d 4 -r 3
 ```
 
 Play on 19x19 board and save result:
 
 ```bash
-./test-gomoku-http -p 3000 -b 19 -j game_result.json
+./gomoku-http-client -b 19 -j game_result.json
 ```
 
 Play with verbose output to see full game state:
 
 ```bash
-./test-gomoku-http -p 3000 -v
+./gomoku-http-client -v
 ```
 
 ### Sample Output
 
-```
-Connecting to gomoku-httpd at 127.0.0.1:3000
+```text
+Connecting to gomoku-http-daemon at 127.0.0.1:9900
 Playing as X (human) against O (AI depth=2, radius=2, board=15)
 
 Move 1: X plays [7, 7]
 Move 2: O plays [8, 8]
 Move 3: X plays [6, 6]
-Move 4: O plays [7, 9]
+Move 4: O plays [6, 8]
 Move 5: X plays [6, 7]
-Move 6: O plays [6, 8]
-Move 7: X plays [7, 6]
-Move 8: O plays [5, 7]
-Move 9: X plays [7, 8]
-Move 10: O plays [5, 6]
-Move 11: X plays [8, 6]
-Move 12: O plays [4, 6]
-Move 13: X plays [8, 7]
+Move 6: O plays [5, 6]
+...
+Move 29: X plays [3, 10]
+Move 30: O plays [12, 8]
+Move 31: X plays [2, 11]
 
 Final board:
-  . . . . . . . . . . . . . . .
-  . . . . . . . . . . . . . . .
-  . . . . . . . . . . . . . . .
-  . . . . . O . . . . . . . . .
-  . . . . . . O . . . . . . . .
-  . . . . . . O O . . . . . . .
-  . . . . . . X X O . . . . . .
-  . . . . . . X X X O . . . . .
-  . . . . . . X X O . . . . . .
-  . . . . . . . . . . . . . . .
-  . . . . . . . . . . . . . . .
-  . . . . . . . . . . . . . . .
-  . . . . . . . . . . . . . . .
-  . . . . . . . . . . . . . . .
-  . . . . . . . . . . . . . . .
+. . . . . . . . . . . . . . .
+. . . . . . . . . . . . . . .
+. . . . . . . . . . . X . . .
+. . . . . . . . . . X . . . .
+. . . . . O . . . X . . . . .
+. . . . . . O . X . . . . . .
+. . . . . . X X O O . . . . .
+. . . . . . X X X O . . . . .
+. . . . . . X X O O . O . . .
+. . . . . . X . O . . . . . .
+. . . . . . X . O . . . . . .
+. . . . . . . . O . . . . . .
+. . . . . . . . O . . . . . .
+. . . . . . . . . . . . . . .
+. . . . . . . . . . . . . . .
 
 Game over: O (AI) wins!
-Total moves: 13
+Total moves: 31
 Game saved to: game_result.json
 ```
 
@@ -423,25 +449,34 @@ The daemon logs each HTTP request at INFO level with:
 
 ## Architecture
 
-```
-Client                    Daemon
-  |                         |
-  |  POST /gomoku/play      |
-  |  {game state JSON}      |
-  |------------------------>|
-  |                         |
-  |                    Parse JSON
-  |                    Restore game
-  |                    Find AI move
-  |                    Update state
-  |                    Serialize JSON
-  |                         |
-  |  {updated game JSON}    |
-  |<------------------------|
-  |                         |
+![uml](img/gomoku-uml-sequence.png)
+
+<details>
+<summary>Click to see Mermaid Source (or auto-rendering):</summary>
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Daemon
+
+    Client->>Daemon: POST /gomoku/play\n{game state JSON}
+    activate Daemon
+
+    Daemon->>Daemon: Parse JSON
+    Daemon->>Daemon: Restore game
+    Daemon->>Daemon: Find AI move
+    Daemon->>Daemon: Update state
+    Daemon->>Daemon: Serialize JSON
+
+    Daemon-->>Client: {updated game JSON}
+    deactivate Daemon
 ```
 
-The daemon is completely stateless. All game state is passed in each request and returned in each response. This allows:
+</details>
+
+## Stateful vs Stateless
+
+The Gomoku daemon is completely stateless. All of the game state is passed in each request and returned in each response with one extra move made. This allows:
 
 - Horizontal scaling (multiple daemon instances)
 - Client-side game persistence

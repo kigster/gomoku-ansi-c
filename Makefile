@@ -35,9 +35,7 @@ OBJECTS          	= $(SOURCES:.c=.o)
 # Daemon configuration
 DAEMON_TARGET    	= $(DAEMON_PACKAGE)
 DAEMON_CORE      	= src/gomoku.o src/board.o src/game.o src/ai.o
-DAEMON_NET       	= src/net/main.o src/net/cli.o src/net/handlers.o src/net/json_api.o
-LOGC_DIR         	= lib/log.c
-LOGC_SRC         	= $(LOGC_DIR)/src/log.c
+DAEMON_NET       	= src/net/main.o src/net/cli.o src/net/handlers.o src/net/json_api.o src/net/logger.o
 HTTPSERVER_DIR   	= lib/httpserver.h
 # Platform-specific flags for httpserver.h
 ifeq ($(OS),darwin)
@@ -45,11 +43,11 @@ HTTPSERVER_PLATFORM 	= -DKQUEUE
 else
 HTTPSERVER_PLATFORM	= -DEPOLL
 endif
-DAEMON_CFLAGS    	= $(CFLAGS) -I$(HTTPSERVER_DIR) -I$(HTTPSERVER_DIR)/src -I$(LOGC_DIR)/src $(HTTPSERVER_PLATFORM)
+DAEMON_CFLAGS    	= $(CFLAGS) -I$(HTTPSERVER_DIR) -I$(HTTPSERVER_DIR)/src $(HTTPSERVER_PLATFORM)
 
 # Test HTTP client
 DAEMON_CLIENT_TARGET 	= $(DAEMON_CLIENT)
-TEST_HTTP_SRC    	= src/net/test_client.c
+TEST_HTTP_SRC    	= src/net/test_client.c src/net/test_client_utils.c
 
 # Test configuration
 TEST_TARGET     	= test_gomoku
@@ -60,8 +58,7 @@ GTEST_MAIN_LIB  	= tests/googletest/build/lib/libgtest_main.a
 
 # Daemon test configuration
 DAEMON_TEST_TARGET = test_daemon
-DAEMON_TEST_CXXFLAGS = $(CXXFLAGS) -Ilib/log.c/src
-LOGC_OBJ = lib/log.c/src/log.o
+DAEMON_TEST_CXXFLAGS = $(CXXFLAGS)
 
 # CMake build directory
 BUILD_DIR = build
@@ -98,11 +95,8 @@ $(TARGET): $(JSONC_LIB) $(OBJECTS) ## Build the terminal game
 # Daemon targets (must come before generic src/%.o rule)
 submodules-daemon: submodules ## Initialize daemon submodules (depends on submodules)
 
-$(LOGC_OBJ): submodules-daemon
-		$(CC) $(CFLAGS) -I$(LOGC_DIR)/src -c $(LOGC_SRC) -o $(LOGC_OBJ)
-
-gomoku-httpd: submodules-daemon $(JSONC_LIB) $(DAEMON_CORE) $(DAEMON_NET) $(LOGC_OBJ) ## Build the HTTP daemon
-		$(CC) $(DAEMON_CORE) $(DAEMON_NET) $(LOGC_OBJ) $(LDFLAGS) -o $(DAEMON_TARGET)
+gomoku-httpd: submodules-daemon $(JSONC_LIB) $(DAEMON_CORE) $(DAEMON_NET) ## Build the HTTP daemon
+		$(CC) $(DAEMON_CORE) $(DAEMON_NET) $(LDFLAGS) -lpthread -o $(DAEMON_TARGET)
 
 src/net/%.o: src/net/%.c | $(JSONC_LIB) submodules-daemon
 		$(CC) $(DAEMON_CFLAGS) -c $< -o $@
@@ -136,8 +130,8 @@ test: 		$(TEST_TARGET) $(DAEMON_TEST_TARGET) $(TARGET) ## Run all unit tests (ga
 tests: 		test
 
 # Daemon tests
-$(DAEMON_TEST_TARGET): googletest submodules-daemon $(JSONC_LIB) tests/daemon_test.o $(DAEMON_CORE) src/net/cli.o src/net/json_api.o $(LOGC_OBJ)
-		$(CXX) tests/daemon_test.o $(DAEMON_CORE) src/net/cli.o src/net/json_api.o $(LOGC_OBJ) $(GTEST_LIB) $(GTEST_MAIN_LIB) $(JSONC_LIB) -pthread -o $(DAEMON_TEST_TARGET)
+$(DAEMON_TEST_TARGET): googletest submodules-daemon $(JSONC_LIB) tests/daemon_test.o $(DAEMON_CORE) src/net/cli.o src/net/json_api.o src/net/test_client_utils.o src/net/logger.o
+		$(CXX) tests/daemon_test.o $(DAEMON_CORE) src/net/cli.o src/net/json_api.o src/net/test_client_utils.o src/net/logger.o $(GTEST_LIB) $(GTEST_MAIN_LIB) $(JSONC_LIB) -pthread -o $(DAEMON_TEST_TARGET)
 
 tests/daemon_test.o: googletest submodules-daemon tests/daemon_test.cpp src/net/cli.h src/net/json_api.h
 		$(CXX) $(DAEMON_TEST_CXXFLAGS) -c tests/daemon_test.cpp -o tests/daemon_test.o
@@ -145,10 +139,12 @@ tests/daemon_test.o: googletest submodules-daemon tests/daemon_test.cpp src/net/
 test-daemon: 	$(DAEMON_TEST_TARGET) ## Run daemon unit tests
 		GREP_COLOR=32 ./$(DAEMON_TEST_TARGET) | grep --color=always -E 'Daemon[A-Za-z]*Test\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
 
-clean:  	## Clean up all the intermediate objects
+clean:  	cmake-clean ## Clean up all the intermediate objects
 		rm -f $(TARGET) $(TEST_TARGET) $(OBJECTS) tests/gomoku_test.o
-		rm -f $(DAEMON_TARGET) $(DAEMON_TEST_TARGET) $(DAEMON_NET) tests/daemon_test.o $(LOGC_OBJ)
+		rm -f $(DAEMON_TARGET) $(DAEMON_TEST_TARGET) $(DAEMON_NET) src/net/test_client_utils.o tests/daemon_test.o
 		rm -f $(DAEMON_CLIENT_TARGET)
+		rm -rf tests/googletest
+		find . -name '*.a' -type f -delete || true
 
 tag:    	## Tag the current git version with the tag equal to the VERSION constant
 		git tag $(TAG) -f
@@ -164,6 +160,10 @@ cmake-build: 	## Build using CMake (creates build directory and runs cmake ..)
 
 cmake-clean: 	## Clean CMake build directory
 		rm -rf $(BUILD_DIR)
+		find . -name CMakeCache.txt -delete || true
+		find . -name CMakeFiles -type d -exec rm -rf {} \; || true
+		find . -name cmake_install.cmake -type d -exec rm -rf {} \; || true
+		true
 
 cmake-test: 	cmake-build ## Run tests using CMake
 		cd $(BUILD_DIR) && ctest --verbose
@@ -181,3 +181,9 @@ uninstall: 	## Uninstall the binary from the prefix
 format: 	## Format all source and test files using clang-format
 		find src -maxdepth 2 -name '*.c**'   | xargs clang-format -i
 		find tests -maxdepth 1 -name '*.c**' | xargs clang-format -i
+
+docker-build: 	## Builds the project docker container with the gomoku-httpd
+		docker build -t gomoku-httpd:latest .
+
+docker-run: 	## Runs the gomoku-httpd docker container
+		docker run -p 8787:8787 gomoku-httpd:latest

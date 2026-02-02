@@ -4,6 +4,6 @@
 [submodule "lib/httpserver.h"]
 	path = lib/httpserver.h
 	url = https://github.com/jeremycw/httpserver.h
-[submodule "lib/log.c"]
-	path = lib/log.c
-	url = https://github.com/rxi/log.c
+[submodule "lib/c-logger"]
+	path = lib/c-logger
+	url = https://github.com/yksz/c-logger.git

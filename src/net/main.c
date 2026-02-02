@@ -6,7 +6,7 @@
 #include "cli.h"
 #include "handlers.h"
 #include "httpserver.h"
-#include "log.h"
+#include "logger.h"
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -24,7 +24,6 @@
 //===============================================================================
 
 static volatile sig_atomic_t running = 1;
-static FILE *log_file_handle = NULL;
 
 //===============================================================================
 // PORT AVAILABILITY CHECK
@@ -81,10 +80,10 @@ static int check_port_available(const char *host, int port) {
 
 static void signal_handler(int signum) {
   if (signum == SIGTERM || signum == SIGINT) {
-    log_info("Received signal %d, shutting down...", signum);
+    LOG_INFO("Received signal %d, shutting down...", signum);
     running = 0;
   } else if (signum == SIGHUP) {
-    log_info("Received SIGHUP, reopening log file...");
+    LOG_INFO("Received SIGHUP, reopening log file...");
     // Log file reopen would be handled here if needed
   }
 }
@@ -97,13 +96,13 @@ static void setup_signal_handlers(void) {
   sa.sa_flags = 0;
 
   if (sigaction(SIGTERM, &sa, NULL) == -1) {
-    log_warn("Failed to set SIGTERM handler: %s", strerror(errno));
+    LOG_WARN("Failed to set SIGTERM handler: %s", strerror(errno));
   }
   if (sigaction(SIGINT, &sa, NULL) == -1) {
-    log_warn("Failed to set SIGINT handler: %s", strerror(errno));
+    LOG_WARN("Failed to set SIGINT handler: %s", strerror(errno));
   }
   if (sigaction(SIGHUP, &sa, NULL) == -1) {
-    log_warn("Failed to set SIGHUP handler: %s", strerror(errno));
+    LOG_WARN("Failed to set SIGHUP handler: %s", strerror(errno));
   }
 
   // Ignore SIGPIPE to prevent crashes on broken connections
@@ -171,33 +170,51 @@ static int daemonize(void) {
 // LOGGING SETUP
 //===============================================================================
 
+/**
+ * Convert daemon log level to c-logger LogLevel.
+ */
+static LogLevel convert_log_level(int daemon_level) {
+  // daemon_config uses LOG_TRACE=0, LOG_DEBUG=1, etc. (same as c-logger)
+  switch (daemon_level) {
+  case 0:
+    return LogLevel_TRACE;
+  case 1:
+    return LogLevel_DEBUG;
+  case 2:
+    return LogLevel_INFO;
+  case 3:
+    return LogLevel_WARN;
+  case 4:
+    return LogLevel_ERROR;
+  case 5:
+    return LogLevel_FATAL;
+  default:
+    return LogLevel_INFO;
+  }
+}
+
 static int setup_logging(const daemon_config_t *config) {
   // Set log level
-  log_set_level(config->log_level);
+  logger_setLevel(convert_log_level(config->log_level));
 
-  // If log file specified, open it
+  // If log file specified, use file logger
   if (strlen(config->log_file) > 0) {
-    log_file_handle = fopen(config->log_file, "a");
-    if (!log_file_handle) {
-      fprintf(stderr, "Error: Cannot open log file '%s': %s\n",
-              config->log_file, strerror(errno));
+    // Use 10MB max file size and 5 backup files
+    if (!logger_initFileLogger(config->log_file, 10 * 1024 * 1024, 5)) {
+      fprintf(stderr, "Error: Cannot open log file '%s'\n", config->log_file);
       return -1;
     }
-
-    // Disable stdout logging and add file logging
-    log_set_quiet(1);
-    log_add_fp(log_file_handle, config->log_level);
+    // Auto-flush every 100ms to ensure logs are written promptly
+    logger_autoFlush(100);
+  } else {
+    // Log to stderr
+    logger_initConsoleLogger(stderr);
   }
 
   return 0;
 }
 
-static void cleanup_logging(void) {
-  if (log_file_handle) {
-    fclose(log_file_handle);
-    log_file_handle = NULL;
-  }
-}
+static void cleanup_logging(void) { logger_exitFileLogger(); }
 
 //===============================================================================
 // MAIN
@@ -241,7 +258,7 @@ int main(int argc, char *argv[]) {
   // Check if port is available before trying to bind
   int port_check = check_port_available(config.bind_host, config.bind_port);
   if (port_check == 0) {
-    log_fatal("Port %d is already in use. Another process may be listening on "
+    LOG_FATAL("Port %d is already in use. Another process may be listening on "
               "this port.",
               config.bind_port);
     fprintf(stderr,
@@ -251,7 +268,7 @@ int main(int argc, char *argv[]) {
     cleanup_logging();
     return 1;
   } else if (port_check < 0 && errno != 0) {
-    log_fatal("Failed to check port availability: %s", strerror(errno));
+    LOG_FATAL("Failed to check port availability: %s", strerror(errno));
     fprintf(stderr, "Error: Failed to check port availability: %s\n",
             strerror(errno));
     cleanup_logging();
@@ -262,20 +279,20 @@ int main(int argc, char *argv[]) {
   struct http_server_s *server =
       http_server_init(config.bind_port, handle_request);
   if (!server) {
-    log_fatal("Failed to initialize HTTP server on port %d", config.bind_port);
+    LOG_FATAL("Failed to initialize HTTP server on port %d", config.bind_port);
     cleanup_logging();
     return 1;
   }
 
-  log_info("gomoku-httpd v%s starting", DAEMON_VERSION);
+  LOG_INFO("gomoku-httpd v%s starting", DAEMON_VERSION);
 
-  // Start listening
+  // Start listening using polling mode for graceful shutdown support
   int result;
   if (strlen(config.bind_host) > 0 &&
       strcmp(config.bind_host, "0.0.0.0") != 0) {
-    result = http_server_listen_addr(server, config.bind_host);
+    result = http_server_listen_addr_poll(server, config.bind_host);
   } else {
-    result = http_server_listen(server);
+    result = http_server_listen_poll(server);
   }
 
   if (result != 0) {
@@ -300,7 +317,7 @@ int main(int argc, char *argv[]) {
       break;
     }
 
-    log_fatal("Failed to bind to %s:%d: %s", config.bind_host, config.bind_port,
+    LOG_FATAL("Failed to bind to %s:%d: %s", config.bind_host, config.bind_port,
               error_msg);
     fprintf(stderr, "Error: Failed to bind to %s:%d: %s\n", config.bind_host,
             config.bind_port, error_msg);
@@ -308,13 +325,18 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  log_info("Listening on %s:%d", config.bind_host, config.bind_port);
+  LOG_INFO("Listening on %s:%d", config.bind_host, config.bind_port);
 
-  // Note: http_server_listen blocks, so we won't reach here during
-  // normal operation. The server uses its own event loop.
-  // For graceful shutdown support, we would need to use the polling API.
+  // Event loop with graceful shutdown support
+  while (running) {
+    int poll_result = http_server_poll(server);
+    if (poll_result < 0) {
+      // Error or shutdown
+      break;
+    }
+  }
 
-  log_info("Server stopped");
+  LOG_INFO("Server stopped");
   cleanup_logging();
 
   return 0;

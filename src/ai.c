@@ -700,7 +700,7 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
 
   // Clear previous AI status message and show thinking message
   strcpy(game->ai_status_message, "");
-  if (game->config.skip_welcome) {
+  if (game->config.skip_welcome && !game->config.headless) {
     if (game->move_timeout > 0) {
       printf("%s%c%s It's AI's Turn... Please wait... (timeout: %ds)\n",
              ai_color, ai_symbol, COLOR_RESET, game->move_timeout);
@@ -796,43 +796,107 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
   // moves! An open three becomes an open four (unstoppable win) if not blocked.
   // Even if we have a forcing move (closed four), opponent can block it and
   // then make their open four on the next turn.
+  //
+  // However, if WE have an open three or open four, we have "initiative" -
+  // opponent must respond to us. In that case, we can play offense instead.
   int open_three_blocks_x[361];
   int open_three_blocks_y[361];
+  int open_three_block_threat[361]; // Track the opponent's threat level
   int open_three_block_count = 0;
+  int max_open_three_threat = 0;
 
   for (int i = 0; i < move_count; i++) {
     int opp_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
                                           opponent, game->board_size);
-    // Open three is threat 1500, we want to block threats that could become
-    // open fours Threshold: 1000+ catches open threes and similar dangerous
-    // patterns
+    // Open three is threat 1500, closed four is 10000
+    // We want to block threats that could become open fours
+    // Threshold: 1000+ catches open threes and similar dangerous patterns
     if (opp_threat >= 1000 && opp_threat < 40000) {
       open_three_blocks_x[open_three_block_count] = moves[i].x;
       open_three_blocks_y[open_three_block_count] = moves[i].y;
+      open_three_block_threat[open_three_block_count] = opp_threat;
+      if (opp_threat > max_open_three_threat) {
+        max_open_three_threat = opp_threat;
+      }
       open_three_block_count++;
     }
   }
 
   if (open_three_block_count > 0) {
-    // Block the open three - pick the one that also gives us the best position
-    int best_block_idx = 0;
-    int best_block_own_threat = 0;
-    for (int i = 0; i < open_three_block_count; i++) {
-      int own_threat = evaluate_threat_fast(game->board, open_three_blocks_x[i],
-                                            open_three_blocks_y[i], ai_player,
-                                            game->board_size);
-      if (own_threat > best_block_own_threat) {
-        best_block_own_threat = own_threat;
-        best_block_idx = i;
+    // Check if we have initiative - a SEQUENCE of forcing moves
+    // Initiative means: we can keep making threats that opponent MUST answer
+    //
+    // - Open four (50000): unstoppable, we win
+    // - Compound threat (40000+): multiple threats, opponent can only block one
+    // - Multiple fours: we play four, they block, we play another four...
+    // - Single four with no follow-up: NOT initiative (they block, then attack)
+    int our_max_threat = 0;
+    int our_four_count = 0;       // How many positions give us a four?
+    int our_open_three_count = 0; // How many open threes do we have?
+
+    for (int i = 0; i < move_count; i++) {
+      int my_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
+                                           ai_player, game->board_size);
+      if (my_threat > our_max_threat) {
+        our_max_threat = my_threat;
+      }
+      if (my_threat >= 10000) {
+        our_four_count++; // This position creates a four
+      } else if (my_threat >= 1500) {
+        our_open_three_count++; // This position creates an open three
       }
     }
-    *best_x = open_three_blocks_x[best_block_idx];
-    *best_y = open_three_blocks_y[best_block_idx];
-    snprintf(game->ai_status_message, sizeof(game->ai_status_message),
-             "%s%c%s Blocking opponent's open three!", ai_color, ai_symbol,
-             COLOR_RESET);
-    add_ai_history_entry(game, open_three_block_count);
-    return;
+
+    // We have initiative if:
+    // 1. We have an open four or compound threat (50000/40000+) - unstoppable
+    // 2. We have MULTIPLE fours - opponent blocks one, we play another
+    // 3. We have a four AND open threes - after they block four, we have
+    // threats
+    // 4. We have better open three in a race condition
+    int we_have_initiative =
+        (our_max_threat >= 40000) || // Open four or compound
+        (our_four_count >= 2) ||     // Multiple fours = forcing sequence
+        (our_four_count >= 1 && our_open_three_count >= 1) || // Four + backup
+        (our_max_threat >= 1500 && our_max_threat > max_open_three_threat);
+
+    if (!we_have_initiative) {
+      // No initiative - we MUST block the highest opponent threat
+      // Find all positions that block the highest threat level
+      int best_blocks_x[361];
+      int best_blocks_y[361];
+      int best_block_count = 0;
+
+      for (int i = 0; i < open_three_block_count; i++) {
+        if (open_three_block_threat[i] == max_open_three_threat) {
+          best_blocks_x[best_block_count] = open_three_blocks_x[i];
+          best_blocks_y[best_block_count] = open_three_blocks_y[i];
+          best_block_count++;
+        }
+      }
+
+      // Among the best blocking positions, pick the one that gives us best
+      // threat
+      int best_block_idx = 0;
+      int best_block_own_threat = 0;
+      for (int i = 0; i < best_block_count; i++) {
+        int own_threat =
+            evaluate_threat_fast(game->board, best_blocks_x[i],
+                                 best_blocks_y[i], ai_player, game->board_size);
+        if (own_threat > best_block_own_threat) {
+          best_block_own_threat = own_threat;
+          best_block_idx = i;
+        }
+      }
+
+      *best_x = best_blocks_x[best_block_idx];
+      *best_y = best_blocks_y[best_block_idx];
+      snprintf(game->ai_status_message, sizeof(game->ai_status_message),
+               "%s%c%s Blocking opponent's open three!", ai_color, ai_symbol,
+               COLOR_RESET);
+      add_ai_history_entry(game, open_three_block_count);
+      return;
+    }
+    // We have initiative - fall through to play our forcing move
   }
 
   // Now check if we have a forcing move (four - open or closed)
@@ -954,7 +1018,7 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
       }
 
       moves_considered++;
-      if (current_depth == game->max_depth) {
+      if (current_depth == game->max_depth && !game->config.headless) {
         printf("%s•%s", COLOR_BLUE, COLOR_RESET);
         fflush(stdout);
       }

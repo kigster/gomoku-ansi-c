@@ -2,6 +2,12 @@
 
 [![CI](https://github.com/kigster/gomoku-ansi-c/actions/workflows/ci.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/ci.yml)
 
+## Table of Contents
+
+1. This document: GamePlay, Terminal Usage, Building, CLI.
+2. [Implementation details, modules, and code organization](doc/OVERVIEW.md)
+3. []
+
 > [!TIP]
 > This is an ANSI-C implementation of the Gomoku (Five-in-a-Row) game featuring gameplay against an AI opponent, AI vs AI, or Human vs Human.
 >
@@ -32,17 +38,17 @@ Here is the screenshot of a game where a human player prevailed against the "AI 
 
 As you'll see down below, the default gameplay is for a human to start with X, and AI player to respond with a O.
 
-<img src="doc/gomoku-human-vs-ai.png" width="700" border="1" style="border-radius: 10px"/>
+<img src="doc/img/gomoku-human-vs-ai.png" width="700" border="1" style="border-radius: 10px"/>
 
 #### Game Example: AI vs AI
 
 Using CLI flags you can make the game engine play against itself. Below is the screenshot of AI playing against itself, and both sides play on the same difficulty (i.e. they can scan the board into the same number of future possible moves — 6).
 
-<img src="doc/gomoku-ai-vs-ai.png" width="700" border="1" style="border-radius: 10px"/>
+<img src="doc/img/gomoku-ai-vs-ai.png" width="700" border="1" style="border-radius: 10px"/>
 
 #### Another Example: AI vs AI Resulting in a Draw
 
-<img src="doc/gomoku-draw.png" width="700" border="1" style="border-radius: 10px"/>
+<img src="doc/img/gomoku-draw.png" width="700" border="1" style="border-radius: 10px"/>
 
 ## Compiling the Game
 
@@ -55,7 +61,7 @@ make build -j 4
 make install
 ```
 
-<img src="doc/gomoku-build.png" width="700" border="1" style="border-radius: 10px"/>
+<img src="doc/img/gomoku-build.png" width="700" border="1" style="border-radius: 10px"/>
 
 ### Running the Tests
 
@@ -63,7 +69,7 @@ make install
 make test
 ```
 
-<img src="doc/gomoku-test.png" width="700" border="1" style="border-radius: 10px"/>
+<img src="doc/img/gomoku-test.png" width="700" border="1" style="border-radius: 10px"/>
 
 ### Alternatively — Using `cmake`
 
@@ -83,7 +89,7 @@ gomoku -h
 
 See the following screenshot for an example:
 
-<img src="doc/gomoku-help.png" width="700" border="1" style="border-radius: 10px"/>
+<img src="doc/img/gomoku-help.png" width="700" border="1" style="border-radius: 10px"/>
 
 ### All Features
 
