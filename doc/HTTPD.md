@@ -107,7 +107,27 @@ pkill gomoku-httpd
 kill $(pgrep gomoku-httpd)
 ```
 
-### HAProxy Agent-Check
+## Running a Cluster with HAProxy
+
+You can deploy HAProxy in front of multiple `gomoku-httpd` instances for load balancing:
+
+Below you see multple clients connecting to HAProxy same port, which then distributes requests to a cluster of `gomoku-httpd` daemons. Whenever a daemon is busy computing a move, it responds to haproxy with the status `drain` which makes haproxy avoid sending new requests to that busy daemon.
+
+![multi-clients](img/gomoku-http-clients.png)
+
+HAProxy comes with a built-in web dashboard which is very easy to read. You can observe the connection pool and its status in real time.
+
+![haproxy](img/haproxy-gomoku.png)
+
+> [!TIP]
+> If you use `iac/config/haproxy.cfg` configuration file, you can run a cluster of 10 gomoku-httpd instances with a single HAProxy process locally and test it with `./gomoku-http-client -p 10000`. 
+> 
+> To start the cluster, run `make install`, then `gomokud-ctl start`. Use brew to install `haproxy` on macOS, start it as a service via `brew services start haproxy`. Then go to `/opt/homebrew/etc` folder and create a symlink to `iac/config/haproxy.cfg` file in this repo. After that restart the haproxy service via `brew services restart haproxy`. Note that `gomoku-ctl start` starts gomoku-httpd services listening on ports 9500, 9501, ... while the agent status check ports are 9600, 9601, ...
+> 
+> You should be able to monitor haproxy connection pool via [http://localhost:8404/stats](http://localhost:8404/stats) (no password for localhost access).
+
+
+### Agent-Check for HAProxy
 
 For load-balanced deployments, the daemon can run an agent-check server that reports whether the server is idle or busy:
 
