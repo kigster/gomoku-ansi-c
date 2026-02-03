@@ -111,13 +111,15 @@ kill $(pgrep gomoku-httpd)
 
 You can deploy HAProxy in front of multiple `gomoku-httpd` instances for load balancing:
 
+![haproxy-architecture](img/haproxy-design-flowchart.png)
+
 Below you see multple clients connecting to HAProxy same port, which then distributes requests to a cluster of `gomoku-httpd` daemons. Whenever a daemon is busy computing a move, it responds to haproxy with the status `drain` which makes haproxy avoid sending new requests to that busy daemon.
 
 ![multi-clients](img/gomoku-http-clients.png)
 
 HAProxy comes with a built-in web dashboard which is very easy to read. You can observe the connection pool and its status in real time.
 
-![haproxy](img/haproxy-gomoku.png)
+![haproxy](img/haproxy-admin.png)
 
 > [!TIP]
 > If you use `iac/config/haproxy.cfg` configuration file, you can run a cluster of 10 gomoku-httpd instances with a single HAProxy process locally and test it with `./gomoku-http-client -p 10000`. 
