@@ -1,0 +1,25 @@
+# kustomization.yaml - Kustomize configuration for deploying all resources
+# Apply with: kubectl apply -k iac/k8s/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: gomoku
+
+resources:
+  - namespace.yaml
+  - configmaps.yaml
+  - gomoku-workers-az-a.yaml
+  - gomoku-workers-az-b.yaml
+  - loadbalancer-az-a.yaml
+  - loadbalancer-az-b.yaml
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/part-of: gomoku-platform
+
+# Image customization (override in overlays)
+images:
+  - name: gomoku-httpd
+    newName: gomoku-httpd
+    newTag: latest

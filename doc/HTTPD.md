@@ -70,6 +70,7 @@ The daemon runs as a foreground process by default. Use `-d` to daemonize.
 | Flag | Long Form | Description | Default |
 |------|-----------|-------------|---------|
 | `-b` | `--bind` | Host and port to bind (required) | - |
+| `-a` | `--agent-port` | HAProxy agent-check port | disabled |
 | `-d` | `--daemonize` | Run as background daemon | No |
 | `-l` | `--log-file` | Path to log file | stdout |
 | `-L` | `--log-level` | Log level: TRACE, DEBUG, INFO, WARN, ERROR, FATAL | INFO |
@@ -102,6 +103,30 @@ pkill gomoku-httpd
 # or send SIGTERM
 kill $(pgrep gomoku-httpd)
 ```
+
+### HAProxy Agent-Check
+
+For load-balanced deployments, the daemon can run an agent-check server that reports whether the server is idle or busy:
+
+```bash
+# Start with agent-check on port 8788
+./gomoku-httpd -b 0.0.0.0:8787 -a 8788
+```
+
+The agent-check port responds with:
+- `ready` - Server is idle, can accept new requests
+- `drain` - Server is busy computing a move
+
+This allows HAProxy to make intelligent routing decisions based on actual server availability, routing requests only to idle servers rather than just checking if the process is running.
+
+Test manually with:
+
+```bash
+nc localhost 8788
+# Returns: ready (or drain if busy)
+```
+
+See [iac/README.md](../iac/README.md) for Kubernetes deployment with HAProxy integration.
 
 ---
 

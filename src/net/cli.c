@@ -94,6 +94,7 @@ daemon_config_t daemon_parse_arguments(int argc, char *argv[]) {
   daemon_config_t config = {
       .bind_host = "",
       .bind_port = 0,
+      .agent_port = 0,
       .daemonize = 0,
       .log_file = "",
       .log_level = DAEMON_LOG_INFO,
@@ -103,6 +104,7 @@ daemon_config_t daemon_parse_arguments(int argc, char *argv[]) {
 
   static struct option long_options[] = {
       {"bind", required_argument, 0, 'b'},
+      {"agent-port", required_argument, 0, 'a'},
       {"daemonize", no_argument, 0, 'd'},
       {"log-file", required_argument, 0, 'l'},
       {"log-level", required_argument, 0, 'L'},
@@ -115,7 +117,7 @@ daemon_config_t daemon_parse_arguments(int argc, char *argv[]) {
   // Reset getopt
   optind = 1;
 
-  while ((c = getopt_long(argc, argv, "b:dl:L:h", long_options,
+  while ((c = getopt_long(argc, argv, "b:a:dl:L:h", long_options,
                           &option_index)) != -1) {
     switch (c) {
     case 'b':
@@ -126,6 +128,18 @@ daemon_config_t daemon_parse_arguments(int argc, char *argv[]) {
         config.invalid_args = 1;
       }
       break;
+
+    case 'a': {
+      int port = atoi(optarg);
+      if (port <= 0 || port > 65535) {
+        fprintf(stderr, "Error: Invalid agent port '%s'\n", optarg);
+        fprintf(stderr, "Expected port number between 1 and 65535\n");
+        config.invalid_args = 1;
+      } else {
+        config.agent_port = port;
+      }
+      break;
+    }
 
     case 'd':
       config.daemonize = 1;
@@ -198,6 +212,10 @@ void daemon_print_help(const char *program_name) {
   printf("                           Can also be just port (e.g., 3000)\n\n");
 
   printf("OPTIONS:\n");
+  printf("  -a, --agent-port <port>  HAProxy agent-check port (default: "
+         "disabled)\n");
+  printf("                           Enables health reporting for load "
+         "balancers\n");
   printf("  -d, --daemonize          Run as a background daemon\n");
   printf("  -l, --log-file <file>    Log to file instead of stdout\n");
   printf("  -L, --log-level <level>  Set log level (default: INFO)\n");
@@ -209,6 +227,13 @@ void daemon_print_help(const char *program_name) {
   printf("  GET  /health             Health check endpoint\n");
   printf("  POST /gomoku/play        Make AI move (accepts/returns JSON)\n\n");
 
+  printf("HAPROXY AGENT-CHECK:\n");
+  printf(
+      "  When --agent-port is specified, a lightweight TCP server runs on\n");
+  printf("  that port responding with 'ready' (idle) or 'drain' (busy).\n");
+  printf(
+      "  This allows HAProxy to route requests only to available servers.\n\n");
+
   printf("EXAMPLES:\n");
   printf("  %s -b 3000                          # Listen on all interfaces, "
          "port 3000\n",
@@ -218,7 +243,9 @@ void daemon_print_help(const char *program_name) {
   printf("  %s -b 0.0.0.0:3000 -d               # Run as daemon\n",
          program_name);
   printf("  %s -b 3000 -l /var/log/gomoku.log   # Log to file\n", program_name);
-  printf("  %s -b 3000 -L DEBUG                 # Enable debug logging\n\n",
+  printf("  %s -b 3000 -L DEBUG                 # Enable debug logging\n",
+         program_name);
+  printf("  %s -b 8787 -a 8788                  # With HAProxy agent-check\n\n",
          program_name);
 
   printf("CONSTRAINTS:\n");

@@ -1,4 +1,12 @@
+/build
+gomoku
+gomoku-httpd
+gomoku-http-client
+test_gomoku
+test_daemon
 **/.DS_Store
+**/*.log
+tests/googletest
 # CMake specific files and directories
 /build*/                  # Common build directories (e.g., build/, build-release/, etc.)
 /out/                     # Another common build directory name
@@ -20,6 +28,8 @@ compile_commands.json     # Optional, but often generated and ignorable
 /bld/                     # Visual Studio build directory
 .vs/                      # Visual Studio cache/options directory
 *.user                    # User-specific files for various IDEs (e.g., CMakeLists.txt.user)
+**/*.o
+**/*.a
 
 # Compiled object files and executables
 *.o                       # Object files

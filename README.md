@@ -28,7 +28,7 @@ In this implementation, the default first player is a human, so you will have a 
 ## Introduction
 
 > [!NOTE]
-> For detailed breakdown of the source files and their functions we refer to to the [Implementation  Overview](OVERVIEW.md) document.
+> For detailed breakdown of the source files and their functions we refer to the [Developer Documentation](doc/DEVELOPER.md) document.
 
 ### Completed Game Screenshot
 

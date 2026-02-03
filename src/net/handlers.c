@@ -26,6 +26,10 @@
 
 static time_t daemon_start_time = 0;
 
+// Atomic flag for busy status (used by HAProxy agent-check)
+// Using sig_atomic_t for signal-safe access from agent thread
+static volatile sig_atomic_t server_busy = 0;
+
 //===============================================================================
 // REQUEST CONTEXT FOR LOGGING
 //===============================================================================
@@ -131,8 +135,21 @@ void handlers_init(void) {
   // Record start time for uptime calculation
   daemon_start_time = time(NULL);
 
+  // Initialize busy flag
+  server_busy = 0;
+
   LOG_INFO("Handlers initialized");
 }
+
+//===============================================================================
+// PUBLIC FUNCTIONS - BUSY STATUS
+//===============================================================================
+
+int handlers_is_busy(void) { return server_busy != 0; }
+
+void handlers_set_busy(void) { server_busy = 1; }
+
+void handlers_set_ready(void) { server_busy = 0; }
 
 //===============================================================================
 // PUBLIC FUNCTIONS - REQUEST DISPATCHER
@@ -279,6 +296,9 @@ void handle_play(struct http_request_s *request) {
             (ai_player == AI_CELL_CROSSES) ? "X" : "O",
             game->move_history_count + 1, game->max_depth, game->search_radius);
 
+  // Mark server as busy for HAProxy agent-check
+  handlers_set_busy();
+
   // Start timing
   double start_time = get_current_time();
   game->search_start_time = start_time;
@@ -301,6 +321,9 @@ void handle_play(struct http_request_s *request) {
     // Use minimax
     find_best_ai_move(game, &best_x, &best_y);
   }
+
+  // Mark server as ready after AI computation
+  handlers_set_ready();
 
   // Restore original max_depth
   game->max_depth = saved_depth;

@@ -1,0 +1,21 @@
+# gomoku-httpd.target - Systemd target to manage all Gomoku HTTP Daemon instances
+#
+# This target groups all gomoku-httpd@*.service instances together.
+# Use this to start/stop/restart all instances at once.
+#
+# Usage:
+#   systemctl start gomoku-httpd.target   # Start all instances
+#   systemctl stop gomoku-httpd.target    # Stop all instances
+#   systemctl restart gomoku-httpd.target # Restart all instances
+#   systemctl status gomoku-httpd.target  # Check status of all
+#
+# Note: Instances must be enabled to be part of this target:
+#   systemctl enable gomoku-httpd@{8787..8791}
+
+[Unit]
+Description=Gomoku HTTP Daemon Cluster
+Documentation=https://github.com/kigster/gomoku-ansi-c
+After=network.target
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,8 @@
+# namespace.yaml - Kubernetes namespace for Gomoku infrastructure
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gomoku
+  labels:
+    app.kubernetes.io/name: gomoku
+    app.kubernetes.io/component: infrastructure

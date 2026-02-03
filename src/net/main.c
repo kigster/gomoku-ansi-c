@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +25,11 @@
 //===============================================================================
 
 static volatile sig_atomic_t running = 1;
+
+// Agent thread state
+static pthread_t agent_thread_id;
+static int agent_socket_fd = -1;
+static volatile sig_atomic_t agent_running = 0;
 
 //===============================================================================
 // PORT AVAILABILITY CHECK
@@ -72,6 +78,174 @@ static int check_port_available(const char *host, int port) {
 
   errno = bind_errno;
   return -1; // Other error
+}
+
+//===============================================================================
+// HAPROXY AGENT-CHECK THREAD
+//===============================================================================
+
+/**
+ * Agent-check thread function.
+ * Listens on a TCP port and responds with "ready\n" or "drain\n" based on
+ * whether the main thread is currently processing a request.
+ *
+ * HAProxy agent-check protocol:
+ * - "ready" : Server is idle, can accept new requests
+ * - "drain" : Server is busy, don't send new requests
+ * - "down"  : Server is broken (we don't use this)
+ * - "up"    : Server is available (we use "ready" instead for clarity)
+ */
+static void *agent_thread_func(void *arg) {
+  (void)arg; // Unused
+
+  LOG_DEBUG("Agent-check thread started");
+
+  while (agent_running && running) {
+    // Accept connection with timeout to allow clean shutdown
+    struct timeval tv;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+
+    fd_set read_fds;
+    FD_ZERO(&read_fds);
+    FD_SET(agent_socket_fd, &read_fds);
+
+    int select_result = select(agent_socket_fd + 1, &read_fds, NULL, NULL, &tv);
+
+    if (select_result < 0) {
+      if (errno == EINTR) {
+        continue; // Interrupted by signal, retry
+      }
+      LOG_ERROR("Agent select error: %s", strerror(errno));
+      break;
+    }
+
+    if (select_result == 0) {
+      // Timeout, check if we should keep running
+      continue;
+    }
+
+    // Accept the connection
+    struct sockaddr_in client_addr;
+    socklen_t client_len = sizeof(client_addr);
+    int client_fd =
+        accept(agent_socket_fd, (struct sockaddr *)&client_addr, &client_len);
+
+    if (client_fd < 0) {
+      if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
+        continue;
+      }
+      LOG_ERROR("Agent accept error: %s", strerror(errno));
+      continue;
+    }
+
+    // Determine status and respond
+    const char *status;
+    if (handlers_is_busy()) {
+      status = "drain\n";
+      LOG_DEBUG("Agent-check: responding 'drain' (busy)");
+    } else {
+      status = "ready\n";
+      LOG_DEBUG("Agent-check: responding 'ready' (idle)");
+    }
+
+    // Send response (best effort, don't retry on partial write)
+    ssize_t written = write(client_fd, status, strlen(status));
+    if (written < 0) {
+      LOG_DEBUG("Agent write error: %s", strerror(errno));
+    }
+
+    close(client_fd);
+  }
+
+  LOG_DEBUG("Agent-check thread exiting");
+  return NULL;
+}
+
+/**
+ * Start the HAProxy agent-check thread on the specified port.
+ * Returns 0 on success, -1 on failure.
+ */
+static int start_agent_thread(const char *host, int port) {
+  // Create socket
+  agent_socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (agent_socket_fd < 0) {
+    LOG_ERROR("Failed to create agent socket: %s", strerror(errno));
+    return -1;
+  }
+
+  // Set socket options
+  int opt = 1;
+  setsockopt(agent_socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+  // Bind to address
+  struct sockaddr_in addr;
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons((uint16_t)port);
+
+  if (host && strlen(host) > 0 && strcmp(host, "0.0.0.0") != 0) {
+    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
+      LOG_ERROR("Invalid agent bind address: %s", host);
+      close(agent_socket_fd);
+      agent_socket_fd = -1;
+      return -1;
+    }
+  } else {
+    addr.sin_addr.s_addr = INADDR_ANY;
+  }
+
+  if (bind(agent_socket_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+    LOG_ERROR("Failed to bind agent socket to port %d: %s", port,
+              strerror(errno));
+    close(agent_socket_fd);
+    agent_socket_fd = -1;
+    return -1;
+  }
+
+  // Listen with small backlog (agent checks are quick)
+  if (listen(agent_socket_fd, 5) < 0) {
+    LOG_ERROR("Failed to listen on agent socket: %s", strerror(errno));
+    close(agent_socket_fd);
+    agent_socket_fd = -1;
+    return -1;
+  }
+
+  // Start the thread
+  agent_running = 1;
+  if (pthread_create(&agent_thread_id, NULL, agent_thread_func, NULL) != 0) {
+    LOG_ERROR("Failed to create agent thread: %s", strerror(errno));
+    agent_running = 0;
+    close(agent_socket_fd);
+    agent_socket_fd = -1;
+    return -1;
+  }
+
+  LOG_INFO("HAProxy agent-check listening on %s:%d",
+           (host && strlen(host) > 0) ? host : "0.0.0.0", port);
+  return 0;
+}
+
+/**
+ * Stop the HAProxy agent-check thread.
+ */
+static void stop_agent_thread(void) {
+  if (!agent_running) {
+    return;
+  }
+
+  LOG_DEBUG("Stopping agent-check thread");
+  agent_running = 0;
+
+  // Close the socket to unblock accept()
+  if (agent_socket_fd >= 0) {
+    close(agent_socket_fd);
+    agent_socket_fd = -1;
+  }
+
+  // Wait for thread to exit
+  pthread_join(agent_thread_id, NULL);
+  LOG_DEBUG("Agent-check thread stopped");
 }
 
 //===============================================================================
@@ -236,7 +410,12 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // Daemonize if requested (before logging setup)
+  // Setup logging
+  if (setup_logging(&config) < 0) {
+    return 1;
+  }
+
+  // Daemonize if requested (after logging setup)
   if (config.daemonize) {
     if (daemonize() < 0) {
       fprintf(stderr, "Error: Failed to daemonize: %s\n", strerror(errno));
@@ -244,16 +423,21 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // Setup logging
-  if (setup_logging(&config) < 0) {
-    return 1;
-  }
-
   // Setup signal handlers
   setup_signal_handlers();
 
   // Initialize handlers (threat matrix, etc.)
   handlers_init();
+
+  // Start HAProxy agent-check thread if configured
+  if (config.agent_port > 0) {
+    if (start_agent_thread(config.bind_host, config.agent_port) < 0) {
+      fprintf(stderr, "Error: Failed to start agent-check thread on port %d\n",
+              config.agent_port);
+      cleanup_logging();
+      return 1;
+    }
+  }
 
   // Check if port is available before trying to bind
   int port_check = check_port_available(config.bind_host, config.bind_port);
@@ -335,6 +519,9 @@ int main(int argc, char *argv[]) {
       break;
     }
   }
+
+  // Stop agent thread if running
+  stop_agent_thread();
 
   LOG_INFO("Server stopped");
   cleanup_logging();

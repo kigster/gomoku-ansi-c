@@ -1,0 +1,177 @@
+# configmaps.yaml - Configuration for nginx and haproxy
+# Note: In production, you would likely use a ConfigMap generator or Helm
+# to inject the actual config files. These are templates.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: gomoku
+  labels:
+    app.kubernetes.io/name: gomoku
+    app.kubernetes.io/component: loadbalancer
+data:
+  nginx.conf: |
+    # See iac/config/nginx.conf for the full configuration
+    # This is a minimal config for K8s - adjust paths and upstreams as needed
+    user nginx;
+    worker_processes 6;
+    error_log /var/log/nginx/error.log warn;
+    pid /var/run/nginx.pid;
+
+    events {
+        worker_connections 4096;
+        use epoll;
+        multi_accept on;
+    }
+
+    http {
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+
+        log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                        '$status $body_bytes_sent rt=$request_time';
+        access_log /var/log/nginx/access.log main;
+
+        sendfile on;
+        tcp_nopush on;
+        tcp_nodelay on;
+        keepalive_timeout 65;
+
+        upstream haproxy_backend {
+            server 127.0.0.1:10000;
+            keepalive 32;
+        }
+
+        server {
+            listen 80;
+            server_name _;
+
+            location = /nginx-health {
+                access_log off;
+                return 200 "healthy\n";
+            }
+
+            location / {
+                proxy_pass http://haproxy_backend;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_connect_timeout 5s;
+                proxy_read_timeout 30s;
+            }
+        }
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: haproxy-config-az-a
+  namespace: gomoku
+  labels:
+    app.kubernetes.io/name: gomoku
+    app.kubernetes.io/component: loadbalancer
+    topology.kubernetes.io/zone: us-east-1a
+data:
+  haproxy.cfg: |
+    # HAProxy config for AZ-a load balancer
+    # Primary: gomoku-workers-az-a, Backup: gomoku-workers-az-b
+    global
+        log stdout format raw local0
+        maxconn 4096
+
+    defaults
+        log global
+        mode http
+        option httplog
+        option dontlognull
+        timeout connect 5s
+        timeout client 30s
+        timeout server 30s
+        default-server inter 3s fall 3 rise 2
+
+    frontend gomoku_frontend
+        bind 127.0.0.1:10000
+        default_backend gomoku_primary
+
+    backend gomoku_primary
+        balance leastconn
+        option httpchk GET /health
+        http-check expect status 200
+        
+        # Primary: AZ-a workers (DNS resolves to pod IPs via headless service)
+        server-template gomoku-a 5 gomoku-workers-az-a.gomoku.svc.cluster.local:8787 check agent-check agent-port 8788 agent-inter 1s resolvers dns
+        
+        # Backup: AZ-b workers
+        server-template gomoku-b 5 gomoku-workers-az-b.gomoku.svc.cluster.local:8787 check agent-check agent-port 8788 agent-inter 1s resolvers dns backup
+
+    resolvers dns
+        nameserver coredns kube-dns.kube-system.svc.cluster.local:53
+        resolve_retries 3
+        timeout resolve 1s
+        timeout retry 1s
+        hold valid 10s
+
+    frontend stats
+        bind 127.0.0.1:8404
+        mode http
+        stats enable
+        stats uri /stats
+        stats refresh 10s
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: haproxy-config-az-b
+  namespace: gomoku
+  labels:
+    app.kubernetes.io/name: gomoku
+    app.kubernetes.io/component: loadbalancer
+    topology.kubernetes.io/zone: us-east-1b
+data:
+  haproxy.cfg: |
+    # HAProxy config for AZ-b load balancer
+    # Primary: gomoku-workers-az-b, Backup: gomoku-workers-az-a
+    global
+        log stdout format raw local0
+        maxconn 4096
+
+    defaults
+        log global
+        mode http
+        option httplog
+        option dontlognull
+        timeout connect 5s
+        timeout client 30s
+        timeout server 30s
+        default-server inter 3s fall 3 rise 2
+
+    frontend gomoku_frontend
+        bind 127.0.0.1:10000
+        default_backend gomoku_primary
+
+    backend gomoku_primary
+        balance leastconn
+        option httpchk GET /health
+        http-check expect status 200
+        
+        # Primary: AZ-b workers (DNS resolves to pod IPs via headless service)
+        server-template gomoku-b 5 gomoku-workers-az-b.gomoku.svc.cluster.local:8787 check agent-check agent-port 8788 agent-inter 1s resolvers dns
+        
+        # Backup: AZ-a workers
+        server-template gomoku-a 5 gomoku-workers-az-a.gomoku.svc.cluster.local:8787 check agent-check agent-port 8788 agent-inter 1s resolvers dns backup
+
+    resolvers dns
+        nameserver coredns kube-dns.kube-system.svc.cluster.local:53
+        resolve_retries 3
+        timeout resolve 1s
+        timeout retry 1s
+        hold valid 10s
+
+    frontend stats
+        bind 127.0.0.1:8404
+        mode http
+        stats enable
+        stats uri /stats
+        stats refresh 10s
