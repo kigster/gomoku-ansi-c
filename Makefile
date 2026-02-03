@@ -10,6 +10,8 @@ VERSION         := $(shell grep VERSION src/gomoku.h | awk '{print $$3}' | tr -d
 TAG             := $(shell echo "v$(VERSION)")
 BRANCH          := $(shell git branch --show)
 
+SCRIPT          := $(shell dirname $(MAKEFILE_PATH))/bin/gomokud-ctl
+
 # installation prefix (can override)
 PREFIX 			?= /usr/local
 PACKAGE 		= gomoku
@@ -173,7 +175,7 @@ cmake-rebuild: 	cmake-clean cmake-build ## Clean and rebuild using CMake
 install: 	all ## Install the binaries to the prefix
 		@echo "Installing to $(PREFIX)"
 		install -d $(BINDIR)
-		install -m 755 $(BINS) $(BINDIR)
+		install -m 755 $(BINS) $(SCRIPT) $(BINDIR)
 
 uninstall: 	## Uninstall the binary from the prefix
 		-rm -f $(BINDIR)/$(PACKAGE)
