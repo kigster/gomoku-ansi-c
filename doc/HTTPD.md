@@ -158,11 +158,6 @@ See [iac/README.md](../iac/README.md) for Kubernetes deployment with HAProxy int
 The following diagram depects the idea:
 
 ```mermaid
----
-config:
-  theme: base
-  layout: dagre
----
 flowchart LR
  subgraph AZA["Availability Zone A"]
         LBA["Load Balancer A<br>nginx + haproxy"]
