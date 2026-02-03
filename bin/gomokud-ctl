@@ -3,6 +3,10 @@
 #
 
 GOMOKUD_BINARY="gomoku-httpd"
+GOMOKUD_EXECUTABLE="gomoku-httpd"
+
+command -V "${GOMOKUD_EXECUTABLE}" >/dev/null 2>&1 || export GOMOKUD_EXECUTABLE="./${GOMOKUD_BINARY}"
+
 GOMOKUD_BINARY_REGEX="[g]omoku-httpd"
 
 DEFAULT_HOST="0.0.0.0"
@@ -89,7 +93,7 @@ function daemons-start() {
   for ((i=0; i<nproc; i++)); do
     port=$((DEFAULT_PORT + i))
     haproxy_port=$((DEFAULT_PORT + i + 100))
-    cmd="./${GOMOKUD_BINARY} -b ${DEFAULT_HOST}:${port} -a ${haproxy_port} -d ${DEFAULT_FLAGS}"
+    cmd="${GOMOKUD_EXECUTABLE} -b ${DEFAULT_HOST}:${port} -a ${haproxy_port} -d ${DEFAULT_FLAGS}"
 
     echo -e -n  "${txtgrn}booting: [${cmd}] ... ${clr}"
     eval "${cmd}" &>/dev/null
