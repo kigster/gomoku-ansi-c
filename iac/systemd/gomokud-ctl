@@ -1,0 +1,256 @@
+#!/usr/bin/env bash
+# gomokud-ctl - Control script for gomoku-httpd systemd services
+#
+# Usage:
+#   gomokud-ctl <command> [options]
+#
+# Commands:
+#   start         Start all gomoku-httpd instances
+#   stop          Stop all gomoku-httpd instances
+#   restart       Restart all gomoku-httpd instances
+#   reload        Reload configuration (graceful restart)
+#   status        Show status of all instances
+#   list          List all configured instances and their ports
+#   logs          Follow logs from all instances
+#   drain         Signal instances to stop accepting new requests
+#   health        Check health of all instances
+#
+# Options:
+#   -p, --port PORT    Operate on specific port only
+#   -h, --help         Show this help message
+
+set -euo pipefail
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+SERVICE_PREFIX="gomoku-httpd@"
+TARGET="gomoku-httpd.target"
+
+log_info() { echo -e "${GREEN}[OK]${NC} $*"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+
+usage() {
+    head -20 "$0" | tail -18 | sed 's/^# //' | sed 's/^#//'
+    exit 0
+}
+
+# Get list of enabled instances
+get_instances() {
+    systemctl list-unit-files "${SERVICE_PREFIX}*.service" --no-legend 2>/dev/null | \
+        awk '{print $1}' | \
+        sed "s/${SERVICE_PREFIX}//" | \
+        sed 's/.service//' | \
+        sort -n
+}
+
+# Get running instances
+get_running() {
+    systemctl list-units "${SERVICE_PREFIX}*.service" --no-legend 2>/dev/null | \
+        grep running | \
+        awk '{print $1}' | \
+        sed "s/${SERVICE_PREFIX}//" | \
+        sed 's/.service//' | \
+        sort -n
+}
+
+cmd_start() {
+    local port="${1:-}"
+    if [[ -n "$port" ]]; then
+        log_info "Starting gomoku-httpd on port $port"
+        systemctl start "${SERVICE_PREFIX}${port}.service"
+    else
+        log_info "Starting all gomoku-httpd instances"
+        systemctl start "$TARGET"
+    fi
+}
+
+cmd_stop() {
+    local port="${1:-}"
+    if [[ -n "$port" ]]; then
+        log_info "Stopping gomoku-httpd on port $port"
+        systemctl stop "${SERVICE_PREFIX}${port}.service"
+    else
+        log_info "Stopping all gomoku-httpd instances"
+        systemctl stop "$TARGET"
+    fi
+}
+
+cmd_restart() {
+    local port="${1:-}"
+    if [[ -n "$port" ]]; then
+        log_info "Restarting gomoku-httpd on port $port"
+        systemctl restart "${SERVICE_PREFIX}${port}.service"
+    else
+        log_info "Restarting all gomoku-httpd instances"
+        systemctl restart "$TARGET"
+    fi
+}
+
+cmd_reload() {
+    log_info "Reloading systemd daemon configuration"
+    systemctl daemon-reload
+    log_info "Restarting all instances gracefully"
+    for port in $(get_running); do
+        systemctl reload-or-restart "${SERVICE_PREFIX}${port}.service" &
+    done
+    wait
+    log_info "Reload complete"
+}
+
+cmd_status() {
+    local port="${1:-}"
+    if [[ -n "$port" ]]; then
+        systemctl status "${SERVICE_PREFIX}${port}.service" --no-pager
+    else
+        echo -e "${BLUE}=== Gomoku HTTP Daemon Status ===${NC}"
+        echo ""
+        local instances
+        instances=$(get_instances)
+        if [[ -z "$instances" ]]; then
+            log_warn "No instances configured"
+            return
+        fi
+        
+        printf "%-8s %-12s %-10s %s\n" "PORT" "AGENT" "STATUS" "PID"
+        printf "%-8s %-12s %-10s %s\n" "----" "-----" "------" "---"
+        
+        for port in $instances; do
+            local agent_port=$((port + 1000))
+            local status pid
+            if systemctl is-active "${SERVICE_PREFIX}${port}.service" &>/dev/null; then
+                status="${GREEN}running${NC}"
+                pid=$(systemctl show "${SERVICE_PREFIX}${port}.service" -p MainPID --value)
+            else
+                status="${RED}stopped${NC}"
+                pid="-"
+            fi
+            printf "%-8s %-12s ${status}%-1s %s\n" "$port" "$agent_port" "" "$pid"
+        done
+        
+        echo ""
+        local running total
+        running=$(get_running | wc -l | tr -d ' ')
+        total=$(echo "$instances" | wc -l | tr -d ' ')
+        echo -e "Running: ${GREEN}${running}${NC} / ${total}"
+    fi
+}
+
+cmd_list() {
+    echo -e "${BLUE}=== Configured Instances ===${NC}"
+    echo ""
+    local instances
+    instances=$(get_instances)
+    if [[ -z "$instances" ]]; then
+        log_warn "No instances configured"
+        echo "Run 'sudo ./install.sh' to configure instances"
+        return
+    fi
+    
+    for port in $instances; do
+        local agent_port=$((port + 1000))
+        echo "  HTTP: $port, Agent: $agent_port"
+    done
+}
+
+cmd_logs() {
+    local port="${1:-}"
+    if [[ -n "$port" ]]; then
+        journalctl -u "${SERVICE_PREFIX}${port}.service" -f
+    else
+        journalctl -u "${SERVICE_PREFIX}*.service" -f
+    fi
+}
+
+cmd_health() {
+    echo -e "${BLUE}=== Health Check ===${NC}"
+    echo ""
+    
+    local instances
+    instances=$(get_running)
+    if [[ -z "$instances" ]]; then
+        log_warn "No running instances"
+        return
+    fi
+    
+    for port in $instances; do
+        local agent_port=$((port + 1000))
+        local http_status agent_status
+        
+        # Check HTTP health endpoint
+        if curl -s -o /dev/null -w "%{http_code}" "http://localhost:$port/health" 2>/dev/null | grep -q "200"; then
+            http_status="${GREEN}OK${NC}"
+        else
+            http_status="${RED}FAIL${NC}"
+        fi
+        
+        # Check agent port
+        agent_response=$(echo "" | nc -w 1 localhost "$agent_port" 2>/dev/null || echo "error")
+        case "$agent_response" in
+            ready*)  agent_status="${GREEN}ready${NC}" ;;
+            drain*)  agent_status="${YELLOW}drain${NC}" ;;
+            *)       agent_status="${RED}error${NC}" ;;
+        esac
+        
+        printf "Port %-5s: HTTP=%b Agent=%b\n" "$port" "$http_status" "$agent_status"
+    done
+}
+
+cmd_drain() {
+    log_warn "Drain mode: Sending SIGUSR1 to stop accepting new requests"
+    log_warn "(Note: This requires gomoku-httpd to implement SIGUSR1 handling)"
+    
+    for port in $(get_running); do
+        local pid
+        pid=$(systemctl show "${SERVICE_PREFIX}${port}.service" -p MainPID --value)
+        if [[ "$pid" != "0" ]]; then
+            kill -USR1 "$pid" 2>/dev/null && log_info "Sent SIGUSR1 to port $port (PID $pid)"
+        fi
+    done
+}
+
+# Parse arguments
+PORT=""
+COMMAND=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -p|--port)
+            PORT="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            ;;
+        start|stop|restart|reload|status|list|logs|health|drain)
+            COMMAND="$1"
+            shift
+            ;;
+        *)
+            log_error "Unknown argument: $1"
+            usage
+            ;;
+    esac
+done
+
+if [[ -z "$COMMAND" ]]; then
+    usage
+fi
+
+# Execute command
+case "$COMMAND" in
+    start)   cmd_start "$PORT" ;;
+    stop)    cmd_stop "$PORT" ;;
+    restart) cmd_restart "$PORT" ;;
+    reload)  cmd_reload ;;
+    status)  cmd_status "$PORT" ;;
+    list)    cmd_list ;;
+    logs)    cmd_logs "$PORT" ;;
+    health)  cmd_health ;;
+    drain)   cmd_drain ;;
+esac

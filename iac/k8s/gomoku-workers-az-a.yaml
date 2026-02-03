@@ -1,0 +1,110 @@
+# gomoku-workers-az-a.yaml - Gomoku worker deployment for Availability Zone A
+# These pods run the gomoku-httpd server with HAProxy agent-check enabled
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gomoku-workers-az-a
+  namespace: gomoku
+  labels:
+    app.kubernetes.io/name: gomoku
+    app.kubernetes.io/component: worker
+    topology.kubernetes.io/zone: us-east-1a
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gomoku
+      app.kubernetes.io/component: worker
+      topology.kubernetes.io/zone: us-east-1a
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gomoku
+        app.kubernetes.io/component: worker
+        topology.kubernetes.io/zone: us-east-1a
+    spec:
+      # Ensure pods are scheduled in AZ-a
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: topology.kubernetes.io/zone
+                operator: In
+                values:
+                - us-east-1a
+        # Spread pods across nodes in the zone
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: gomoku
+                  app.kubernetes.io/component: worker
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: gomoku-httpd
+        image: gomoku-httpd:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8787
+          protocol: TCP
+        - name: agent
+          containerPort: 8788
+          protocol: TCP
+        # Resource allocation: 1 full CPU core per pod (single-threaded AI)
+        resources:
+          requests:
+            cpu: "1000m"
+            memory: "128Mi"
+          limits:
+            cpu: "1000m"
+            memory: "256Mi"
+        # Liveness probe - basic process health
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        # Readiness probe - can accept traffic
+        # Note: This may timeout when busy, which is intentional
+        # HAProxy agent-check on port 8788 provides more accurate status
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 3
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 1
+---
+# Service for AZ-a workers (internal ClusterIP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: gomoku-workers-az-a
+  namespace: gomoku
+  labels:
+    app.kubernetes.io/name: gomoku
+    app.kubernetes.io/component: worker
+    topology.kubernetes.io/zone: us-east-1a
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: gomoku
+    app.kubernetes.io/component: worker
+    topology.kubernetes.io/zone: us-east-1a
+  ports:
+  - name: http
+    port: 8787
+    targetPort: http
+    protocol: TCP
+  - name: agent
+    port: 8788
+    targetPort: agent
+    protocol: TCP

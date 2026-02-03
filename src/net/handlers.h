@@ -20,6 +20,30 @@ struct http_request_s;
 void handlers_init(void);
 
 //===============================================================================
+// BUSY STATUS (for HAProxy agent-check)
+//===============================================================================
+
+/**
+ * Check if the server is currently processing a request.
+ * Used by the agent-check thread to report availability to HAProxy.
+ *
+ * @return 1 if busy (processing a move), 0 if ready for new requests
+ */
+int handlers_is_busy(void);
+
+/**
+ * Mark the server as busy (starting to process a request).
+ * Called internally by handle_play before AI computation.
+ */
+void handlers_set_busy(void);
+
+/**
+ * Mark the server as ready (finished processing a request).
+ * Called internally by handle_play after AI computation.
+ */
+void handlers_set_ready(void);
+
+//===============================================================================
 // REQUEST DISPATCHER
 //===============================================================================
 

@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: haproxy-config
+data:
+  haproxy.cfg: |
+    global
+      log stdout format raw local0
+
+    defaults
+      log global
+      mode http
+      option httplog
+      option dontlognull
+      timeout connect 5s
+      timeout client 30s
+      timeout server 30s
+
+    frontend http_front
+      # HAProxy listens on port 9999.
+      bind *:9999
+      default_backend gomoku_backend
+
+    backend gomoku_backend
+      balance roundrobin
+      # This line enables auto-discovery. HAProxy will resolve the DNS name
+      # 'gomoku-service' to get the list of all active Gomoku pods and will
+      # add them to the load balancing pool.
+      server-template gomoku- 10 gomoku-service:8787 check
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: haproxy-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: haproxy
+  template:
+    metadata:
+      labels:
+        app: haproxy
+    spec:
+      containers:
+      - name: haproxy
+        image: haproxy:2.5
+        ports:
+        - containerPort: 9999
+        volumeMounts:
+        - name: haproxy-config-volume
+          mountPath: /usr/local/etc/haproxy/haproxy.cfg
+          subPath: haproxy.cfg
+          readOnly: true
+      volumes:
+      - name: haproxy-config-volume
+        configMap:
+          name: haproxy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: haproxy-service
+spec:
+  # This exposes the service externally. On a cloud provider, it provisions
+  # a public IP. On Minikube, it's accessed via `minikube service`.
+  type: LoadBalancer
+  selector:
+    app: haproxy
+  ports:
+  - protocol: TCP
+    # External port
+    port: 9999
+    # Internal port on the haproxy pod
+    targetPort: 9999

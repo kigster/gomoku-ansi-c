@@ -57,7 +57,7 @@ make clean
 
 ## HTTP Daemon
 
-### Usage
+### Usage — Single Daemon
 
 ```
 gomoku-httpd -b <host:port> [options]
@@ -70,6 +70,7 @@ The daemon runs as a foreground process by default. Use `-d` to daemonize.
 | Flag | Long Form | Description | Default |
 |------|-----------|-------------|---------|
 | `-b` | `--bind` | Host and port to bind (required) | - |
+| `-a` | `--agent-port` | HAProxy agent-check port | disabled |
 | `-d` | `--daemonize` | Run as background daemon | No |
 | `-l` | `--log-file` | Path to log file | stdout |
 | `-L` | `--log-level` | Log level: TRACE, DEBUG, INFO, WARN, ERROR, FATAL | INFO |
@@ -103,7 +104,61 @@ pkill gomoku-httpd
 kill $(pgrep gomoku-httpd)
 ```
 
+### HAProxy Agent-Check
+
+For load-balanced deployments, the daemon can run an agent-check server that reports whether the server is idle or busy:
+
+```bash
+# Start with agent-check on port 8788
+./gomoku-httpd -b 0.0.0.0:8787 -a 8788
+```
+
+The agent-check port responds with:
+- `ready` - Server is idle, can accept new requests
+- `drain` - Server is busy computing a move
+
+This allows HAProxy to make intelligent routing decisions based on actual server availability, routing requests only to idle servers rather than just checking if the process is running.
+
+Test manually with:
+
+```bash
+nc localhost 8788
+# Returns: ready (or drain if busy)
+```
+
+See [iac/README.md](../iac/README.md) for Kubernetes deployment with HAProxy integration.
+
+### HAProxy With the Cluster of `gomoku-httpd` daemons
+
+The following diagram depects the idea:
+
+```mermaid
 ---
+config:
+  theme: base
+  layout: dagre
+---
+flowchart LR
+ subgraph AZA["Availability Zone A"]
+        LBA["Load Balancer A<br>nginx + haproxy"]
+        WAA1["Worker A1"]
+        WAA2["Worker A2"]
+        WAA3["Worker A3"]
+  end
+ subgraph AZB["Availability Zone B"]
+        LBB["Load Balancer B<br>nginx + haproxy"]
+        WBB1["Worker B1"]
+        WBB2["Worker B2"]
+        WBB3["Worker B3"]
+  end
+    DNS["DNS Round Robin"] --> LBA & LBB
+    LBA --> WAA1 & WAA2 & WAA3
+    LBB --> WBB1 & WBB2 & WBB3
+    LBA -. primary .-> WAA1 & WAA2 & WAA3
+    LBA -. backup .-> WBB1 & WBB2 & WBB3
+    LBB -. primary .-> WBB1 & WBB2 & WBB3
+    LBB -. backup .-> WAA1 & WAA2 & WAA3
+```
 
 ## HTTP API
 

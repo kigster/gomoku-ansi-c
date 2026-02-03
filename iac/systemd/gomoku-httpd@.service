@@ -1,0 +1,66 @@
+# gomoku-httpd@.service - Systemd template unit for Gomoku HTTP Daemon
+#
+# This is a template unit file. The instance name (%i) is the HTTP port number.
+# The agent-check port is automatically calculated as HTTP_PORT + 1000.
+#
+# Examples:
+#   systemctl start gomoku-httpd@8787    # Starts on port 8787, agent on 9787
+#   systemctl start gomoku-httpd@8788    # Starts on port 8788, agent on 9788
+#
+# To enable multiple instances at boot:
+#   systemctl enable gomoku-httpd@{8787..8791}
+#
+# Or use the gomoku-httpd.target to manage all instances together.
+
+[Unit]
+Description=Gomoku HTTP Daemon (port %i)
+Documentation=https://github.com/kigster/gomoku-ansi-c
+After=network.target
+PartOf=gomoku-httpd.target
+
+[Service]
+Type=simple
+User=gomoku
+Group=gomoku
+
+# Working directory (adjust to your installation path)
+WorkingDirectory=/opt/gomoku
+
+# Environment variables (can be overridden in drop-in files)
+Environment="GOMOKU_LOG_LEVEL=info"
+Environment="GOMOKU_BIND_HOST=0.0.0.0"
+
+# Calculate agent port as HTTP_PORT + 1000
+# %i = instance name (HTTP port), e.g., 8787
+# Agent port will be 9787, 9788, etc.
+ExecStart=/bin/bash -c 'exec /opt/gomoku/bin/gomoku-httpd \
+    -b ${GOMOKU_BIND_HOST}:%i \
+    -a $((  %i + 1000 )) \
+    -L ${GOMOKU_LOG_LEVEL} \
+    -l /var/log/gomoku/gomoku-httpd-%i.log'
+
+# Restart policy
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Resource limits (optional, adjust as needed)
+# LimitNOFILE=65535
+# LimitNPROC=4096
+
+# Security hardening (optional but recommended)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/log/gomoku
+
+# Graceful shutdown
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=gomoku-httpd.target
+WantedBy=multi-user.target
