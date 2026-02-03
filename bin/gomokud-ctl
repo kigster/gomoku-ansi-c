@@ -1,0 +1,123 @@
+#daemons-stop "$@"!/usr/bin/env bash
+# vim: ft=bash
+
+GOMOKUD_BINARY="gomoku-httpd"
+GOMOKUD_BINARY_REGEX="[g]omoku-httpd"
+
+DEFAULT_HOST="0.0.0.0"
+DEFAULT_PORT=9900
+DEFAULT_FLAGS="-L debug -l log/${GOMOKUD_BINARY}.log"
+
+function daemons-count() {
+  daemons-show | wc -l | tr -d ' '
+}
+
+function daemons-show() {
+  ps -ef | grep "${GOMOKUD_BINARY_REGEX}" | grep -v grep
+}
+
+function usage() {
+  echo "USAGE:"
+  echo "   gomokud-ctl start|stop|show|htop|help"
+  echo ""
+  echo "DESCRIPTION:"
+  echo "   Starts ${GOMOKUD_BINARY} processes equal to the number of CPU cores."
+  echo "   listening on the port starting with the first argument, default is 9900."
+}
+
+function parse-argv() {
+  [[ -z "$*" ]] && usage && exit 0
+
+  while :; do
+    case $1 in
+      start)
+        shift
+        daemons-start "$@"
+        ;;
+      stop)
+        shift
+        daemons-stop "$@"
+        ;;
+      show)
+        shift
+        daemons-stop "$@"
+        ;;
+      htop)
+        shift
+        command -v htop >/dev/null 2>&1 || { echo "htop is not installed. Please install it first." >&2; exit 1; }
+        daemons-htop "$@"
+        ;;
+      -h | --help|help)  
+        shift
+        usage
+        exit 0
+        ;;
+      --) # End of all options; anything after will be passed to the action function
+        shift
+        break
+        ;;
+      -?*)
+        printf 'WARN: Unknown option (ignored): %s\n' "$1" >&2
+        exit 127
+        shift
+        ;;
+      *)
+        [[ -z "$1" ]] && break
+        shift
+        ;;
+    esac
+  done
+}
+
+function daemons-htop() {
+  htop -F ${GOMOKUD_BINARY}
+}
+
+function daemons-start() {
+  local nproc=$(getconf _NPROCESSORS_ONLN)
+  local port
+  local i
+  local cmd
+
+  echo -e "${txtylw}Starting ${nproc} ${GOMOKUD_BINARY} processes...${clr}"
+
+  [[ -f ${GOMOKUD_BINARY} ]] || { make all; }
+
+  mkdir -p log
+
+  for ((i=0; i<nproc; i++)); do
+    port=$((DEFAULT_PORT + i))
+    cmd="./${GOMOKUD_BINARY} -b ${DEFAULT_HOST}:${port} -d ${DEFAULT_FLAGS}"
+
+    echo -e -n  "${txtgrn}booting: [${cmd}] ... ${clr}"
+    eval "${cmd}" &>/dev/null
+    echo -e "with PID ${txtpur}$!${clr}, exit code $?"
+  done
+
+  count_end=$(daemons-count)
+
+  echo -e "${txtylw}Started $((count_end - count_start)) ${GOMOKUD_BINARY} processes.${clr}"
+  echo -e "${txtgrn}Total running ${GOMOKUD_BINARY} processes: ${bldylw}${count_end}${clr}."
+}
+
+function daemons-stop() {
+  local count=$(daemons-count)
+
+  if [[ ${count} -gt 0 ]]; then
+    echo -e "${txtylw}Found ${count} processes running, stopping them...${clr}"
+    pkill -9 ${GOMOKUD_BINARY}
+  else
+    echo -e "${txtgrn}No ${GOMOKUD_BINARY} processes found, nothing to stop.${clr}"
+  fi
+
+  count=$(daemons-count)
+  echo -e "Currently remaining ${GOMOKUD_BINARY} processes: ${bldgrn}${count}${clr}"
+}
+
+function main() {
+  parse-argv "$@"
+}
+
+main "$@"
+
+

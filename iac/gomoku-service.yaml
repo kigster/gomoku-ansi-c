@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gomoku-service
+spec:
+  # ClusterIP makes the service only reachable from within the Kubernetes cluster.
+  type: ClusterIP
+  selector:
+    # This selector finds all pods with the "app: gomoku-worker" label.
+    app: gomoku-worker
+  ports:
+  - protocol: TCP
+    # The service listens on port 8787...
+    port: 8787
+    # ...and forwards traffic to the 'http' port (8787) on the pods.
+    targetPort: http

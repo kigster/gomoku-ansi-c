@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gomoku-worker-deployment
+  labels:
+    app: gomoku-worker
+spec:
+  # IMPORTANT: Adjust this replica count to match the number of CPU cores
+  # available in your cluster for optimal performance.
+  replicas: 4 # Placeholder value
+  selector:
+    matchLabels:
+      app: gomoku-worker
+  template:
+    metadata:
+      labels:
+        app: gomoku-worker
+    spec:
+      containers:
+      - name: gomoku-http-daemon
+        # IMPORTANT: Replace this with the actual name of your built Docker image.
+        image: gomoku-httpd:latest
+        ports:
+        - containerPort: 8787
+          name: http
+        # Since the app is single-threaded and CPU-intensive, we request
+        # one full CPU core for each pod.
+        resources:
+          requests:
+            cpu: "1000m"
+          limits:
+            cpu: "1000m"
