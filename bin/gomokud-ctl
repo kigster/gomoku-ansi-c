@@ -1,15 +1,16 @@
 #daemons-stop "$@"!/usr/bin/env bash
 # vim: ft=bash
+#
 
 GOMOKUD_BINARY="gomoku-httpd"
 GOMOKUD_BINARY_REGEX="[g]omoku-httpd"
 
 DEFAULT_HOST="0.0.0.0"
-DEFAULT_PORT=9900
+DEFAULT_PORT=9500
 DEFAULT_FLAGS="-L debug -l log/${GOMOKUD_BINARY}.log"
 
 function daemons-count() {
-  daemons-show | wc -l | tr -d ' '
+  (daemons-show || echo 0) | wc -l | tr -d ' '
 }
 
 function daemons-show() {
@@ -75,7 +76,7 @@ function daemons-htop() {
 
 function daemons-start() {
   local nproc=$(getconf _NPROCESSORS_ONLN)
-  local port
+  local port hapoxy_port
   local i
   local cmd
 
@@ -87,7 +88,8 @@ function daemons-start() {
 
   for ((i=0; i<nproc; i++)); do
     port=$((DEFAULT_PORT + i))
-    cmd="./${GOMOKUD_BINARY} -b ${DEFAULT_HOST}:${port} -d ${DEFAULT_FLAGS}"
+    haproxy_port=$((DEFAULT_PORT + i + 100))
+    cmd="./${GOMOKUD_BINARY} -b ${DEFAULT_HOST}:${port} -a ${haproxy_port} -d ${DEFAULT_FLAGS}"
 
     echo -e -n  "${txtgrn}booting: [${cmd}] ... ${clr}"
     eval "${cmd}" &>/dev/null
