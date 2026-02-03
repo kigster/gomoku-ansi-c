@@ -7,7 +7,7 @@ This directory contains configuration files and Kubernetes manifests for deployi
 ```mermaid
 ---
 config:
-  theme: mc
+  theme: base
   layout: dagre
 ---
 flowchart LR
@@ -46,23 +46,23 @@ flowchart LR
 
 ```
 iac/
-├── README.md           # This file
-├── config/             # Raw configuration files for nginx and haproxy
-│   ├── nginx.conf      # nginx config for SSL termination and routing
-│   ├── haproxy-az-a.cfg  # HAProxy config for AZ-a (primary: zone-a workers)
-│   └── haproxy-az-b.cfg  # HAProxy config for AZ-b (primary: zone-b workers)
-├── k8s/                # Kubernetes manifests
-│   ├── kustomization.yaml     # Kustomize configuration
-│   ├── namespace.yaml         # Namespace definition
-│   ├── configmaps.yaml        # ConfigMaps for nginx/haproxy
+├── README.md                     # This file
+├── config/                       # Raw configuration files for nginx and haproxy
+│   ├── nginx.conf                # nginx config for SSL termination and routing
+│   ├── haproxy-az-a.cfg          # HAProxy config for AZ-a (primary: zone-a workers)
+│   └── haproxy-az-b.cfg          # HAProxy config for AZ-b (primary: zone-b workers)
+├── k8s/                          # Kubernetes manifests
+│   ├── kustomization.yaml        # Kustomize configuration
+│   ├── namespace.yaml            # Namespace definition
+│   ├── configmaps.yaml           # ConfigMaps for nginx/haproxy
 │   ├── gomoku-workers-az-a.yaml  # Worker deployment for AZ-a
 │   ├── gomoku-workers-az-b.yaml  # Worker deployment for AZ-b
 │   ├── loadbalancer-az-a.yaml    # Load balancer for AZ-a
 │   └── loadbalancer-az-b.yaml    # Load balancer for AZ-b
 └── (legacy files)
-    ├── gomoku-deployment.yaml  # Legacy single-zone deployment
-    ├── gomoku-service.yaml     # Legacy service
-    └── haproxy.yaml            # Legacy HAProxy config
+    ├── gomoku-deployment.yaml    # Legacy single-zone deployment
+    ├── gomoku-service.yaml       # Legacy service
+    └── haproxy.yaml              # Legacy HAProxy config
 ```
 
 ## Deployment Instructions

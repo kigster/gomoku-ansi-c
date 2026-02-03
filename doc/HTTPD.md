@@ -57,7 +57,7 @@ make clean
 
 ## HTTP Daemon
 
-### Usage
+### Usage — Single Daemon
 
 ```
 gomoku-httpd -b <host:port> [options]
@@ -128,7 +128,37 @@ nc localhost 8788
 
 See [iac/README.md](../iac/README.md) for Kubernetes deployment with HAProxy integration.
 
+### HAProxy With the Cluster of `gomoku-httpd` daemons
+
+The following diagram depects the idea:
+
+```mermaid
 ---
+config:
+  theme: base
+  layout: dagre
+---
+flowchart LR
+ subgraph AZA["Availability Zone A"]
+        LBA["Load Balancer A<br>nginx + haproxy"]
+        WAA1["Worker A1"]
+        WAA2["Worker A2"]
+        WAA3["Worker A3"]
+  end
+ subgraph AZB["Availability Zone B"]
+        LBB["Load Balancer B<br>nginx + haproxy"]
+        WBB1["Worker B1"]
+        WBB2["Worker B2"]
+        WBB3["Worker B3"]
+  end
+    DNS["DNS Round Robin"] --> LBA & LBB
+    LBA --> WAA1 & WAA2 & WAA3
+    LBB --> WBB1 & WBB2 & WBB3
+    LBA -. primary .-> WAA1 & WAA2 & WAA3
+    LBA -. backup .-> WBB1 & WBB2 & WBB3
+    LBB -. primary .-> WBB1 & WBB2 & WBB3
+    LBB -. backup .-> WAA1 & WAA2 & WAA3
+```
 
 ## HTTP API
 
