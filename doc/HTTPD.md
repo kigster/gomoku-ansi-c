@@ -2,6 +2,9 @@
 
 A stateless HTTP server that provides a REST API for playing Gomoku games. The daemon accepts game state via JSON, makes an AI move, and returns the updated state.
 
+> [!CAUTION]
+> This documentation is slightly behind the actual source code. We have since added the [`iac`](../iac) folder, with haproxy config, K8S setup, and deployment, and more.
+
 ## Table of Contents
 
 - [Gomoku HTTP Daemon](#gomoku-http-daemon)
