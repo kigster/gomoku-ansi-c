@@ -158,13 +158,13 @@ static const char *get_winner(const char *json) {
 }
 
 // ANSI color codes
-#define COLOR_RED "\033[31m"
-#define COLOR_BLUE "\033[34m"
+#define COLOR_YELLOW "\033[33m"
+#define COLOR_GREEN "\033[32m"
 #define COLOR_RESET "\033[0m"
 
 /**
  * Print the board state from JSON response with colored pieces.
- * X is displayed in red, O is displayed in blue.
+ * X is displayed in yellow, O is displayed in green.
  */
 static void print_board_with_padding(const char *json, int padding) {
   const char *board_state = strstr(json, "\"board_state\"");
@@ -211,9 +211,9 @@ static void print_board_with_padding(const char *json, int padding) {
     // Print line content with colors for X and O
     for (const char *c = quote_start + 1; c < quote_end; c++) {
       if (*c == 'X') {
-        printf("%sX%s", COLOR_RED, COLOR_RESET);
+        printf("%sX%s", COLOR_YELLOW, COLOR_RESET);
       } else if (*c == 'O') {
-        printf("%sO%s", COLOR_BLUE, COLOR_RESET);
+        printf("%sO%s", COLOR_GREEN, COLOR_RESET);
       } else {
         putchar(*c);
       }

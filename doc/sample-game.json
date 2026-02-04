@@ -8,7 +8,7 @@
     "player":"human",
     "time_ms":29393.615
   },
-  "board":19,
+  "board_size":19,
   "radius":3,
   "timeout":"none",
   "undo":"off",

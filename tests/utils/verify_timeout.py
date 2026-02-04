@@ -68,7 +68,7 @@ def verify_timeout():
     # Now it is O's turn.
                  
     payload_base = {
-        "board": 19,
+        "board_size": 19,
         "X": {"player": "human", "time_ms": 0},
         "O": {"player": "AI", "depth": 10}, # Max depth
         "moves": moves
