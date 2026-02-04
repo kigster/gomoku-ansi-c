@@ -32,14 +32,15 @@ In this implementation, the default first player is a human, so you will have a 
 
 ### The Two Versions of the Game
 
-This repo contains what can be thought of a two separate versions of the gamw
-that share some core code, but built into two separate executables:
+This repo contains what can be thought of two separate versions of the gamw
+that share some core AI code, but are built into two separate executables:
 
-1. The first is the single player (or two hunan players, or AI vs AI) for your terminal, works particularly well in iTerm. this game's binary us `gomoku` and running it with `-h` will provide you with all the info you need. Not to mention sections below. This game is written in ANSI C99, is single threaded, and can capture the game into a JSON file.
+1. `gomoku` - the first is the single player (or two human players, or AI vs AI) for your terminal, works particularly well in iTerm. This game's binary is `gomoku` and running it with `-h` will provide you with all the info you need. Not to mention sections below. This game is written in ANSI C99, the process is single threaded, and can capture the game into a JSON file.
 
-2. The second executable is `gomoku-httpd` — a network daemon that shares some code with the Terminal version, except its completely stateless. It receives the game state via JSON that makes it cleanr whose move is the next, so the daemon responds with nearly identical JSON that includes one more move.
-  - because each daemon is single threaded its meant to be run as a swarm behind a reverse proxy such `haproxy`.
-  - for testint this daemon we provide a utility `gomoku-http-client`. Using the client you can have the networked game play against itself. The client does not have any logic about the gameplay, it simoly responds to the server with what swrver responded just before.
+2. `gomoku-httpd` — is the second executable — a network daemon that shares some code with the Terminal version, except its completely stateless. It receives the game state via JSON that makes it clear whose move is next, so the daemon responds with a nearly identical JSON that includes one more move, and potentially game over status.
+   This games shares the AI engine with the terminal game, except the caches which are not thread safe and wont work for JSON requests representing different games.
+   - because each daemon is single threaded its meant to be run as a swarm behind a reverse proxy such `haproxy`.
+   - for testint this daemon we provide a utility `gomoku-http-client`. Using the client you can have the networked game play against itself. The client does not have any logic about the gameplay, it simoly responds to the server with what swrver responded just before.
  
 ![uml](doc/img/haproxy-design-sequence.png)
 
