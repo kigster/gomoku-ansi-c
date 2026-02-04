@@ -35,8 +35,8 @@
 #define COLOR_X_NORMAL "\033[0;33m"      // Yellow for X
 #define COLOR_X_LAST_MOVE "\033[1;33m"   // Bold yellow for X last move
 
-#define COLOR_O_NORMAL "\033[0;35m"      // Magenta for O
-#define COLOR_O_LAST_MOVE "\033[1;35m"   // Bold magenta for O last move
+#define COLOR_O_NORMAL "\033[0;32m"      // Green for O
+#define COLOR_O_LAST_MOVE "\033[1;32m"   // Bold green for O last move
 
 #define COLOR_O_INVALID "\033[0m\033[5;37;41m" // Red background for invalid moves
 #define COLOR_X_INVALID "\033[0m\033[5;37;41m"
