@@ -1,0 +1,21 @@
+{
+  "name": "dont_block_closed_three",
+  "description": "O should NOT block X's closed three - should play offense instead",
+  "category": "offense",
+  "difficulty": "hard",
+  "board_size": 15,
+  "X": {"player": "human"},
+  "O": {"player": "AI", "depth": 4},
+  "moves": [
+    {"X (human)": [7, 7]},
+    {"O (AI)": [7, 8]},
+    {"X (human)": [8, 8]},
+    {"O (AI)": [6, 8]},
+    {"X (human)": [9, 9]},
+    {"O (AI)": [5, 8]},
+    {"X (human)": [6, 6]}
+  ],
+  "forbidden_moves": [[10, 10], [5, 5]],
+  "expected_behavior": "offensive",
+  "explanation": "X has a diagonal closed three [6,6][7,7][8,8][9,9] but it's blocked by O at [7,8]. O should NOT waste a move blocking the other end - instead O should extend their own column 8 threat or create new threats."
+}
