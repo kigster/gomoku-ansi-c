@@ -30,6 +30,20 @@ In this implementation, the default first player is a human, so you will have a 
 > [!NOTE]
 > For detailed breakdown of the source files and their functions we refer to the [Developer Documentation](doc/DEVELOPER.md) document.
 
+### The Two Versions of the Game
+
+This repo contains what can be thought or ae two separate versions of the gamw
+that share some code, but built into two separate executablee:
+
+- The first is the single player (or two hunan players, or AI vs AI) for your terminal, works particularly well in iTerm. this game's binary us `gomoku` and running it with `-h` will provide you with all the info you need. Not to mention sections below. This game is written in ANSI C99, is single threaded, and can capture the game into a JSON file.
+  
+- The second executable is `gomoku-httpd` — a network daemon that shares some code with the Terminal version, except its completely stateless. It receives the game state via JSON that makes it cleanr whose move is the next, so the daemon responds with nearly identical JSON that includes one more move.
+  - because each daemon is single threaded its meant to be run as a swarm behind a reverse proxy such `haproxy`.
+ 
+![uml](doc/img/haproxy-design-sequence.png)
+
+The above picture shows the cluster architecture from the point of view of a sequence diagram. 
+
 ### Completed Game Screenshot
 
 Here is the screenshot of a game where a human player prevailed against the "AI Player" on a "hard mode" (with depth of 6).
