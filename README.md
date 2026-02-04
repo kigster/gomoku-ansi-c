@@ -39,12 +39,15 @@ that share some core AI code, but are built into two separate executables:
 
 2. `gomoku-httpd` — is the second executable — a network daemon that shares some code with the Terminal version, except its completely stateless. It receives the game state via JSON that makes it clear whose move is next, so the daemon responds with a nearly identical JSON that includes one more move, and potentially game over status.
    This games shares the AI engine with the terminal game, except the caches which are not thread safe and wont work for JSON requests representing different games.
-   - because each daemon is single threaded its meant to be run as a swarm behind a reverse proxy such `haproxy`.
-   - for testint this daemon we provide a utility `gomoku-http-client`. Using the client you can have the networked game play against itself. The client does not have any logic about the gameplay, it simoly responds to the server with what swrver responded just before.
- 
+   - Due to the fact that each daemon is single threaded, its meant to be run as a swarm behind a reverse proxy such as `haproxy`. In fact the daemon has a special
+socket for haproxy to probe its status.
+   - To test the network swarm behind haproxy (or a single daemon) we additonally provide a test utility `gomoku-http-client`. Using this client you can play the networked game play against the daemon. The client does not have any AI logic related to the gameplay, it simply responds to the server with what the server responded just before. In that sense it mirrors the JSON responses back to the daemon.
+
+The below picture shows the cluster architecture as a sequence diagram. 
+
 ![uml](doc/img/haproxy-design-sequence.png)
 
-The above picture shows the cluster architecture from the point of view of a sequence diagram. 
+There is more information about this mode in the `iac` folder and the `httpd` document linked to at the top.
 
 ### Completed Game Screenshot
 
