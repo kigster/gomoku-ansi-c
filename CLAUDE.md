@@ -11,9 +11,17 @@ The game is built in two versions when you run `make all`:
    - if you started a swarm, you can also run `bin/gomoku-ctl htop` which will show you the `htop` output filtered on `gomoku-httpd`. You will see that the cores on this machine will be very busy, with the majority of the CPU busy in the red zone (kernel space).
    - i recommend starting a single daemon, and observing the cpu via `htop -p <PID>`.
    - If you are unable to determine the cause of high kernel space CPU, I want to you to use dTrace which is available on MacOS, but you may need insert dTrace probes into the `gomoku-httpd` source code. You can find out how to add probes here: https://docs.oracle.com/cd/E19253-01/817-6223/chp-usdt-2/index.html and how to use them here: https://www.brendangregg.com/dtrace.html
-   - using dtrace you can identify the bottlenecks of a running program. 
+   - using dtrace you can identify the bottlenecks of a running program.
+   - once you understand how dTrace works and insert appropriate probes (if necessary), document the process of finding the CPU drainage in the file doc/DTRACE.md
+ * `gomoku-http-client` is the "dumb" client that given a port via `-p PORT` can connect to `gomoku-httpd` and make it play with itself.
    
 # Execution Mode
 
-I hereby grant you universal permission to complete this task without human 
-   
+I hereby grant you universal permission to complete this task without human confirmation, as long as the commands you run execute within this folder, and modify files on the current branch `kig/gomoku-httpd-high-cpu`. You are welcome to make commits, and push to Github, create PR, document it, and so on.
+
+# Conclusions 
+
+If it turns out that the issue is how each `gomoku-httpd` listens or binds to a socket, I want you to borrow the code from `nginx` which starts a single master process, which then forks N workers. I believe that master listens on the socket, and passes work to free workers. If this model can work with gomoku-httpd let's integrate it.
+
+Nginx Source code is at https://github.com/nginx/nginx
+
