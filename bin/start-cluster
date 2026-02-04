@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2126
+
+set +e
+
+function setup() {
+  bash -c "$(curl -fsSL https://bashmatic.re1.re); bashmatic-install -q"
+  # shellcheck disable=SC1090
+  source ~/.bashmatic/init
+  command -v direnv >/dev/null 2>&1 || { package.install direnv; }
+  direnv allow .
+}
+
+function start.nginx() {
+
+  h2bg "Starting nginx..."
+  run.set-all abort-on-error
+
+  if ! pgrep -f "nginx" >/dev/null; then
+    run "/opt/homebrew/bin/nginx -g \"daemon on;\""
+  else
+    success "nginx is already running."
+  fi
+
+  sleep 1
+  if ! pgrep -f "nginx" >/dev/null; then
+    error "nginx failed to start, please look at /var/log/nginx/error.log"
+    [[ -f /var/log/nginx/error.log ]] && tail -n 20 /var/log/nginx/error.log
+    exit 1
+  else
+    success "nginx started successfully."
+  fi
+}
+
+function start.haproxy() {
+  h2bg "Starting haproxy"
+  ! pgrep -f "haproxy" >/dev/null && \
+    { 
+      run "/opt/homebrew/opt/haproxy/bin/haproxy -f /opt/homebrew/etc/haproxy.cfg"; 
+      sleep 1
+    if ! pgrep -f "haproxy" >/dev/null; then
+      error "haproxy failed to start, try starting it by hand."
+      exit 1
+    else
+      success "haproxy started successfully."
+    fi
+  } || \
+  { info "haproxy is already running, skipping start."; }
+}
+
+function start.gomoku() {
+  h2bg "Starting Gomoku Cluster"
+
+  pgrep -f "gomoku-httpd" >/dev/null && {
+    info "Stopping existing gomoku-httpd instances..."
+    bin/gomokud-ctl stop
+  }
+
+  sleep 1
+  if ! pgrep -f "gomoku-httpd" >/dev/null; then
+    bin/gomokud-ctl start
+    sleep 1
+    if ! pgrep -f "gomoku-httpd" >/dev/null; then
+      error "gomoku-httpd failed to start."
+      exit 1
+    else
+      success "gomoku-httpd started successfully."
+    fi
+  else
+    error "Gomoku Cluster did not shutdown correctly."
+    exit 1
+  fi
+}
+
+function start.all() {
+  haproxy_admin_url=$(cat /opt/homebrew/etc/haproxy.cfg  | grep -C 3 stats | grep bind | awk '{print $2}')
+  start.nginx &&
+    start.haproxy &&
+    start.gomoku &&
+    open "http://${haproxy_admin_url}/stats"
+}
+
+setup
+start.all
+
+
