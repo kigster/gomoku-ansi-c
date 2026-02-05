@@ -4,7 +4,7 @@
   "title": "Gomoku Game State JSON Schema",
   "description": "JSON schema for Gomoku game state, used for saving games and client-server communication with gomoku-httpd",
   "type": "object",
-  "required": ["X", "O", "board_size", "moves"],
+  "required": ["X", "O", "moves"],
   "properties": {
     "X": {
       "$ref": "#/$defs/player",
@@ -17,7 +17,8 @@
     "board_size": {
       "type": "integer",
       "enum": [15, 19],
-      "description": "Size of the game board (15x15 or 19x19)"
+      "default": 19,
+      "description": "Size of the game board (15x15 or 19x19). Defaults to 19 if not specified."
     },
     "radius": {
       "type": "integer",

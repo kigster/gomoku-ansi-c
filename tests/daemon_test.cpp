@@ -175,18 +175,19 @@ TEST_F(DaemonJsonTest, CapsDepthAndRadius) {
   cleanup_game(game);
 }
 
-// Test parsing invalid JSON - missing board field
-TEST_F(DaemonJsonTest, ParseInvalidMissingBoard) {
+// Test parsing JSON with missing board_size field - should default to 19
+TEST_F(DaemonJsonTest, ParseMissingBoardDefaultsTo19) {
   std::string json = read_fixture("invalid_missing_board.json");
   ASSERT_FALSE(json.empty()) << "Could not read fixture file";
 
   char error[256] = {0};
   game_state_t *game = json_api_parse_game(json.c_str(), error, sizeof(error));
 
-  EXPECT_EQ(game, nullptr);
-  EXPECT_STRNE(error, "");
-  EXPECT_NE(strstr(error, "board"), nullptr)
-      << "Error message should mention 'board'";
+  // board_size is now optional and defaults to 19
+  ASSERT_NE(game, nullptr) << "Parse should succeed with default board_size";
+  EXPECT_EQ(game->board_size, 19) << "Missing board_size should default to 19";
+
+  cleanup_game(game);
 }
 
 // Test parsing invalid JSON - overlapping moves

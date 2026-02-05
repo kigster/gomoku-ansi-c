@@ -75,7 +75,7 @@ char *test_client_create_initial_game_state(int board_size, int depth,
       "{\n"
       "  \"X\": { \"player\": \"AI\", \"depth\": %d, \"time_ms\": 0.000 },\n"
       "  \"O\": { \"player\": \"AI\", \"depth\": %d, \"time_ms\": 0.000 },\n"
-      "  \"board\": %d,\n"
+      "  \"board_size\": %d,\n"
       "  \"radius\": %d,\n"
       "  \"timeout\": \"none\",\n"
       "  \"winner\": \"none\",\n"
