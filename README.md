@@ -32,22 +32,72 @@ In this implementation, the default first player is a human, so you will have a 
 
 ### The Two Versions of the Game
 
-This repo contains what can be thought of two separate versions of the gamw
-that share some core AI code, but are built into two separate executables:
+This repo contains what can be thought of three separate versions of the game that share some core AI code, but are built into two separate executables:
 
 1. `gomoku` - the first is the single player (or two human players, or AI vs AI) for your terminal, works particularly well in iTerm. This game's binary is `gomoku` and running it with `-h` will provide you with all the info you need. Not to mention sections below. This game is written in ANSI C99, the process is single threaded, and can capture the game into a JSON file.
 
-2. `gomoku-httpd` — is the second executable — a network daemon that shares some code with the Terminal version, except its completely stateless. It receives the game state via JSON that makes it clear whose move is next, so the daemon responds with a nearly identical JSON that includes one more move, and potentially game over status.
+2. Single `gomoku-httpd` daemon — is the second executable — a network daemon that shares some code with the Terminal version, except its completely stateless. It receives the game state via JSON that makes it clear whose move is next, so the daemon responds with a nearly identical JSON that includes one more move, and potentially game over status.
    This games shares the AI engine with the terminal game, except the caches which are not thread safe and wont work for JSON requests representing different games.
-   - Due to the fact that each daemon is single threaded, its meant to be run as a swarm behind a reverse proxy such as `haproxy`. In fact the daemon has a special
-socket for haproxy to probe its status.
-   - To test the network swarm behind haproxy (or a single daemon) we additonally provide a test utility `gomoku-http-client`. Using this client you can play the networked game play against the daemon. The client does not have any AI logic related to the gameplay, it simply responds to the server with what the server responded just before. In that sense it mirrors the JSON responses back to the daemon.
+
+3. Gomoku Cluster behind nginx and haproxy (or envoy).  It's controlled with `bin/gomoku-cluster` script, or in short `gctl`.
+   - Since the `gomoku-httpd` daemon is single threaded, for running it as a backend on the web requires a swarm of processes, behind a reverse proxy such as `haproxy` or `envoy`. 
+   - `gomoku-httpd` has separate health checks endpoints implemented for both `haproxy` and `envoy` to be able to probe the state of the backend process. 
+   - Utility `gomoku-http-client` can be used to start a networked game against the port 10000 (haproxy and envoy's frontend). or via SSL to `nginx` listening on ports 80 and 443. 
+   - Using this client you can play the networked game play against the cluster of `gomoku-httpd` processes. The client does not have any AI logic related to the gameplay, it simply mirrors back to the server what the previous server responded just before.  It does so until either a draw or one side wins.
+
+Before we dive into the gameplay, let's briefly explain the cluster mode:
+
+### Cluster Operations
+
+#### Starting
+
+```bash
+gctl start -p haproxy
+```
+
+This will boot the cluster. 
+
+> [!IMPORTANT] 
+> Nake sure that your nginx uses nginx.conf from `iac/config` folder, same with haproxy — `iac/config/haproxy.cfg` should be used for haproxy configuration.
+
+#### Stopping
+
+```bash
+gctl stop
+```
+
+#### Checking Up
+
+For `haproxy` status dashboard, open the URL [http://127.0.0.1:8404/stats](http://127.0.0.1:8404/stats)
+
+```bash
+gctl status
+```
+
+OR 
+
+```bash
+gctl htop
+```
+
+This may or may not stop nginx (which often runs as root). But it will stop everything else.
+
+#### Cluster Architecture
 
 The below picture shows the cluster architecture as a sequence diagram. 
 
 ![uml](doc/img/haproxy-design-sequence.png)
 
 There is more information about this mode in the `iac` folder and the `httpd` document linked to at the top.
+
+## Game Play
+
+Gomoku, or "five in a row," is a traditional two-player strategy game played on a (15x15) or (19x19) board, where the goal is to be the first to align FIVE pieces (black or white, or crosses and naughts) horizontally, vertically, or diagonally. 
+
+Black (X) goes first. 
+
+> [!IMPORTANT]
+> Note that six in a row is NOT a win.
 
 ### Completed Game Screenshot
 
