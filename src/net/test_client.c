@@ -22,6 +22,13 @@
 #define DEFAULT_PORT 9900
 #define BUFFER_SIZE 65536
 
+// ANSI color codes
+#define COLOR_YELLOW "\033[33m"
+#define COLOR_GREEN "\033[32m"
+#define COLOR_RED "\033[31m"
+#define COLOR_BOLD_YELLOW "\033[1;33m"
+#define COLOR_RESET "\033[0m"
+
 //===============================================================================
 // HTTP CLIENT
 //===============================================================================
@@ -29,9 +36,10 @@
 /**
  * Send HTTP POST request and receive response.
  * Returns response body (caller must free) or NULL on error.
+ * If http_status is non-NULL, the HTTP status code is stored there.
  */
 static char *http_post(const char *host, int port, const char *path,
-                       const char *body) {
+                       const char *body, int *http_status) {
   // Create socket
   int sock = socket(AF_INET, SOCK_STREAM, 0);
   if (sock < 0) {
@@ -114,14 +122,32 @@ static char *http_post(const char *host, int port, const char *path,
   }
   body_start += 4;
 
-  // Check for HTTP error status
-  if (strncmp(response, "HTTP/1.1 2", 10) != 0 &&
-      strncmp(response, "HTTP/1.0 2", 10) != 0) {
+  // Extract HTTP status code
+  int status_code = 0;
+  if (strncmp(response, "HTTP/1.1 ", 9) == 0 ||
+      strncmp(response, "HTTP/1.0 ", 9) == 0) {
+    status_code = atoi(response + 9);
+  }
+
+  if (http_status) {
+    *http_status = status_code;
+  }
+
+  // Check for HTTP error status (but let caller handle retryable errors)
+  if (status_code < 200 || status_code >= 300) {
     // Extract status line for error message
-    char *end = strchr(response, '\r');
-    if (end)
-      *end = '\0';
-    fprintf(stderr, "Error: Server returned: %s\n", response);
+    char status_line[128];
+    const char *end = strchr(response, '\r');
+    size_t len = end ? (size_t)(end - response) : strlen(response);
+    if (len >= sizeof(status_line))
+      len = sizeof(status_line) - 1;
+    memcpy(status_line, response, len);
+    status_line[len] = '\0';
+
+    // For 503, don't print error - caller will handle retry
+    if (status_code != 503) {
+      fprintf(stderr, "Error: Server returned: %s\n", status_line);
+    }
     free(response);
     return NULL;
   }
@@ -129,6 +155,61 @@ static char *http_post(const char *host, int port, const char *path,
   char *result = strdup(body_start);
   free(response);
   return result;
+}
+
+//===============================================================================
+// HTTP POST WITH RETRY
+//===============================================================================
+
+/**
+ * Send HTTP POST with exponential backoff retry on 503 errors.
+ * Retries with delays: 0.1s, 0.2s, 0.4s, 0.8s, 1.6s, 3.2s, ...
+ * Returns response body (caller must free) or NULL on non-retryable error.
+ */
+static char *http_post_with_retry(const char *host, int port, const char *path,
+                                  const char *body, int max_retries) {
+  double delay_sec = 0.1;
+  int attempt = 0;
+
+  while (1) {
+    int http_status = 0;
+    char *response = http_post(host, port, path, body, &http_status);
+
+    if (response) {
+      return response; // Success
+    }
+
+    // Check if it's a 503 error (retryable)
+    if (http_status != 503) {
+      return NULL; // Non-retryable error
+    }
+
+    attempt++;
+    if (max_retries > 0 && attempt >= max_retries) {
+      fprintf(stderr, "%sError: Max retries (%d) exceeded for 503 errors%s\n",
+              COLOR_RED, max_retries, COLOR_RESET);
+      return NULL;
+    }
+
+    // Print 503 error in red
+    fprintf(stderr, "%sServer returned 503 (Service Unavailable)%s\n",
+            COLOR_RED, COLOR_RESET);
+
+    // Print retry message in bold yellow
+    fprintf(stderr, "%sRetrying in %.1f seconds...%s\n", COLOR_BOLD_YELLOW,
+            delay_sec, COLOR_RESET);
+
+    // Sleep with the current delay
+    usleep((useconds_t)(delay_sec * 1000000));
+
+    // Exponential backoff: double the delay for next attempt
+    delay_sec *= 2.0;
+
+    // Cap the delay at a reasonable maximum (e.g., 60 seconds)
+    if (delay_sec > 60.0) {
+      delay_sec = 60.0;
+    }
+  }
 }
 
 //===============================================================================
@@ -156,11 +237,6 @@ static const char *get_winner(const char *json) {
     return "draw";
   return "none";
 }
-
-// ANSI color codes
-#define COLOR_YELLOW "\033[33m"
-#define COLOR_GREEN "\033[32m"
-#define COLOR_RESET "\033[0m"
 
 /**
  * Print the board state from JSON response with colored pieces.
@@ -346,8 +422,9 @@ int main(int argc, char *argv[]) {
   const char *winner = "none";
 
   while (strcmp(winner, "none") == 0) {
-    // Send to server
-    char *response = http_post(host, port, "/gomoku/play", game_state);
+    // Send to server (with retry on 503 errors)
+    char *response =
+        http_post_with_retry(host, port, "/gomoku/play", game_state, 0);
     if (!response) {
       fprintf(stderr, "Error: Failed to communicate with server\n");
       free(game_state);
