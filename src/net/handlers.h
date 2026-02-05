@@ -61,10 +61,21 @@ void handle_request(struct http_request_s *request);
 /**
  * Handle GET /health endpoint.
  * Returns JSON: {"status": "ok", "version": "1.0.0", "uptime": "..."}
+ * Always returns 200 if server is alive (liveness check).
  *
  * @param request The HTTP request
  */
 void handle_health(struct http_request_s *request);
+
+/**
+ * Handle GET /ready endpoint.
+ * Returns 200 with {"status": "ready"} when server is idle.
+ * Returns 503 with {"status": "busy"} when server is processing a request.
+ * Used by Envoy/load balancers for readiness checks and intelligent routing.
+ *
+ * @param request The HTTP request
+ */
+void handle_ready(struct http_request_s *request);
 
 /**
  * Handle POST /gomoku/play endpoint.

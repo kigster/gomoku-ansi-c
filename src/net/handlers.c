@@ -202,6 +202,12 @@ void handle_request(struct http_request_s *request) {
     } else {
       handle_method_not_allowed(request);
     }
+  } else if (path_matches(request, "/ready")) {
+    if (method_matches(request, "GET")) {
+      handle_ready(request);
+    } else {
+      handle_method_not_allowed(request);
+    }
   } else if (path_matches(request, "/gomoku/play")) {
     if (method_matches(request, "POST")) {
       handle_play(request);
@@ -226,6 +232,22 @@ void handle_health(struct http_request_s *request) {
     free(response_json);
   } else {
     handle_internal_error(request, "Failed to generate health response");
+  }
+}
+
+void handle_ready(struct http_request_s *request) {
+  // Readiness check for Envoy/load balancers
+  // Returns 200 when server is idle and ready to accept requests
+  // Returns 503 when server is busy processing a request
+  //
+  // This is different from /health which always returns 200 if server is alive.
+  // Load balancers can use /ready to route requests to idle servers.
+  if (handlers_is_busy()) {
+    LOG_DEBUG("Readiness check: BUSY (503)");
+    send_json_response(request, 503, "{\"status\":\"busy\"}");
+  } else {
+    LOG_DEBUG("Readiness check: READY (200)");
+    send_json_response(request, 200, "{\"status\":\"ready\"}");
   }
 }
 

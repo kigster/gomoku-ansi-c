@@ -224,7 +224,8 @@ void daemon_print_help(const char *program_name) {
   printf("  -h, --help               Show this help message\n\n");
 
   printf("ENDPOINTS:\n");
-  printf("  GET  /health             Health check endpoint\n");
+  printf("  GET  /health             Liveness check (always 200 if alive)\n");
+  printf("  GET  /ready              Readiness check (200=idle, 503=busy)\n");
   printf("  POST /gomoku/play        Make AI move (accepts/returns JSON)\n\n");
 
   printf("HAPROXY AGENT-CHECK:\n");
