@@ -38,7 +38,7 @@ function nginx.start() {
   run.set-all abort-on-error
 
   if ! pgrep -f "nginx" >/dev/null; then
-    run "/opt/homebrew/bin/nginx -g \"daemon on;\""
+    sudo /opt/homebrew/bin/nginx -g "daemon on;"
   else
     success "nginx is already running."
   fi
@@ -102,7 +102,7 @@ function haproxy.start() {
   h2bg "Starting haproxy"
   ! pgrep -f "haproxy" >/dev/null && \
     { 
-      run "/opt/homebrew/opt/haproxy/bin/haproxy -f /opt/homebrew/etc/haproxy.cfg"; 
+      sudo /opt/homebrew/opt/haproxy/bin/haproxy -D -f /opt/homebrew/etc/haproxy.cfg;
       sleep 1
     if ! pgrep -f "haproxy" >/dev/null; then
       error "haproxy failed to start, try starting it by hand."
@@ -182,7 +182,7 @@ function envoy.start() {
     fi
     
     # Start envoy in background
-    nohup envoy -c "$envoy_config" >/dev/null 2>&1 &
+    sudo nohup envoy -c "$envoy_config" >/dev/null 2>&1 &
     sleep 2
     
     if pgrep -f "envoy.*envoy.yaml" >/dev/null; then
