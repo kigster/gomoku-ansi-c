@@ -49,6 +49,10 @@ Before we dive into the gameplay, let's briefly explain the cluster mode:
 
 ### Cluster Operations
 
+You can operate the cluster using the `gctl` utility located in the `bin` folder. Here is it's help command:
+
+<img src="doc/img/cluster-manager.png" width="700" border="1" style="border-radius: 10px"/>
+
 #### Starting
 
 ```bash
