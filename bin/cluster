@@ -1,0 +1,643 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2126
+
+set +e
+
+# Global variables
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+function setup() {
+  bash -c "$(curl -fsSL https://bashmatic.re1.re); bashmatic-install -q"
+  # shellcheck disable=SC1090
+  source ~/.bashmatic/init
+  command -v direnv >/dev/null 2>&1 || { package.install direnv; }
+  direnv allow .
+}
+
+# =============================================================================
+# NGINX Functions
+# =============================================================================
+
+function nginx.start() {
+  h2bg "Starting nginx..."
+  run.set-all abort-on-error
+
+  if ! pgrep -f "nginx" >/dev/null; then
+    run "/opt/homebrew/bin/nginx -g \"daemon on;\""
+  else
+    success "nginx is already running."
+  fi
+
+  sleep 1
+  if ! pgrep -f "nginx" >/dev/null; then
+    error "nginx failed to start, please look at /var/log/nginx/error.log"
+    [[ -f /var/log/nginx/error.log ]] && tail -n 20 /var/log/nginx/error.log
+    exit 1
+  else
+    success "nginx started successfully."
+  fi
+}
+
+function nginx.stop() {
+  h2bg "Stopping nginx..."
+  
+  if pgrep -f "nginx" >/dev/null; then
+    run "/opt/homebrew/bin/nginx -s quit"
+    sleep 2
+    
+    # Force kill if still running
+    if pgrep -f "nginx" >/dev/null; then
+      warning "nginx didn't stop gracefully, force killing..."
+      pkill -f "nginx"
+      sleep 1
+    fi
+    
+    if ! pgrep -f "nginx" >/dev/null; then
+      success "nginx stopped successfully."
+    else
+      error "Failed to stop nginx."
+      exit 1
+    fi
+  else
+    info "nginx is not running."
+  fi
+}
+
+function nginx.restart() {
+  h2bg "Restarting nginx..."
+  nginx.stop
+  sleep 1
+  nginx.start
+}
+
+function nginx.status() {
+  h2bg "nginx status..."
+  
+  if pgrep -f "nginx" >/dev/null; then
+    success "nginx is running (PID: $(pgrep -f nginx | tr '\n' ' '))"
+    
+    # Try to get nginx status if available
+    if command -v curl >/dev/null 2>&1; then
+      echo "Checking nginx status endpoint..."
+      curl -s http://127.0.0.1/nginx_status 2>/dev/null || echo "No status endpoint configured"
+    fi
+  else
+    warning "nginx is not running."
+  fi
+}
+
+# =============================================================================
+# HAPROXY Functions
+# =============================================================================
+
+function haproxy.start() {
+  h2bg "Starting haproxy"
+  ! pgrep -f "haproxy" >/dev/null && \
+    { 
+      run "/opt/homebrew/opt/haproxy/bin/haproxy -f /opt/homebrew/etc/haproxy.cfg"; 
+      sleep 1
+    if ! pgrep -f "haproxy" >/dev/null; then
+      error "haproxy failed to start, try starting it by hand."
+      exit 1
+    else
+      success "haproxy started successfully."
+    fi
+  } || \
+  { info "haproxy is already running, skipping start."; }
+}
+
+function haproxy.stop() {
+  h2bg "Stopping haproxy..."
+  
+  if pgrep -f "haproxy" >/dev/null; then
+    pkill -f "haproxy"
+    sleep 2
+    
+    if ! pgrep -f "haproxy" >/dev/null; then
+      success "haproxy stopped successfully."
+    else
+      error "Failed to stop haproxy."
+      exit 1
+    fi
+  else
+    info "haproxy is not running."
+  fi
+}
+
+function haproxy.restart() {
+  h2bg "Restarting haproxy..."
+  haproxy.stop
+  sleep 1
+  haproxy.start
+}
+
+function haproxy.status() {
+  h2bg "haproxy status..."
+  
+  if pgrep -f "haproxy" >/dev/null; then
+    success "haproxy is running (PID: $(pgrep -f haproxy | tr '\n' ' '))"
+    
+    # Get haproxy admin URL and show stats
+    if [[ -f /opt/homebrew/etc/haproxy.cfg ]]; then
+      local haproxy_admin_url
+      haproxy_admin_url=$(grep -A 3 stats /opt/homebrew/etc/haproxy.cfg | grep bind | awk '{print $2}' | head -1)
+      if [[ -n "$haproxy_admin_url" ]]; then
+        echo "Admin interface: http://${haproxy_admin_url}/stats"
+        if command -v curl >/dev/null 2>&1; then
+          echo "Stats summary:"
+          curl -s "http://${haproxy_admin_url}/stats;csv" 2>/dev/null | head -5 || echo "Could not fetch stats"
+        fi
+      fi
+    fi
+  else
+    warning "haproxy is not running."
+  fi
+}
+
+# =============================================================================
+# ENVOY Functions
+# =============================================================================
+
+function envoy.start() {
+  h2bg "Starting envoy..."
+  
+  if ! command -v envoy >/dev/null 2>&1; then
+    error "envoy is not installed. Install with: brew install envoy"
+    exit 1
+  fi
+  
+  local envoy_config="$PROJECT_DIR/iac/envoy/envoy.yaml"
+  if [[ ! -f "$envoy_config" ]]; then
+    error "Envoy config not found: $envoy_config"
+    exit 1
+  fi
+  
+  if ! pgrep -f "envoy.*envoy.yaml" >/dev/null; then
+    # Validate config first
+    if ! envoy --mode validate -c "$envoy_config" >/dev/null 2>&1; then
+      error "Envoy configuration validation failed"
+      envoy --mode validate -c "$envoy_config"
+      exit 1
+    fi
+    
+    # Start envoy in background
+    nohup envoy -c "$envoy_config" >/dev/null 2>&1 &
+    sleep 2
+    
+    if pgrep -f "envoy.*envoy.yaml" >/dev/null; then
+      success "envoy started successfully."
+    else
+      error "envoy failed to start."
+      exit 1
+    fi
+  else
+    success "envoy is already running."
+  fi
+}
+
+function envoy.stop() {
+  h2bg "Stopping envoy..."
+  
+  if pgrep -f "envoy.*envoy.yaml" >/dev/null; then
+    pkill -f "envoy.*envoy.yaml"
+    sleep 2
+    
+    if ! pgrep -f "envoy.*envoy.yaml" >/dev/null; then
+      success "envoy stopped successfully."
+    else
+      error "Failed to stop envoy."
+      exit 1
+    fi
+  else
+    info "envoy is not running."
+  fi
+}
+
+function envoy.restart() {
+  h2bg "Restarting envoy..."
+  envoy.stop
+  sleep 1
+  envoy.start
+}
+
+function envoy.status() {
+  h2bg "envoy status..."
+  
+  if pgrep -f "envoy.*envoy.yaml" >/dev/null; then
+    success "envoy is running (PID: $(pgrep -f 'envoy.*envoy.yaml' | tr '\n' ' '))"
+    
+    # Check envoy admin interface
+    if command -v curl >/dev/null 2>&1; then
+      echo "Admin interface: http://127.0.0.1:9901"
+      echo "Checking envoy readiness..."
+      if curl -s http://127.0.0.1:9901/ready >/dev/null 2>&1; then
+        echo "✓ Envoy admin interface is responding"
+        echo "Cluster status:"
+        curl -s http://127.0.0.1:9901/clusters | grep -E "^gomoku_cluster::" | head -5
+      else
+        warning "Envoy admin interface not responding"
+      fi
+    fi
+  else
+    warning "envoy is not running."
+  fi
+}
+
+# =============================================================================
+# GOMOKU Functions
+# =============================================================================
+
+function gomoku.start() {
+  h2bg "Starting Gomoku Cluster"
+
+  pgrep -f "gomoku-httpd" >/dev/null && {
+    info "Stopping existing gomoku-httpd instances..."
+    "$SCRIPT_DIR/gomokud-ctl" stop
+  }
+
+  sleep 1
+  if ! pgrep -f "gomoku-httpd" >/dev/null; then
+    "$SCRIPT_DIR/gomokud-ctl" start
+    sleep 1
+    if ! pgrep -f "gomoku-httpd" >/dev/null; then
+      error "gomoku-httpd failed to start."
+      exit 1
+    else
+      success "gomoku-httpd started successfully."
+    fi
+  else
+    error "Gomoku Cluster did not shutdown correctly."
+    exit 1
+  fi
+}
+
+function gomoku.stop() {
+  h2bg "Stopping Gomoku Cluster..."
+  
+  if pgrep -f "gomoku-httpd" >/dev/null; then
+    "$SCRIPT_DIR/gomokud-ctl" stop
+    sleep 2
+    
+    if ! pgrep -f "gomoku-httpd" >/dev/null; then
+      success "gomoku-httpd stopped successfully."
+    else
+      error "Failed to stop gomoku-httpd."
+      exit 1
+    fi
+  else
+    info "gomoku-httpd is not running."
+  fi
+}
+
+function gomoku.restart() {
+  h2bg "Restarting Gomoku Cluster..."
+  gomoku.stop
+  sleep 1
+  gomoku.start
+}
+
+function gomoku.status() {
+  h2bg "gomoku-httpd status..."
+  
+  if pgrep -f "gomoku-httpd" >/dev/null; then
+    local pids
+    pids=$(pgrep -f "gomoku-httpd" | tr '\n' ' ')
+    success "gomoku-httpd is running (PIDs: $pids)"
+    
+    echo "Checking individual instances:"
+    # Check each expected port
+    for port in {9500..9509}; do
+      if command -v curl >/dev/null 2>&1; then
+        if curl -s --max-time 2 "http://127.0.0.1:$port/ready" >/dev/null 2>&1; then
+          echo "✓ Port $port: responding"
+        else
+          echo "✗ Port $port: not responding"
+        fi
+      else
+        if nc -z 127.0.0.1 "$port" 2>/dev/null; then
+          echo "✓ Port $port: listening"
+        else
+          echo "✗ Port $port: not listening"
+        fi
+      fi
+    done
+  else
+    warning "gomoku-httpd is not running."
+  fi
+}
+
+# =============================================================================
+# Main Commands
+# =============================================================================
+
+function cmd_start() {
+  local proxy=""
+  local components=()
+  
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -p|--proxy)
+        proxy="$2"
+        shift 2
+        ;;
+      -c|--component)
+        components+=("$2")
+        shift 2
+        ;;
+      *)
+        error "Unknown option: $1"
+        show_usage
+        exit 1
+        ;;
+    esac
+  done
+  
+  # Validate proxy option
+  if [[ -n "$proxy" && "$proxy" != "haproxy" && "$proxy" != "envoy" ]]; then
+    error "Invalid proxy: $proxy. Must be 'haproxy' or 'envoy'"
+    exit 1
+  fi
+  
+  # If no components specified, start all with specified proxy
+  if [[ ${#components[@]} -eq 0 ]]; then
+    if [[ -z "$proxy" ]]; then
+      error "Must specify --proxy when starting all components"
+      show_usage
+      exit 1
+    fi
+    
+    nginx.start
+    if [[ "$proxy" == "haproxy" ]]; then
+      haproxy.start
+    else
+      envoy.start
+    fi
+    gomoku.start
+    
+    # Open admin interface
+    if [[ "$proxy" == "haproxy" ]]; then
+      local haproxy_admin_url
+      haproxy_admin_url=$(grep -A 3 stats /opt/homebrew/etc/haproxy.cfg | grep bind | awk '{print $2}' | head -1)
+      [[ -n "$haproxy_admin_url" ]] && open "http://${haproxy_admin_url}/stats"
+    else
+      open "http://127.0.0.1:9901"
+    fi
+  else
+    # Start specified components
+    for component in "${components[@]}"; do
+      case "$component" in
+        nginx)
+          nginx.start
+          ;;
+        haproxy)
+          haproxy.start
+          ;;
+        envoy)
+          envoy.start
+          ;;
+        gomoku-httpd|gomoku)
+          gomoku.start
+          ;;
+        *)
+          error "Invalid component: $component"
+          exit 1
+          ;;
+      esac
+    done
+  fi
+}
+
+function cmd_stop() {
+  local components=()
+  
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -c|--component)
+        components+=("$2")
+        shift 2
+        ;;
+      *)
+        error "Unknown option: $1"
+        show_usage
+        exit 1
+        ;;
+    esac
+  done
+  
+  # If no components specified, stop all
+  if [[ ${#components[@]} -eq 0 ]]; then
+    gomoku.stop
+    haproxy.stop
+    envoy.stop
+    nginx.stop
+  else
+    # Stop specified components
+    for component in "${components[@]}"; do
+      case "$component" in
+        nginx)
+          nginx.stop
+          ;;
+        haproxy)
+          haproxy.stop
+          ;;
+        envoy)
+          envoy.stop
+          ;;
+        gomoku-httpd|gomoku)
+          gomoku.stop
+          ;;
+        *)
+          error "Invalid component: $component"
+          exit 1
+          ;;
+      esac
+    done
+  fi
+}
+
+function cmd_restart() {
+  local components=()
+  
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -c|--component)
+        components+=("$2")
+        shift 2
+        ;;
+      *)
+        error "Unknown option: $1"
+        show_usage
+        exit 1
+        ;;
+    esac
+  done
+  
+  # If no components specified, restart all
+  if [[ ${#components[@]} -eq 0 ]]; then
+    gomoku.restart
+    haproxy.restart
+    envoy.restart
+    nginx.restart
+  else
+    # Restart specified components
+    for component in "${components[@]}"; do
+      case "$component" in
+        nginx)
+          nginx.restart
+          ;;
+        haproxy)
+          haproxy.restart
+          ;;
+        envoy)
+          envoy.restart
+          ;;
+        gomoku-httpd|gomoku)
+          gomoku.restart
+          ;;
+        *)
+          error "Invalid component: $component"
+          exit 1
+          ;;
+      esac
+    done
+  fi
+}
+
+function cmd_status() {
+  local components=()
+  
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -c|--component)
+        components+=("$2")
+        shift 2
+        ;;
+      *)
+        error "Unknown option: $1"
+        show_usage
+        exit 1
+        ;;
+    esac
+  done
+  
+  # If no components specified, show status for all
+  if [[ ${#components[@]} -eq 0 ]]; then
+    nginx.status
+    echo
+    haproxy.status
+    echo
+    envoy.status
+    echo
+    gomoku.status
+  else
+    # Show status for specified components
+    for component in "${components[@]}"; do
+      case "$component" in
+        nginx)
+          nginx.status
+          ;;
+        haproxy)
+          haproxy.status
+          ;;
+        envoy)
+          envoy.status
+          ;;
+        gomoku-httpd|gomoku)
+          gomoku.status
+          ;;
+        *)
+          error "Invalid component: $component"
+          exit 1
+          ;;
+      esac
+      echo
+    done
+  fi
+}
+
+function show_usage() {
+  cat << EOF
+Usage: $0 <command> [options]
+
+Commands:
+  start     Start services
+  stop      Stop services  
+  restart   Restart services
+  status    Show service status
+
+Start Options:
+  -p, --proxy <haproxy|envoy>    Specify proxy to use (required for start all)
+  -c, --component <name>         Component to start (can be used multiple times)
+
+Stop/Restart/Status Options:
+  -c, --component <name>         Component to operate on (can be used multiple times)
+
+Components:
+  nginx       Nginx web server
+  haproxy     HAProxy load balancer  
+  envoy       Envoy proxy
+  gomoku      Gomoku-httpd cluster (alias: gomoku-httpd)
+
+Examples:
+  $0 start --proxy haproxy                    # Start all with HAProxy
+  $0 start --proxy envoy                      # Start all with Envoy
+  $0 start -c nginx -c gomoku                 # Start only nginx and gomoku
+  $0 stop -c haproxy                          # Stop only haproxy
+  $0 restart -c envoy                         # Restart only envoy
+  $0 status                                   # Show status of all components
+  $0 status -c gomoku                         # Show status of gomoku only
+
+EOF
+}
+
+# =============================================================================
+# Main
+# =============================================================================
+
+# Initialize bashmatic if available
+if [[ -f ~/.bashmatic/init ]]; then
+  # shellcheck disable=SC1090
+  source ~/.bashmatic/init
+else
+  # Fallback functions if bashmatic is not available
+  function h2bg() { echo "==> $*"; }
+  function success() { echo "✓ $*"; }
+  function error() { echo "✗ $*" >&2; }
+  function warning() { echo "⚠ $*"; }
+  function info() { echo "ℹ $*"; }
+  function run() { echo "Running: $*"; eval "$*"; }
+  function run.set-all() { :; }
+fi
+
+# Main command dispatch
+case "${1:-}" in
+  start)
+    shift
+    cmd_start "$@"
+    ;;
+  stop)
+    shift
+    cmd_stop "$@"
+    ;;
+  restart)
+    shift
+    cmd_restart "$@"
+    ;;
+  status)
+    shift
+    cmd_status "$@"
+    ;;
+  ""|--help|-h|help)
+    show_usage
+    ;;
+  *)
+    error "Unknown command: $1"
+    show_usage
+    exit 1
+    ;;
+esac
