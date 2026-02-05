@@ -37,14 +37,14 @@ function nginx.start() {
   h2bg "Starting nginx..."
   run.set-all abort-on-error
 
-  if ! pgrep -f "nginx" >/dev/null; then
+  if [[ -z $(pids.matching nginx) ]]; then
     sudo /opt/homebrew/bin/nginx -g "daemon on;"
   else
     success "nginx is already running."
   fi
 
   sleep 1
-  if ! pgrep -f "nginx" >/dev/null; then
+  if [[ -z $(pids.matching nginx) ]]; then
     error "nginx failed to start, please look at /var/log/nginx/error.log"
     [[ -f /var/log/nginx/error.log ]] && tail -n 20 /var/log/nginx/error.log
     return 1
@@ -56,14 +56,14 @@ function nginx.start() {
 function nginx.stop() {
   h2bg "Stopping nginx..."
   
-  if pgrep -f "nginx" >/dev/null; then
+  if [[ -n $(pids.matching nginx) ]]; then
     run "/opt/homebrew/bin/nginx -s quit"
     sleep 2
     
     # Force kill if still running
-    if pgrep -f "nginx" >/dev/null; then
+    if [[ -n $(pids.matching nginx) ]]; then
       warning "nginx didn't stop gracefully, force killing..."
-      pkill -f "nginx"
+      pkill -9 "nginx"
       success "nginx stopped successfully."
     fi
   else
@@ -100,25 +100,25 @@ function nginx.status() {
 
 function haproxy.start() {
   h2bg "Starting haproxy"
-  ! pgrep -f "haproxy" >/dev/null && \
-    { 
-      sudo /opt/homebrew/opt/haproxy/bin/haproxy -D -f /opt/homebrew/etc/haproxy.cfg;
-      sleep 1
-    if ! pgrep -f "haproxy" >/dev/null; then
+  if [[ -z $(pids.matching haproxy) ]]; then
+    sudo /opt/homebrew/opt/haproxy/bin/haproxy -D -f /opt/homebrew/etc/haproxy.cfg;
+    sleep 1
+    if [[ -z $(pids.matching haproxy) ]]; then
       error "haproxy failed to start, try starting it by hand."
       return 1
     else
       success "haproxy started successfully."
     fi
-  } || \
-  { info "haproxy is already running, skipping start."; }
+  else
+    info "haproxy is already running, skipping start."; 
+  fi
 }
 
 function haproxy.stop() {
   h2bg "Stopping haproxy..."
   
-  if pgrep -f "haproxy" >/dev/null; then
-    pkill -f "haproxy"    
+  if [[ -n $(pids.matching haproxy) ]]; then
+    pkill -9 "haproxy"    
     success "haproxy stopped successfully."
   else
     info "haproxy is not running."
@@ -135,7 +135,7 @@ function haproxy.restart() {
 function haproxy.status() {
   h2bg "haproxy status..."
   
-  if pgrep -f "haproxy" >/dev/null; then
+  if [[ -n $(pids.matching haproxy) ]]; then
     success "haproxy is running (PID: $(pgrep -f haproxy | tr '\n' ' '))"
     
     # Get haproxy admin URL and show stats
@@ -173,7 +173,7 @@ function envoy.start() {
     return 1
   fi
   
-  if ! pgrep -f "envoy.*envoy.yaml" >/dev/null; then
+  if [[ -z $(pids.matching envoy) ]]; then
     # Validate config first
     if ! envoy --mode validate -c "$envoy_config" >/dev/null 2>&1; then
       error "Envoy configuration validation failed"
@@ -199,7 +199,7 @@ function envoy.start() {
 function envoy.stop() {
   h2bg "Stopping envoy..."
   
-  if pgrep -f "envoy.*envoy.yaml" >/dev/null; then
+  if [[ -n $(pids.matching envoy) ]]; then
     pkill -f "envoy.*envoy.yaml"
     sleep 2
     
