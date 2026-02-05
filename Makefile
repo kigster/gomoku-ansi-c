@@ -65,7 +65,7 @@ DAEMON_TEST_CXXFLAGS = $(CXXFLAGS)
 # CMake build directory
 BUILD_DIR = build
 
-.PHONY: all clean test tag help cmake-build cmake-clean cmake-test install uninstall rebuild release json-c gomoku-httpd test-daemon submodules-daemon test-gomoku-http test-client
+.PHONY: all clean test tag help cmake-build cmake-clean cmake-test install uninstall rebuild release json-c gomoku-httpd test-daemon submodules-daemon test-gomoku-http test-client evals eval-tournament eval-tactical eval-llm
 
 help:		## Prints help message auto-generated from the comments.
 		@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[32m%-20s\033[35m %s\033[0\n", $$1, $$2}' | sed '/^$$/d' | sort
@@ -140,6 +140,32 @@ tests/daemon_test.o: googletest submodules-daemon tests/daemon_test.cpp src/net/
 
 test-daemon: 	$(DAEMON_TEST_TARGET) ## Run daemon unit tests
 		GREP_COLOR=32 ./$(DAEMON_TEST_TARGET) | grep --color=always -E 'Daemon[A-Za-z]*Test\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
+
+# AI Evaluation targets
+EVAL_DIR = tests/eval
+
+evals: 		$(TARGET) $(DAEMON_TARGET) ## Run all AI evaluation scripts
+		@echo "=== Running Tactical Tests ==="
+		@chmod +x $(EVAL_DIR)/run_tactical_tests.sh
+		-@$(EVAL_DIR)/run_tactical_tests.sh
+		@echo ""
+		@echo "=== Running Depth Tournament ==="
+		@chmod +x $(EVAL_DIR)/depth_tournament.sh
+		@$(EVAL_DIR)/depth_tournament.sh --games 10 --depths "2,3,4"
+
+eval-tactical: 	$(TARGET) $(DAEMON_TARGET) ## Run tactical position tests
+		@echo "=== Running Tactical Tests ==="
+		@chmod +x $(EVAL_DIR)/run_tactical_tests.sh
+		-@$(EVAL_DIR)/run_tactical_tests.sh
+
+eval-tournament: $(TARGET) ## Run depth tournament (AI vs AI at different depths)
+		@echo "=== Running Depth Tournament ==="
+		@chmod +x $(EVAL_DIR)/depth_tournament.sh
+		@$(EVAL_DIR)/depth_tournament.sh --games 10 --depths "2,3,4"
+
+eval-llm: 	$(TARGET) ## Run LLM-based game evaluation (requires ANTHROPIC_API_KEY)
+		@echo "=== Running LLM Evaluation ==="
+		@uv run $(EVAL_DIR)/llm_eval.py
 
 clean:  	cmake-clean ## Clean up all the intermediate objects
 		rm -f $(TARGET) $(TEST_TARGET) $(OBJECTS) tests/gomoku_test.o

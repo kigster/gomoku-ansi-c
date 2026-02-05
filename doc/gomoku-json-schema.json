@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gomoku.games/gomoku-json-schema.json",
+  "title": "Gomoku Game State JSON Schema",
+  "description": "JSON schema for Gomoku game state, used for saving games and client-server communication with gomoku-httpd",
+  "type": "object",
+  "required": ["X", "O", "board_size", "moves"],
+  "properties": {
+    "X": {
+      "$ref": "#/$defs/player",
+      "description": "Configuration and stats for the X player (always moves first)"
+    },
+    "O": {
+      "$ref": "#/$defs/player",
+      "description": "Configuration and stats for the O player"
+    },
+    "board_size": {
+      "type": "integer",
+      "enum": [15, 19],
+      "description": "Size of the game board (15x15 or 19x19)"
+    },
+    "radius": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10,
+      "description": "Search radius around existing stones for AI move generation"
+    },
+    "timeout": {
+      "type": "string",
+      "description": "Timeout setting for moves (e.g., 'none' or time in milliseconds)"
+    },
+    "undo": {
+      "type": "string",
+      "enum": ["on", "off"],
+      "description": "Whether undo functionality is enabled"
+    },
+    "winner": {
+      "type": "string",
+      "enum": ["none", "X", "O"],
+      "description": "Winner of the game, or 'none' if the game is still in progress"
+    },
+    "board_state": {
+      "type": "array",
+      "description": "Visual representation of the board as an array of strings. Each string represents a row with cells separated by spaces. Cells contain '.', 'X', 'O', or Unicode equivalents",
+      "items": {
+        "type": "string",
+        "pattern": "^[.XO✕○ ]+$"
+      }
+    },
+    "moves": {
+      "type": "array",
+      "description": "Chronological list of moves made in the game",
+      "items": {
+        "$ref": "#/$defs/move"
+      }
+    },
+    "name": {
+      "type": "string",
+      "description": "Name identifier for tactical test scenarios"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of the game or test scenario"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["offense", "defense"],
+      "description": "Category for tactical test scenarios"
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": ["trivial", "easy", "medium", "hard"],
+      "description": "Difficulty level for tactical test scenarios"
+    },
+    "expected_moves": {
+      "type": "array",
+      "description": "List of acceptable correct moves for tactical tests",
+      "items": {
+        "$ref": "#/$defs/coordinate"
+      }
+    },
+    "explanation": {
+      "type": "string",
+      "description": "Explanation of the expected move for tactical tests"
+    }
+  },
+  "$defs": {
+    "player": {
+      "type": "object",
+      "required": ["player"],
+      "properties": {
+        "player": {
+          "type": "string",
+          "enum": ["human", "AI"],
+          "description": "Type of player controlling this side"
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Search depth for AI players (required if player is 'AI')"
+        },
+        "time_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total time spent by this player in milliseconds"
+        }
+      },
+      "if": {
+        "properties": { "player": { "const": "AI" } }
+      },
+      "then": {
+        "required": ["depth"]
+      }
+    },
+    "coordinate": {
+      "type": "array",
+      "description": "Board coordinate as [row, column], 0-indexed from top-left",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "move": {
+      "type": "object",
+      "description": "A single move in the game. Contains exactly one move key identifying the player and move coordinates",
+      "minProperties": 1,
+      "properties": {
+        "X (human)": {
+          "$ref": "#/$defs/coordinate",
+          "description": "Move coordinates for human X player"
+        },
+        "X (AI)": {
+          "$ref": "#/$defs/coordinate",
+          "description": "Move coordinates for AI X player"
+        },
+        "O (human)": {
+          "$ref": "#/$defs/coordinate",
+          "description": "Move coordinates for human O player"
+        },
+        "O (AI)": {
+          "$ref": "#/$defs/coordinate",
+          "description": "Move coordinates for AI O player"
+        },
+        "time_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Time taken for this move in milliseconds"
+        },
+        "moves_searched": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of moves evaluated by AI for this move"
+        },
+        "score": {
+          "type": "integer",
+          "description": "AI's evaluation score for the chosen move"
+        },
+        "opponent": {
+          "type": "integer",
+          "description": "Best score available to opponent after this move"
+        },
+        "winner": {
+          "type": "boolean",
+          "description": "True if this move wins the game"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

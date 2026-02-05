@@ -189,10 +189,12 @@ int main(int argc, char *argv[]) {
     return run_replay_mode(&config);
   }
 
-  clear_screen();
+  if (!config.headless) {
+    clear_screen();
 
-  if (!config.skip_welcome) {
-    draw_game_header();
+    if (!config.skip_welcome) {
+      draw_game_header();
+    }
   }
 
   // Initialize game state
@@ -205,13 +207,17 @@ int main(int argc, char *argv[]) {
   // Initialize threat matrix for evaluation functions
   populate_threat_matrix();
 
-  // Enable raw mode for keyboard input
-  enable_raw_mode();
+  // Enable raw mode for keyboard input (skip in headless mode)
+  if (!config.headless) {
+    enable_raw_mode();
+  }
 
   // Main game loop
   while (game->game_state == GAME_RUNNING) {
-    // Refresh display
-    refresh_display(game);
+    // Refresh display (skip in headless mode)
+    if (!config.headless) {
+      refresh_display(game);
+    }
 
     player_type_t current_type = get_player_type(game, game->current_player);
 
@@ -289,8 +295,8 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // Game ended - show final state and wait for input
-  if (game->game_state != GAME_QUIT) {
+  // Game ended - show final state and wait for input (skip in headless mode)
+  if (game->game_state != GAME_QUIT && !config.headless) {
     refresh_display(game);
     get_key(); // Wait for any key press
   }
@@ -298,9 +304,11 @@ int main(int argc, char *argv[]) {
   // Write JSON output if requested
   if (strlen(config.json_file) > 0) {
     if (write_game_json(game, config.json_file)) {
-      printf("Game saved to %s\n", config.json_file);
+      if (!config.headless) {
+        printf("Game saved to %s\n", config.json_file);
+      }
     } else {
-      printf("Error: Failed to write JSON to %s\n", config.json_file);
+      fprintf(stderr, "Error: Failed to write JSON to %s\n", config.json_file);
     }
   }
 

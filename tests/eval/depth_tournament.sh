@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Depth Tournament - Measures AI strength across different search depths
 #
@@ -97,23 +97,24 @@ for ((i=0; i<${#DEPTH_ARRAY[@]}; i++)); do
       GAME_FILE="$OUTPUT_DIR/game_${DEPTH_X}v${DEPTH_O}_${g}.json"
 
       # Run game silently
+      # Use -d X:O format for asymmetric depths
       "$GOMOKU" -x ai -o ai \
-        --depth-x "$DEPTH_X" --depth-o "$DEPTH_O" \
+        -d "${DEPTH_X}:${DEPTH_O}" \
         -r "$RADIUS" -b "$BOARD_SIZE" \
-        -s -j "$GAME_FILE" 2>/dev/null
+        -q -j "$GAME_FILE" 2>/dev/null
 
       # Parse winner from JSON
       if [[ -f "$GAME_FILE" ]]; then
         winner=$(grep -o '"winner":"[^"]*"' "$GAME_FILE" | cut -d'"' -f4)
         case "$winner" in
           X)
-            ((x_wins++))
+            ((++x_wins))
             ;;
           O)
-            ((o_wins++))
+            ((++o_wins))
             ;;
           draw)
-            ((draws++))
+            ((++draws))
             ;;
         esac
         rm -f "$GAME_FILE"  # Clean up
@@ -145,21 +146,21 @@ for ((i=0; i<${#DEPTH_ARRAY[@]}; i++)); do
       GAME_FILE="$OUTPUT_DIR/game_${DEPTH_O}v${DEPTH_X}_${g}.json"
 
       "$GOMOKU" -x ai -o ai \
-        --depth-x "$DEPTH_O" --depth-o "$DEPTH_X" \
+        -d "${DEPTH_O}:${DEPTH_X}" \
         -r "$RADIUS" -b "$BOARD_SIZE" \
-        -s -j "$GAME_FILE" 2>/dev/null
+        -q -j "$GAME_FILE" 2>/dev/null
 
       if [[ -f "$GAME_FILE" ]]; then
         winner=$(grep -o '"winner":"[^"]*"' "$GAME_FILE" | cut -d'"' -f4)
         case "$winner" in
           X)
-            ((x_wins_rev++))
+            ((++x_wins_rev))
             ;;
           O)
-            ((o_wins_rev++))
+            ((++o_wins_rev))
             ;;
           draw)
-            ((draws_rev++))
+            ((++draws_rev))
             ;;
         esac
         rm -f "$GAME_FILE"
