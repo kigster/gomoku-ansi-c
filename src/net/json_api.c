@@ -319,7 +319,8 @@ char *json_api_serialize_game(game_state_t *game) {
   json_object_object_add(root, "O", player_o);
 
   // Game parameters
-  json_object_object_add(root, "board_size", json_object_new_int(game->board_size));
+  json_object_object_add(root, "board_size",
+                         json_object_new_int(game->board_size));
   json_object_object_add(root, "radius",
                          json_object_new_int(game->search_radius));
 

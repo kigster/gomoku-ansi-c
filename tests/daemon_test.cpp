@@ -362,7 +362,8 @@ protected:
   FILE *original_stderr;
 
   void SetUp() override {
-    // Suppress stderr during CLI tests (error messages are expected for invalid input tests)
+    // Suppress stderr during CLI tests (error messages are expected for invalid
+    // input tests)
     original_stderr = stderr;
     stderr = fopen("/dev/null", "w");
   }

@@ -186,7 +186,7 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
 
     case 'q':
       config.headless = 1;
-      config.skip_welcome = 1;  // Quiet mode implies skip welcome
+      config.skip_welcome = 1; // Quiet mode implies skip welcome
       break;
 
     case 'x':
@@ -284,8 +284,9 @@ void print_help(const char *program_name) {
          "involved.\n");
   printf("  %s-s, --skip-welcome%s    Skip the welcome screen.\n", COLOR_YELLOW,
          COLOR_RESET);
-  printf("  %s-q, --quiet%s           Quiet mode: suppress all terminal output.\n",
-         COLOR_YELLOW, COLOR_RESET);
+  printf(
+      "  %s-q, --quiet%s           Quiet mode: suppress all terminal output.\n",
+      COLOR_YELLOW, COLOR_RESET);
   printf("                        Useful for batch/eval scripts with -j.\n");
   printf("  %s-t, --timeout T%s       Timeout in seconds that AI (and human)\n",
          COLOR_YELLOW, COLOR_RESET);

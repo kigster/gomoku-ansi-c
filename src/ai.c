@@ -224,8 +224,8 @@ int evaluate_threat_fast(int **board, int x, int y, int player,
   int dir_threats[4] = {0, 0, 0, 0};       // Threat in each direction
   int dir_is_four[4] = {0, 0, 0, 0};       // Is this direction a four?
   int dir_is_open_three[4] = {0, 0, 0, 0}; // Is this direction an open three?
-  int dir_is_three[4] = {0, 0, 0, 0};      // Is this direction any kind of three?
-  int dir_is_open_two[4] = {0, 0, 0, 0};   // Is this direction an open two?
+  int dir_is_three[4] = {0, 0, 0, 0};    // Is this direction any kind of three?
+  int dir_is_open_two[4] = {0, 0, 0, 0}; // Is this direction an open two?
 
   for (int d = 0; d < 4; d++) {
     int dx = directions[d][0];
