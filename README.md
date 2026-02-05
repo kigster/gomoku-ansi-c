@@ -30,7 +30,7 @@ In this implementation, the default first player is a human, so you will have a 
 > [!NOTE]
 > For detailed breakdown of the source files and their functions we refer to the [Developer Documentation](doc/DEVELOPER.md) document.
 
-### The Two Versions of the Game
+### The Few Versions of the Game
 
 This repo contains what can be thought of three separate versions of the game that share some core AI code, but are built into two separate executables:
 
