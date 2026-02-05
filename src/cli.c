@@ -53,6 +53,7 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
       {"help", no_argument, 0, 'h'},
       {"undo", no_argument, 0, 'u'},
       {"skip-welcome", no_argument, 0, 's'},
+      {"quiet", no_argument, 0, 'q'},
       {"player-x", required_argument, 0, 'x'},
       {"player-o", required_argument, 0, 'o'},
       {0, 0, 0, 0}};
@@ -61,7 +62,7 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
   int option_index = 0;
 
   // Parse command-line arguments using getopt_long
-  while ((c = getopt_long(argc, argv, "d:l:t:b:r:j:p:w:husx:o:", long_options,
+  while ((c = getopt_long(argc, argv, "d:l:t:b:r:j:p:w:husqx:o:", long_options,
                           &option_index)) != -1) {
     switch (c) {
     case 'd':
@@ -183,6 +184,11 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
       config.skip_welcome = 1;
       break;
 
+    case 'q':
+      config.headless = 1;
+      config.skip_welcome = 1;  // Quiet mode implies skip welcome
+      break;
+
     case 'x':
       config.player_x_explicit = 1;
       if (strcmp(optarg, "human") == 0) {
@@ -278,6 +284,9 @@ void print_help(const char *program_name) {
          "involved.\n");
   printf("  %s-s, --skip-welcome%s    Skip the welcome screen.\n", COLOR_YELLOW,
          COLOR_RESET);
+  printf("  %s-q, --quiet%s           Quiet mode: suppress all terminal output.\n",
+         COLOR_YELLOW, COLOR_RESET);
+  printf("                        Useful for batch/eval scripts with -j.\n");
   printf("  %s-t, --timeout T%s       Timeout in seconds that AI (and human)\n",
          COLOR_YELLOW, COLOR_RESET);
   printf("                        have to make their move, otherwise AI must "

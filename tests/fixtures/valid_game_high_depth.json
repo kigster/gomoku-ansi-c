@@ -1,7 +1,7 @@
 {
   "X": { "player": "human", "time_ms": 0.000 },
   "O": { "player": "AI", "depth": 10, "time_ms": 0.000 },
-  "board": 19,
+  "board_size": 19,
   "radius": 5,
   "timeout": "none",
   "winner": "none",

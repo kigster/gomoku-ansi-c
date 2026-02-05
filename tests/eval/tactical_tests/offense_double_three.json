@@ -1,0 +1,21 @@
+{
+  "name": "create_double_three",
+  "description": "X can create an unstoppable double-three threat",
+  "category": "offense",
+  "difficulty": "medium",
+  "board_size": 15,
+  "X": {"player": "AI", "depth": 4},
+  "O": {"player": "human"},
+  "moves": [
+    {"X (AI)": [7, 7]},
+    {"O (human)": [6, 6]},
+    {"X (AI)": [7, 8]},
+    {"O (human)": [6, 8]},
+    {"X (AI)": [8, 8]},
+    {"O (human)": [5, 5]},
+    {"X (AI)": [9, 9]},
+    {"O (human)": [4, 4]}
+  ],
+  "expected_moves": [[6, 7]],
+  "explanation": "X plays [6,7] creating two open threes simultaneously: horizontal [6,7][7,7][7,8] and diagonal. O cannot block both."
+}

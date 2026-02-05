@@ -142,8 +142,17 @@ int get_move_priority_optimized(game_state_t *game, int **board, int x, int y,
   }
 
   // Weight our threats and opponent's threats for move ordering
-  priority += my_threat * 10;
-  priority += opp_threat * 12; // Slightly prefer blocking
+  // Favor offense over defense - only block when opponent has real threats
+  // Opponent's closed threats (< 1500) don't require urgent blocking
+  if (opp_threat >= 1500) {
+    // Opponent has open three or higher - blocking is important
+    priority += my_threat * 10;
+    priority += opp_threat * 12;
+  } else {
+    // Opponent has no urgent threats - prioritize offense
+    priority += my_threat * 15;
+    priority += opp_threat * 5;
+  }
 
   return priority;
 }
@@ -215,7 +224,8 @@ int evaluate_threat_fast(int **board, int x, int y, int player,
   int dir_threats[4] = {0, 0, 0, 0};       // Threat in each direction
   int dir_is_four[4] = {0, 0, 0, 0};       // Is this direction a four?
   int dir_is_open_three[4] = {0, 0, 0, 0}; // Is this direction an open three?
-  int dir_is_three[4] = {0, 0, 0, 0}; // Is this direction any kind of three?
+  int dir_is_three[4] = {0, 0, 0, 0};      // Is this direction any kind of three?
+  int dir_is_open_two[4] = {0, 0, 0, 0};   // Is this direction an open two?
 
   for (int d = 0; d < 4; d++) {
     int dx = directions[d][0];
@@ -265,6 +275,7 @@ int evaluate_threat_fast(int **board, int x, int y, int player,
       }
     } else if (contiguous == 2 && open_ends >= 2) {
       threat = 100; // Open two
+      dir_is_open_two[d] = 1;
     }
 
     dir_threats[d] = threat;
@@ -282,6 +293,7 @@ int evaluate_threat_fast(int **board, int x, int y, int player,
   int num_fours = 0;
   int num_open_threes = 0;
   int num_threes = 0;
+  int num_open_twos = 0;
 
   for (int d = 0; d < 4; d++) {
     if (dir_is_four[d])
@@ -290,6 +302,8 @@ int evaluate_threat_fast(int **board, int x, int y, int player,
       num_open_threes++;
     if (dir_is_three[d])
       num_threes++;
+    if (dir_is_open_two[d])
+      num_open_twos++;
   }
 
   // Compound threat bonuses - these are nearly winning!
@@ -308,6 +322,15 @@ int evaluate_threat_fast(int **board, int x, int y, int player,
   // Open three + another three = dangerous
   if (num_open_threes >= 1 && num_threes >= 2) {
     max_threat = max(max_threat, 30000);
+  }
+  // Two or more intersecting open twos = creates double open three when played
+  // This is a serious developing threat that should be valued highly
+  if (num_open_twos >= 2) {
+    max_threat = max(max_threat, 2000); // Strong developing position
+  }
+  // Open two + open three = developing into compound threat
+  if (num_open_twos >= 1 && num_open_threes >= 1) {
+    max_threat = max(max_threat, 3000);
   }
 
   return max_threat;
@@ -808,10 +831,21 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y) {
   for (int i = 0; i < move_count; i++) {
     int opp_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
                                           opponent, game->board_size);
-    // Open three is threat 1500, closed four is 10000
-    // We want to block threats that could become open fours
-    // Threshold: 1000+ catches open threes and similar dangerous patterns
-    if (opp_threat >= 1000 && opp_threat < 40000) {
+    // Only block threats that lead to UNSTOPPABLE winning sequences:
+    // - Open three (1500): becomes open four (50000) next turn = unstoppable
+    // - Compound threats (30000+): multiple threats, can only block one
+    //
+    // Do NOT block threats that are FORCIBLE but BLOCKABLE:
+    // - Closed four (10000): opponent plays, we block, game continues
+    // - Closed three extending: let them make it, we respond
+    //
+    // The key insight: if opponent creates a closed four, we MUST block it,
+    // but that doesn't give them initiative - we get to play after blocking.
+    // But if opponent creates an open three and we don't block, NEXT turn
+    // they make open four which is unstoppable.
+    int is_unstoppable_threat = (opp_threat >= 1500 && opp_threat < 10000) ||
+                                (opp_threat >= 30000 && opp_threat < 40000);
+    if (is_unstoppable_threat) {
       open_three_blocks_x[open_three_block_count] = moves[i].x;
       open_three_blocks_y[open_three_block_count] = moves[i].y;
       open_three_block_threat[open_three_block_count] = opp_threat;

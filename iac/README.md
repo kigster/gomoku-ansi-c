@@ -233,7 +233,7 @@ curl -X POST http://<LOAD_BALANCER_IP>/gomoku/play \
   -d '{
     "X": { "player": "AI", "depth": 4 },
     "O": { "player": "AI", "depth": 4 },
-    "board": 15,
+    "board_size": 15,
     "radius": 2,
     "timeout": "none",
     "winner": "none",

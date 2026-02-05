@@ -53,3 +53,5 @@ compile_commands.json     # Optional, but often generated and ignorable
 # Miscellaneous
 .DS_Store                 # macOS Finder files
 *.pyc                     # Python compile output (if using Python with CMake)
+/*.json
+/tests/eval/results/tournament_*.txt

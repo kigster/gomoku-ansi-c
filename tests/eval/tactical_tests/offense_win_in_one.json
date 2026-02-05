@@ -1,0 +1,21 @@
+{
+  "name": "win_in_one",
+  "description": "X can win immediately by completing five in a row",
+  "category": "offense",
+  "difficulty": "trivial",
+  "board_size": 15,
+  "X": {"player": "AI", "depth": 4},
+  "O": {"player": "human"},
+  "moves": [
+    {"X (AI)": [7, 7]},
+    {"O (human)": [8, 8]},
+    {"X (AI)": [7, 8]},
+    {"O (human)": [8, 9]},
+    {"X (AI)": [7, 9]},
+    {"O (human)": [8, 10]},
+    {"X (AI)": [7, 10]},
+    {"O (human)": [9, 9]}
+  ],
+  "expected_moves": [[7, 6], [7, 11]],
+  "explanation": "X has four in a row and can win by playing [7,6] or [7,11]"
+}

@@ -86,14 +86,15 @@ static int check_port_available(const char *host, int port) {
 
 /**
  * Agent-check thread function.
- * Listens on a TCP port and responds with "ready\n" or "drain\n" based on
+ * Listens on a TCP port and responds with maxconn directives based on
  * whether the main thread is currently processing a request.
  *
- * HAProxy agent-check protocol:
- * - "ready" : Server is idle, can accept new requests
- * - "drain" : Server is busy, don't send new requests
- * - "down"  : Server is broken (we don't use this)
- * - "up"    : Server is available (we use "ready" instead for clarity)
+ * HAProxy agent-check protocol keywords we use:
+ * - "ready maxconn:1"  : Server is busy, limit to 1 connection (excess queues)
+ * - "ready maxconn:10" : Server is idle, can accept more connections
+ *
+ * Using maxconn instead of "drain" keeps servers in the pool, allowing
+ * HAProxy to queue requests when all servers are busy rather than returning 503.
  */
 static void *agent_thread_func(void *arg) {
   (void)arg; // Unused
@@ -140,13 +141,16 @@ static void *agent_thread_func(void *arg) {
     }
 
     // Determine status and respond
+    // Use maxconn instead of drain to keep server in pool for queuing:
+    // - busy: maxconn 1 = only 1 connection, excess requests queue in HAProxy
+    // - idle: maxconn 10 = accept more connections, preferred by leastconn
     const char *status;
     if (handlers_is_busy()) {
-      status = "drain\n";
-      LOG_DEBUG("Agent-check: responding 'drain' (busy)");
+      status = "ready maxconn:1\n";
+      LOG_DEBUG("Agent-check: responding 'ready maxconn:1' (busy)");
     } else {
-      status = "ready\n";
-      LOG_DEBUG("Agent-check: responding 'ready' (idle)");
+      status = "ready maxconn:10\n";
+      LOG_DEBUG("Agent-check: responding 'ready maxconn:10' (idle)");
     }
 
     // Send response (best effort, don't retry on partial write)

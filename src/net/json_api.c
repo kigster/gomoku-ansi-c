@@ -89,10 +89,10 @@ game_state_t *json_api_parse_game(const char *json_str, char *error_msg,
     return NULL;
   }
 
-  // Parse board size (required)
+  // Parse board size (optional, defaults to 19)
   json_object *board_obj;
   int board_size = 19;
-  if (json_object_object_get_ex(root, "board", &board_obj)) {
+  if (json_object_object_get_ex(root, "board_size", &board_obj)) {
     board_size = json_object_get_int(board_obj);
     if (board_size != 15 && board_size != 19) {
       snprintf(error_msg, error_msg_len,
@@ -100,10 +100,6 @@ game_state_t *json_api_parse_game(const char *json_str, char *error_msg,
       json_object_put(root);
       return NULL;
     }
-  } else {
-    snprintf(error_msg, error_msg_len, "Missing required field: board");
-    json_object_put(root);
-    return NULL;
   }
 
   // Parse player configurations (required)
@@ -323,7 +319,7 @@ char *json_api_serialize_game(game_state_t *game) {
   json_object_object_add(root, "O", player_o);
 
   // Game parameters
-  json_object_object_add(root, "board", json_object_new_int(game->board_size));
+  json_object_object_add(root, "board_size", json_object_new_int(game->board_size));
   json_object_object_add(root, "radius",
                          json_object_new_int(game->search_radius));
 

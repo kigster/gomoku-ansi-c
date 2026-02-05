@@ -260,7 +260,7 @@ The game state JSON format:
     "depth": 2,
     "time_ms": 1.234
   },
-  "board": 15,
+  "board_size": 15,
   "radius": 2,
   "timeout": "none",
   "winner": "none",
@@ -334,7 +334,7 @@ curl -X POST http://127.0.0.1:3000/gomoku/play \
   -d '{
     "X": {"player": "human", "time_ms": 0},
     "O": {"player": "AI", "depth": 2, "time_ms": 0},
-    "board": 15,
+    "board_size": 15,
     "radius": 2,
     "timeout": "none",
     "winner": "none",
@@ -373,7 +373,7 @@ Depth 1 (fastest, weakest):
 ```bash
 curl -X POST http://127.0.0.1:3000/gomoku/play \
   -H "Content-Type: application/json" \
-  -d '{"X":{"player":"human"},"O":{"player":"AI","depth":1},"board":15,"radius":2,"timeout":"none","winner":"none","board_state":[],"moves":[{"X (human)":[7,7],"time_ms":0}]}'
+  -d '{"X":{"player":"human"},"O":{"player":"AI","depth":1},"board_size":15,"radius":2,"timeout":"none","winner":"none","board_state":[],"moves":[{"X (human)":[7,7],"time_ms":0}]}'
 ```
 
 Depth 4 (slowest, strongest):
@@ -381,7 +381,7 @@ Depth 4 (slowest, strongest):
 ```bash
 curl -X POST http://127.0.0.1:3000/gomoku/play \
   -H "Content-Type: application/json" \
-  -d '{"X":{"player":"human"},"O":{"player":"AI","depth":4},"board":15,"radius":3,"timeout":"none","winner":"none","board_state":[],"moves":[{"X (human)":[7,7],"time_ms":0}]}'
+  -d '{"X":{"player":"human"},"O":{"player":"AI","depth":4},"board_size":15,"radius":3,"timeout":"none","winner":"none","board_state":[],"moves":[{"X (human)":[7,7],"time_ms":0}]}'
 ```
 
 ---
