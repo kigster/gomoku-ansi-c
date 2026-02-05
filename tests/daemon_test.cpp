@@ -357,7 +357,23 @@ TEST_F(DaemonJsonTest, FormatUptime) {
 // CLI TESTS
 //===============================================================================
 
-class DaemonCliTest : public ::testing::Test {};
+class DaemonCliTest : public ::testing::Test {
+protected:
+  FILE *original_stderr;
+
+  void SetUp() override {
+    // Suppress stderr during CLI tests (error messages are expected for invalid input tests)
+    original_stderr = stderr;
+    stderr = fopen("/dev/null", "w");
+  }
+
+  void TearDown() override {
+    if (stderr != original_stderr) {
+      fclose(stderr);
+      stderr = original_stderr;
+    }
+  }
+};
 
 // Test parsing bind address with host and port
 TEST_F(DaemonCliTest, ParseBindHostPort) {
