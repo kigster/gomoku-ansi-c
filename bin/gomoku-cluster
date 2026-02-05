@@ -15,6 +15,20 @@ function setup() {
   direnv allow .
 }
 
+# We are replacing pkill using bashmatic's pid.matchin and pid.stop-and-kill functions.
+function pkill() {
+  shift # remove -f
+  local pattern="$1"; shift
+  local -a pids=("$(pids.matching "$pattern")")
+  local pid
+  run.set-all continue-on-error
+  for pid in "${pids[@]}"; do
+    if [[ -n ${pid} ]] && pid.alive "$pid"; then
+      pid.stop "$pid"
+    fi
+  done
+}
+
 # =============================================================================
 # NGINX Functions
 # =============================================================================
@@ -33,7 +47,7 @@ function nginx.start() {
   if ! pgrep -f "nginx" >/dev/null; then
     error "nginx failed to start, please look at /var/log/nginx/error.log"
     [[ -f /var/log/nginx/error.log ]] && tail -n 20 /var/log/nginx/error.log
-    exit 1
+    return 1
   else
     success "nginx started successfully."
   fi
@@ -50,14 +64,7 @@ function nginx.stop() {
     if pgrep -f "nginx" >/dev/null; then
       warning "nginx didn't stop gracefully, force killing..."
       pkill -f "nginx"
-      sleep 1
-    fi
-    
-    if ! pgrep -f "nginx" >/dev/null; then
       success "nginx stopped successfully."
-    else
-      error "Failed to stop nginx."
-      exit 1
     fi
   else
     info "nginx is not running."
@@ -99,7 +106,7 @@ function haproxy.start() {
       sleep 1
     if ! pgrep -f "haproxy" >/dev/null; then
       error "haproxy failed to start, try starting it by hand."
-      exit 1
+      return 1
     else
       success "haproxy started successfully."
     fi
@@ -111,15 +118,8 @@ function haproxy.stop() {
   h2bg "Stopping haproxy..."
   
   if pgrep -f "haproxy" >/dev/null; then
-    pkill -f "haproxy"
-    sleep 2
-    
-    if ! pgrep -f "haproxy" >/dev/null; then
-      success "haproxy stopped successfully."
-    else
-      error "Failed to stop haproxy."
-      exit 1
-    fi
+    pkill -f "haproxy"    
+    success "haproxy stopped successfully."
   else
     info "haproxy is not running."
   fi
@@ -164,13 +164,13 @@ function envoy.start() {
   
   if ! command -v envoy >/dev/null 2>&1; then
     error "envoy is not installed. Install with: brew install envoy"
-    exit 1
+    return 1
   fi
   
   local envoy_config="$PROJECT_DIR/iac/envoy/envoy.yaml"
   if [[ ! -f "$envoy_config" ]]; then
     error "Envoy config not found: $envoy_config"
-    exit 1
+    return 1
   fi
   
   if ! pgrep -f "envoy.*envoy.yaml" >/dev/null; then
@@ -178,7 +178,7 @@ function envoy.start() {
     if ! envoy --mode validate -c "$envoy_config" >/dev/null 2>&1; then
       error "Envoy configuration validation failed"
       envoy --mode validate -c "$envoy_config"
-      exit 1
+      return 1
     fi
     
     # Start envoy in background
@@ -189,7 +189,7 @@ function envoy.start() {
       success "envoy started successfully."
     else
       error "envoy failed to start."
-      exit 1
+      return 1
     fi
   else
     success "envoy is already running."
@@ -207,7 +207,7 @@ function envoy.stop() {
       success "envoy stopped successfully."
     else
       error "Failed to stop envoy."
-      exit 1
+      return 1
     fi
   else
     info "envoy is not running."
@@ -262,13 +262,13 @@ function gomoku.start() {
     sleep 1
     if ! pgrep -f "gomoku-httpd" >/dev/null; then
       error "gomoku-httpd failed to start."
-      exit 1
+      return 1
     else
       success "gomoku-httpd started successfully."
     fi
   else
     error "Gomoku Cluster did not shutdown correctly."
-    exit 1
+    return 1
   fi
 }
 
@@ -283,7 +283,7 @@ function gomoku.stop() {
       success "gomoku-httpd stopped successfully."
     else
       error "Failed to stop gomoku-httpd."
-      exit 1
+      return 1
     fi
   else
     info "gomoku-httpd is not running."
@@ -348,8 +348,7 @@ function cmd_start() {
         ;;
       *)
         error "Unknown option: $1"
-        show_usage
-        exit 1
+        return 1
         ;;
     esac
   done
@@ -357,7 +356,7 @@ function cmd_start() {
   # Validate proxy option
   if [[ -n "$proxy" && "$proxy" != "haproxy" && "$proxy" != "envoy" ]]; then
     error "Invalid proxy: $proxy. Must be 'haproxy' or 'envoy'"
-    exit 1
+    return 1
   fi
   
   # If no components specified, start all with specified proxy
@@ -365,7 +364,7 @@ function cmd_start() {
     if [[ -z "$proxy" ]]; then
       error "Must specify --proxy when starting all components"
       show_usage
-      exit 1
+      return 1
     fi
     
     nginx.start
@@ -402,7 +401,7 @@ function cmd_start() {
           ;;
         *)
           error "Invalid component: $component"
-          exit 1
+          return 1
           ;;
       esac
     done
@@ -422,7 +421,7 @@ function cmd_stop() {
       *)
         error "Unknown option: $1"
         show_usage
-        exit 1
+        return 1
         ;;
     esac
   done
@@ -451,7 +450,7 @@ function cmd_stop() {
           ;;
         *)
           error "Invalid component: $component"
-          exit 1
+          return 1
           ;;
       esac
     done
@@ -471,7 +470,7 @@ function cmd_restart() {
       *)
         error "Unknown option: $1"
         show_usage
-        exit 1
+        return 1
         ;;
     esac
   done
@@ -500,7 +499,7 @@ function cmd_restart() {
           ;;
         *)
           error "Invalid component: $component"
-          exit 1
+          return 1
           ;;
       esac
     done
@@ -520,7 +519,7 @@ function cmd_status() {
       *)
         error "Unknown option: $1"
         show_usage
-        exit 1
+        return 1
         ;;
     esac
   done
@@ -552,7 +551,7 @@ function cmd_status() {
           ;;
         *)
           error "Invalid component: $component"
-          exit 1
+          return 1
           ;;
       esac
       echo
@@ -561,48 +560,97 @@ function cmd_status() {
 }
 
 function show_usage() {
-  cat << EOF
-Usage: $0 <command> [options]
+  local binary="$(basename "$0")"
 
-Commands:
-  start     Start services
-  stop      Stop services  
-  restart   Restart services
-  status    Show service status
+  echo -e "
+${bldblu}USAGE:${clr} 
+  ${bldylw}${binary} <command> [options]${clr}
 
-Start Options:
-  -p, --proxy <haproxy|envoy>    Specify proxy to use (required for start all)
-  -c, --component <name>         Component to start (can be used multiple times)
+${bldblu}Commands:${clr}
+  ${bldylw}start     ${clr} # Start services
+  ${bldylw}stop      ${clr} # Stop services  
+  ${bldylw}restart   ${clr} # Restart services
+  ${bldylw}status    ${clr} # Show service status
 
-Stop/Restart/Status Options:
-  -c, --component <name>         Component to operate on (can be used multiple times)
+${bldblu}Start Options:${clr}
+  ${bldylw}-p, --proxy <haproxy|envoy>    ${clr} # Specify proxy to use (required for start all)
+  ${bldylw}-c, --component <name>         ${clr} # Component to start (can be used multiple times)
 
-Components:
-  nginx       Nginx web server
-  haproxy     HAProxy load balancer  
-  envoy       Envoy proxy
-  gomoku      Gomoku-httpd cluster (alias: gomoku-httpd)
+${bldblu}Stop/Restart/Status Options:${clr}
+  ${bldylw}-c, --component <name>         ${clr} # Component to operate on (can be used multiple times)
 
-Examples:
-  $0 start --proxy haproxy                    # Start all with HAProxy
-  $0 start --proxy envoy                      # Start all with Envoy
-  $0 start -c nginx -c gomoku                 # Start only nginx and gomoku
-  $0 stop -c haproxy                          # Stop only haproxy
-  $0 restart -c envoy                         # Restart only envoy
-  $0 status                                   # Show status of all components
-  $0 status -c gomoku                         # Show status of gomoku only
+${bldblu}Components:${clr}
+  ${bldylw}nginx     ${clr} Nginx web server
+  ${bldylw}haproxy   ${clr} HAProxy load balancer  
+  ${bldylw}envoy     ${clr} Envoy proxy
+  ${bldylw}gomoku    ${clr} Gomoku-httpd cluster (alias: gomoku-httpd)
 
-EOF
+${bldblu}Examples: Primary Modes:${clr}
+  ${bldylw}${binary} start --proxy haproxy         ${clr}# Start all with HAProxy
+  ${bldylw}${binary} start --proxy envoy           ${clr}# Start all with Envoy
+
+${bldblu}Examples: Secondary Modes:${clr}
+  ${bldylw}${binary} start -c nginx -c gomoku      ${clr}# Start only nginx and gomoku
+  ${bldylw}${binary} stop -c haproxy               ${clr}# Stop only haproxy
+  ${bldylw}${binary} restart -c envoy              ${clr}# Restart only envoy
+  ${bldylw}${binary} status                        ${clr}# Show status of all components
+  ${bldylw}${binary} status -c gomoku              ${clr}# Show status of gomoku only
+  ${bldylw}${binary} htop                          ${clr}# Show top processes
+"
 }
 
 # =============================================================================
 # Main
 # =============================================================================
 
+declare -a argv=("$@")
+export argv
+
+function parse-args() {
+  # Main command dispatch
+  case "${argv[0]:-}" in
+    start)
+      cmd_start "${argv[@]:1}"
+      ;;
+    stop)
+      shift
+      cmd_stop "${argv[@]:1}"
+      ;;
+    restart)
+      shift
+      cmd_restart "${argv[@]:1}"
+      ;;
+    status)
+      shift
+      cmd_status "${argv[@]:1}"
+      ;;
+    htop)
+      shift
+      command -v htop >/dev/null 2>&1 || { echo "htop is not installed. Please install it first." >&2; return 1; }
+      htop -F 'nginx|haproxy|envoy|gomoku-httpd|gomoku`' "$@"
+      exit 0
+      ;;
+    ""|--help|-h|help)
+      show_usage "${argv[@]:0}"
+      ;;
+    *)
+      error "Unknown command: $1"
+      show_usage "${argv[@]:0}"
+      return 1
+      ;;
+  esac
+
+  return $?
+}
+
+main() {
+  parse-args "$@"
+}
+
 # Initialize bashmatic if available
 if [[ -f ~/.bashmatic/init ]]; then
   # shellcheck disable=SC1090
-  source ~/.bashmatic/init
+  source ~/.bashmatic/init >/dev/null 2>&1
 else
   # Fallback functions if bashmatic is not available
   function h2bg() { echo "==> $*"; }
@@ -614,30 +662,4 @@ else
   function run.set-all() { :; }
 fi
 
-# Main command dispatch
-case "${1:-}" in
-  start)
-    shift
-    cmd_start "$@"
-    ;;
-  stop)
-    shift
-    cmd_stop "$@"
-    ;;
-  restart)
-    shift
-    cmd_restart "$@"
-    ;;
-  status)
-    shift
-    cmd_status "$@"
-    ;;
-  ""|--help|-h|help)
-    show_usage
-    ;;
-  *)
-    error "Unknown command: $1"
-    show_usage
-    exit 1
-    ;;
-esac
+main "$@"

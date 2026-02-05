@@ -180,6 +180,70 @@ flowchart LR
     LBB -. backup .-> WAA1 & WAA2 & WAA3
 ```
 
+## Running a Cluster with Envoy
+
+As an alternative to HAProxy, you can deploy [Envoy Proxy](https://www.envoyproxy.io/) in front of the `gomoku-httpd` cluster. Envoy offers built-in request queueing via circuit breakers, HTTP-based health checks, and automatic retries with exponential backoff -- features that allow it to handle burst traffic more gracefully than HAProxy's agent-check model.
+
+### Envoy Routing Architecture
+
+The following diagram shows how Envoy routes game requests from clients through nginx to the cluster of `gomoku-httpd` daemons:
+
+```mermaid
+flowchart LR
+    C1["Client 1"] --> NGX["nginx<br/>:80"]
+    C2["Client 2"] --> NGX
+    C3["Client N"] --> NGX
+
+    NGX -->|"proxy_pass"| ENVOY["Envoy Proxy<br/>:10000<br/><i>least-request LB</i>"]
+
+    ENVOY -->|"/ready = 200"| G1["gomoku-httpd<br/>:9500"]
+    ENVOY -->|"/ready = 200"| G2["gomoku-httpd<br/>:9501"]
+    ENVOY -->|"/ready = 200"| G3["gomoku-httpd<br/>:9502"]
+    ENVOY -.->|"/ready = 503<br/>(busy)"| G4["gomoku-httpd<br/>:9503"]
+    ENVOY -->|"/ready = 200"| G5["gomoku-httpd<br/>:9504"]
+    ENVOY -->|"..."| GN["gomoku-httpd<br/>:9505-9509"]
+
+    ENVOY --- Q["Request Queue<br/>max_pending: 1000"]
+
+    subgraph health ["Health Check Loop (1s interval)"]
+        HC["GET /ready"] -->|"200 = idle"| HEALTHY["Route traffic"]
+        HC -->|"503 = busy"| DEPRIORITIZE["Deprioritize"]
+    end
+
+    ADMIN["Admin UI<br/>:9901/clusters"] -.-> ENVOY
+```
+
+### How Envoy Differs from HAProxy
+
+| Feature | HAProxy | Envoy |
+|---------|---------|-------|
+| Health Check | TCP agent-check (`drain`/`ready`) | HTTP `GET /ready` (200 vs 503) |
+| Request Queue | Limited (via `maxconn`) | Circuit breaker (`max_pending_requests: 1000`) |
+| Retry Policy | Manual configuration | Built-in with exponential backoff |
+| Load Balancing | Round-robin with drain awareness | Least-request with health-check awareness |
+| Admin Interface | Stats page on `:8404` | Full REST API on `:9901` |
+
+### Key Envoy Features
+
+- **Request Queueing**: When all servers are busy, Envoy queues up to 1000 pending requests via its circuit breaker. Requests are dispatched as servers become available, preventing 503 errors during bursts.
+- **Least-Request Load Balancing**: Routes each new request to the endpoint with the fewest active connections, naturally preferring idle servers.
+- **Automatic Retries**: On 503 responses, Envoy retries up to 3 times with exponential backoff (100ms to 10s), giving busy servers time to finish.
+- **HTTP Health Checks**: Polls each server's `/ready` endpoint every second. Servers responding with 503 (busy) are deprioritized but not ejected, allowing requests to queue rather than fail.
+
+### Starting the Cluster with Envoy
+
+```bash
+# Start the full stack (nginx + envoy + gomoku daemons)
+bin/gomoku-cluster start --proxy envoy
+
+# Or start components individually
+bin/gomoku-cluster start -c nginx -c envoy -c gomoku
+```
+
+The Envoy admin interface is available at [http://127.0.0.1:9901](http://127.0.0.1:9901). See [`iac/envoy/README.md`](../iac/envoy/README.md) for detailed configuration documentation.
+
+---
+
 ## HTTP API
 
 ### POST /gomoku/play
