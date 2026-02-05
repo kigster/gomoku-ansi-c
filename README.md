@@ -56,10 +56,18 @@ You can operate the cluster using the `gctl` utility located in the `bin` folder
 #### Starting
 
 ```bash
+gctl start
+```
+
+This starts nginx, haproxy, and the `gomoku-httpd` cluster.
+
+You can also atart individual components:
+
+```bash
 gctl start -p haproxy
 ```
 
-This will boot the cluster. 
+This will boot `halroxy`only. 
 
 > [!IMPORTANT] 
 > Nake sure that your nginx uses nginx.conf from `iac/config` folder, same with haproxy — `iac/config/haproxy.cfg` should be used for haproxy configuration.
