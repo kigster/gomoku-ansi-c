@@ -1,83 +1,52 @@
-# Gomoku AI Evaluation Framework
+# Gomoku AI Evaluation Tools
 
-This directory contains tools for measuring the strength and quality of the Gomoku AI.
+This directory contains tools for evaluating the performance of the Gomoku AI and testing the `gomoku-httpd` server.
 
-## Evaluation Methods
+## Contents
 
-### 1. Depth Tournament (`depth_tournament.sh`)
+- `tournament.py`: Automated CLI tournament runner.
+- `llm_player.py`: Interaction script for LLMs or human vs Server.
+- `depth_tournament.sh`: Legacy shell script for tournaments (deprecated).
+- `results/`: Directory for storing tournament results.
 
-Runs a round-robin tournament between different AI depths to establish a strength hierarchy.
+## Tournament Runner (`tournament.py`)
 
-```bash
-./tests/eval/depth_tournament.sh --games 50 --depths "2,3,4,5"
-```
+Run automated matches between different AI difficulty levels (depths) to generate win-rate statistics.
 
-Expected results:
-- Depth N should beat Depth N-1 with >60% win rate
-- First-player advantage means X wins more often
-
-### 2. Tactical Test Suite (`tactical_tests/`)
-
-A collection of positions with known correct moves, categorized by:
-- **Defense**: Must-block situations (open fours, open threes)
-- **Offense**: Winning combinations (double threats, checkmates)
-- **Positional**: Best developing moves
-
-Run with:
-```bash
-./tests/eval/run_tactical_tests.sh
-```
-
-### 3. LLM Evaluation (`llm_eval.py`)
-
-Uses an LLM to evaluate game quality by analyzing transcripts.
+### Usage
 
 ```bash
-python tests/eval/llm_eval.py --game saved.json --model claude-3-opus
+python3 tournament.py --games 10 --depth1 2 --depth2 4 --board 15
 ```
 
-Outputs:
-- Per-move quality scores (1-10)
-- Identified blunders
-- Overall game rating
-- Suggested improvements
+**Options:**
+- `--bin`: Path to gomoku binary (default: `./gomoku` in root)
+- `--games`: Number of games to play
+- `--depth1`: Search depth for Player X
+- `--depth2`: Search depth for Player O
+- `--board`: Board size (15 or 19)
+- `--radius`: Search radius
 
-### 4. Regression Tests (`regression/`)
+## LLM Player (`llm_player.py`)
 
-Golden game files that verify AI behavior hasn't degraded.
+A client to play against the `gomoku-httpd` server. Can be used manually or with an OpenAI-compatible API.
 
-## Metrics
+### Usage
 
-| Metric | Description | Target |
-|--------|-------------|--------|
-| Depth Win Rate | D(n) vs D(n-1) win % | >65% |
-| Tactical Accuracy | % puzzles solved | >90% |
-| Blunders/Game | Moves with >500 eval drop | <1 |
-| Avg Move Quality | LLM rating 1-10 | >7 |
-
-## Adding New Tests
-
-### Tactical Position Format
-
-```json
-{
-  "name": "block_double_three",
-  "description": "O must block X's double-three threat",
-  "board_size": 15,
-  "board": [
-    "...............",
-    "...............",
-    "......X........",
-    ".....X.........",
-    "....X..........",
-    "...............",
-    "...X...........",
-    "...............",
-    "..............."
-  ],
-  "current_player": "O",
-  "expected_moves": [[4, 5]],
-  "category": "defense",
-  "difficulty": "medium"
-}
+**Manual Play:**
+```bash
+python3 llm_player.py --manual --url http://127.0.0.1:8080
 ```
+
+**LLM Play:**
+```bash
+export OPENAI_API_KEY="sk-..."
+python3 llm_player.py --model gpt-4 --url http://127.0.0.1:8080
+```
+
+**Options:**
+- `--url`: URL of the gomoku-httpd server
+- `--model`: Model name (default: gpt-4)
+- `--manual`: Enable manual input mode
+- `--ai-starts`: AI plays X (starts)
+- `--size`: Board size
