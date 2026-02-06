@@ -16,7 +16,7 @@ COPY . .
 RUN make clean
 
 # Build all targets (gomoku, gomoku-httpd, etc.).
-# This command also handles git submodule initialization and building json-c from source.
+# This command also handles building vendored json-c from source.
 RUN make all -j 4
 
 # Run the test suite to validate the build. If tests fail, the Docker build will stop here.
