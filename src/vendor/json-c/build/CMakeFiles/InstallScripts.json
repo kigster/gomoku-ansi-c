@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/Users/kig/gomoku-ansi-c/src/vendor/json-c/build/cmake_install.cmake"
-	],
-	"Parallel" : false
-}

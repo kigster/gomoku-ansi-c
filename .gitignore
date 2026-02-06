@@ -56,5 +56,7 @@ compile_commands.json     # Optional, but often generated and ignorable
 /*.json
 /games/*.json
 /tests/eval/results/tournament_*.txt
-/games/*.json
+
+# Vendored library build artifacts
+src/vendor/json-c/build/
 
