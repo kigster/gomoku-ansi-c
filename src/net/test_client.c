@@ -27,7 +27,51 @@
 #define COLOR_GREEN "\033[32m"
 #define COLOR_RED "\033[31m"
 #define COLOR_BOLD_YELLOW "\033[1;33m"
+#define COLOR_BG_RED "\033[41m"
 #define COLOR_RESET "\033[0m"
+
+//===============================================================================
+// HTTP ERROR TRACKING
+//===============================================================================
+
+#define MAX_ERROR_CODES 32
+
+typedef struct {
+  int status_code;
+  int count;
+} error_entry_t;
+
+typedef struct {
+  error_entry_t entries[MAX_ERROR_CODES];
+  int num_entries;
+} error_tracker_t;
+
+static void error_tracker_record(error_tracker_t *tracker, int status_code) {
+  if (!tracker || status_code < 100)
+    return;
+  for (int i = 0; i < tracker->num_entries; i++) {
+    if (tracker->entries[i].status_code == status_code) {
+      tracker->entries[i].count++;
+      return;
+    }
+  }
+  if (tracker->num_entries < MAX_ERROR_CODES) {
+    tracker->entries[tracker->num_entries].status_code = status_code;
+    tracker->entries[tracker->num_entries].count = 1;
+    tracker->num_entries++;
+  }
+}
+
+static int error_tracker_total(const error_tracker_t *tracker) {
+  int total = 0;
+  for (int i = 0; i < tracker->num_entries; i++) {
+    total += tracker->entries[i].count;
+  }
+  return total;
+}
+
+// Forward declaration for use in http_post_with_retry
+static void print_board_with_padding(const char *json, int padding, int red_bg);
 
 //===============================================================================
 // HTTP CLIENT
@@ -164,10 +208,14 @@ static char *http_post(const char *host, int port, const char *path,
 /**
  * Send HTTP POST with exponential backoff retry on 503 errors.
  * Retries with delays: 0.1s, 0.2s, 0.4s, 0.8s, 1.6s, 3.2s, ...
+ * Records all non-2xx status codes in the error tracker.
+ * While retrying 503s, re-renders the board with a red background.
  * Returns response body (caller must free) or NULL on non-retryable error.
  */
 static char *http_post_with_retry(const char *host, int port, const char *path,
-                                  const char *body, int max_retries) {
+                                  const char *body, int max_retries,
+                                  error_tracker_t *tracker,
+                                  const char *last_game_state, int padding) {
   double delay_sec = 0.1;
   int attempt = 0;
 
@@ -179,6 +227,11 @@ static char *http_post_with_retry(const char *host, int port, const char *path,
       return response; // Success
     }
 
+    // Record the error status code
+    if (http_status >= 100) {
+      error_tracker_record(tracker, http_status);
+    }
+
     // Check if it's a 503 error (retryable)
     if (http_status != 503) {
       return NULL; // Non-retryable error
@@ -186,18 +239,13 @@ static char *http_post_with_retry(const char *host, int port, const char *path,
 
     attempt++;
     if (max_retries > 0 && attempt >= max_retries) {
-      fprintf(stderr, "%sError: Max retries (%d) exceeded for 503 errors%s\n",
-              COLOR_RED, max_retries, COLOR_RESET);
       return NULL;
     }
 
-    // Print 503 error in red
-    fprintf(stderr, "%sServer returned 503 (Service Unavailable)%s\n",
-            COLOR_RED, COLOR_RESET);
-
-    // Print retry message in bold yellow
-    fprintf(stderr, "%sRetrying in %.1f seconds...%s\n", COLOR_BOLD_YELLOW,
-            delay_sec, COLOR_RESET);
+    // Re-render the board with red background to indicate 503 state
+    if (last_game_state) {
+      print_board_with_padding(last_game_state, padding, 1);
+    }
 
     // Sleep with the current delay
     usleep((useconds_t)(delay_sec * 1000000));
@@ -241,8 +289,10 @@ static const char *get_winner(const char *json) {
 /**
  * Print the board state from JSON response with colored pieces.
  * X is displayed in yellow, O is displayed in green.
+ * If red_bg is non-zero, the entire board is rendered with a red background.
  */
-static void print_board_with_padding(const char *json, int padding) {
+static void print_board_with_padding(const char *json, int padding,
+                                     int red_bg) {
   const char *board_state = strstr(json, "\"board_state\"");
   if (!board_state)
     return;
@@ -281,23 +331,29 @@ static void print_board_with_padding(const char *json, int padding) {
     if (!quote_end || quote_end >= arr_end)
       break;
 
-    // Print padding
+    // Print padding (with red background if active)
+    if (red_bg)
+      printf("%s", COLOR_BG_RED);
     printf("%*s", padding, "");
 
     // Print line content with colors for X and O
     for (const char *c = quote_start + 1; c < quote_end; c++) {
       if (*c == 'X') {
-        printf("%sX%s", COLOR_YELLOW, COLOR_RESET);
+        printf("%s%sX%s", red_bg ? COLOR_BG_RED : "", COLOR_YELLOW,
+               COLOR_RESET);
       } else if (*c == 'O') {
-        printf("%sO%s", COLOR_GREEN, COLOR_RESET);
+        printf("%s%sO%s", red_bg ? COLOR_BG_RED : "", COLOR_GREEN, COLOR_RESET);
       } else {
         putchar(*c);
       }
     }
-    printf("\n");
+    printf("%s\n", red_bg ? COLOR_RESET : "");
 
     p = quote_end + 1;
   }
+
+  if (red_bg)
+    printf("%s", COLOR_RESET);
 }
 
 //===============================================================================
@@ -305,16 +361,43 @@ static void print_board_with_padding(const char *json, int padding) {
 //===============================================================================
 
 /**
- * Save game state to JSON file.
+ * Save game state to JSON file, injecting server_errors if any were recorded.
+ * Inserts "server_errors": { "503": N, ... } before the closing brace.
  */
-static int save_game_json(const char *filename, const char *json) {
+static int save_game_json(const char *filename, const char *json,
+                          const error_tracker_t *tracker) {
   FILE *fp = fopen(filename, "w");
   if (!fp) {
     fprintf(stderr, "Error: Failed to open '%s' for writing: %s\n", filename,
             strerror(errno));
     return 0;
   }
-  fprintf(fp, "%s", json);
+
+  if (tracker->num_entries == 0) {
+    fprintf(fp, "%s", json);
+    fclose(fp);
+    return 1;
+  }
+
+  // Find the last '}' to inject server_errors before it
+  const char *last_brace = strrchr(json, '}');
+  if (!last_brace) {
+    fprintf(fp, "%s", json);
+    fclose(fp);
+    return 1;
+  }
+
+  // Write everything up to the last '}'
+  fwrite(json, 1, (size_t)(last_brace - json), fp);
+
+  // Inject server_errors object
+  fprintf(fp, ",\n  \"server_errors\": {");
+  for (int i = 0; i < tracker->num_entries; i++) {
+    fprintf(fp, "%s\n    \"%d\": %d", (i > 0) ? "," : "",
+            tracker->entries[i].status_code, tracker->entries[i].count);
+  }
+  fprintf(fp, "\n  }\n}\n");
+
   fclose(fp);
   return 1;
 }
@@ -420,11 +503,12 @@ int main(int argc, char *argv[]) {
 
   int move_num = 0;
   const char *winner = "none";
+  error_tracker_t errors = {0};
 
   while (strcmp(winner, "none") == 0) {
-    // Send to server (with retry on 503 errors)
-    char *response =
-        http_post_with_retry(host, port, "/gomoku/play", game_state, 0);
+    // Send to server (with retry on 503 errors; board turns red during retries)
+    char *response = http_post_with_retry(
+        host, port, "/gomoku/play", game_state, 0, &errors, game_state, 3);
     if (!response) {
       fprintf(stderr, "Error: Failed to communicate with server\n");
       free(game_state);
@@ -434,8 +518,8 @@ int main(int argc, char *argv[]) {
     free(game_state);
     game_state = response;
 
-    // Always print the board with padding
-    print_board_with_padding(game_state, 3);
+    // Always print the board with padding (normal background)
+    print_board_with_padding(game_state, 3, 0);
 
     move_num++;
     const char *label = NULL;
@@ -457,7 +541,7 @@ int main(int argc, char *argv[]) {
 
   // Print the final board (already printed in loop, but print again for
   // clarity)
-  print_board_with_padding(game_state, 3);
+  print_board_with_padding(game_state, 3, 0);
 
   printf("\n");
   if (strcmp(winner, "X") == 0) {
@@ -470,9 +554,19 @@ int main(int argc, char *argv[]) {
 
   printf("%*sTotal moves: %d\n", 3, "", move_num);
 
+  // Print server error summary if any occurred
+  if (error_tracker_total(&errors) > 0) {
+    printf("%*sServer errors: %d total", 3, "", error_tracker_total(&errors));
+    for (int i = 0; i < errors.num_entries; i++) {
+      printf("%s %d=%d", (i > 0) ? "," : " (", errors.entries[i].status_code,
+             errors.entries[i].count);
+    }
+    printf(")\n");
+  }
+
   // Save game to JSON file if specified
   if (json_file) {
-    if (save_game_json(json_file, game_state)) {
+    if (save_game_json(json_file, game_state, &errors)) {
       printf("%*sGame saved to: %s\n", 3, "", json_file);
     }
   }
