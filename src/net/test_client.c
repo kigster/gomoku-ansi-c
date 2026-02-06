@@ -30,6 +30,46 @@
 #define COLOR_RESET "\033[0m"
 
 //===============================================================================
+// HTTP ERROR TRACKING
+//===============================================================================
+
+#define MAX_ERROR_CODES 32
+
+typedef struct {
+  int status_code;
+  int count;
+} error_entry_t;
+
+typedef struct {
+  error_entry_t entries[MAX_ERROR_CODES];
+  int num_entries;
+} error_tracker_t;
+
+static void error_tracker_record(error_tracker_t *tracker, int status_code) {
+  if (!tracker || status_code < 100)
+    return;
+  for (int i = 0; i < tracker->num_entries; i++) {
+    if (tracker->entries[i].status_code == status_code) {
+      tracker->entries[i].count++;
+      return;
+    }
+  }
+  if (tracker->num_entries < MAX_ERROR_CODES) {
+    tracker->entries[tracker->num_entries].status_code = status_code;
+    tracker->entries[tracker->num_entries].count = 1;
+    tracker->num_entries++;
+  }
+}
+
+static int error_tracker_total(const error_tracker_t *tracker) {
+  int total = 0;
+  for (int i = 0; i < tracker->num_entries; i++) {
+    total += tracker->entries[i].count;
+  }
+  return total;
+}
+
+//===============================================================================
 // HTTP CLIENT
 //===============================================================================
 
@@ -164,10 +204,12 @@ static char *http_post(const char *host, int port, const char *path,
 /**
  * Send HTTP POST with exponential backoff retry on 503 errors.
  * Retries with delays: 0.1s, 0.2s, 0.4s, 0.8s, 1.6s, 3.2s, ...
+ * Records all non-2xx status codes in the error tracker.
  * Returns response body (caller must free) or NULL on non-retryable error.
  */
 static char *http_post_with_retry(const char *host, int port, const char *path,
-                                  const char *body, int max_retries) {
+                                  const char *body, int max_retries,
+                                  error_tracker_t *tracker) {
   double delay_sec = 0.1;
   int attempt = 0;
 
@@ -177,6 +219,11 @@ static char *http_post_with_retry(const char *host, int port, const char *path,
 
     if (response) {
       return response; // Success
+    }
+
+    // Record the error status code
+    if (http_status >= 100) {
+      error_tracker_record(tracker, http_status);
     }
 
     // Check if it's a 503 error (retryable)
@@ -305,16 +352,43 @@ static void print_board_with_padding(const char *json, int padding) {
 //===============================================================================
 
 /**
- * Save game state to JSON file.
+ * Save game state to JSON file, injecting server_errors if any were recorded.
+ * Inserts "server_errors": { "503": N, ... } before the closing brace.
  */
-static int save_game_json(const char *filename, const char *json) {
+static int save_game_json(const char *filename, const char *json,
+                          const error_tracker_t *tracker) {
   FILE *fp = fopen(filename, "w");
   if (!fp) {
     fprintf(stderr, "Error: Failed to open '%s' for writing: %s\n", filename,
             strerror(errno));
     return 0;
   }
-  fprintf(fp, "%s", json);
+
+  if (tracker->num_entries == 0) {
+    fprintf(fp, "%s", json);
+    fclose(fp);
+    return 1;
+  }
+
+  // Find the last '}' to inject server_errors before it
+  const char *last_brace = strrchr(json, '}');
+  if (!last_brace) {
+    fprintf(fp, "%s", json);
+    fclose(fp);
+    return 1;
+  }
+
+  // Write everything up to the last '}'
+  fwrite(json, 1, (size_t)(last_brace - json), fp);
+
+  // Inject server_errors object
+  fprintf(fp, ",\n  \"server_errors\": {");
+  for (int i = 0; i < tracker->num_entries; i++) {
+    fprintf(fp, "%s\n    \"%d\": %d", (i > 0) ? "," : "",
+            tracker->entries[i].status_code, tracker->entries[i].count);
+  }
+  fprintf(fp, "\n  }\n}\n");
+
   fclose(fp);
   return 1;
 }
@@ -420,11 +494,12 @@ int main(int argc, char *argv[]) {
 
   int move_num = 0;
   const char *winner = "none";
+  error_tracker_t errors = {0};
 
   while (strcmp(winner, "none") == 0) {
     // Send to server (with retry on 503 errors)
-    char *response =
-        http_post_with_retry(host, port, "/gomoku/play", game_state, 0);
+    char *response = http_post_with_retry(host, port, "/gomoku/play",
+                                          game_state, 0, &errors);
     if (!response) {
       fprintf(stderr, "Error: Failed to communicate with server\n");
       free(game_state);
@@ -470,9 +545,19 @@ int main(int argc, char *argv[]) {
 
   printf("%*sTotal moves: %d\n", 3, "", move_num);
 
+  // Print server error summary if any occurred
+  if (error_tracker_total(&errors) > 0) {
+    printf("%*sServer errors: %d total", 3, "", error_tracker_total(&errors));
+    for (int i = 0; i < errors.num_entries; i++) {
+      printf("%s %d=%d", (i > 0) ? "," : " (", errors.entries[i].status_code,
+             errors.entries[i].count);
+    }
+    printf(")\n");
+  }
+
   // Save game to JSON file if specified
   if (json_file) {
-    if (save_game_json(json_file, game_state)) {
+    if (save_game_json(json_file, game_state, &errors)) {
       printf("%*sGame saved to: %s\n", 3, "", json_file);
     }
   }

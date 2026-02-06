@@ -7,19 +7,26 @@ set +e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-function setup() {
-  bash -c "$(curl -fsSL https://bashmatic.re1.re); bashmatic-install -q"
+function script.setup() {
+  # Install bashmatic if not installed
+  [[ -d ~/.bashmatic ]] || bash -c "$(curl -fsSL https://bashmatic.re1.re); bashmatic-install -q" >/dev/null 2>&1
   # shellcheck disable=SC1090
-  source ~/.bashmatic/init
-  command -v direnv >/dev/null 2>&1 || { package.install direnv; }
-  direnv allow .
+  source ~/.bashmatic/init >/dev/null 2>&1
+  script.dependencies
 }
+
+function script.dependencies() {
+  command -v direnv >/dev/null 2>&1 || { package.install direnv; }
+  command -v direnv >/dev/null 2>&1 && direnv allow .
+}
+
 
 # We are replacing pkill using bashmatic's pid.matchin and pid.stop-and-kill functions.
 function pkill() {
   shift # remove -f
   local pattern="$1"; shift
   local -a pids=("$(pids.matching "$pattern")")
+  [[ ${#pids[@]} -eq 0 ]] && return 0
   local pid
   run.set-all continue-on-error
   for pid in "${pids[@]}"; do
@@ -34,54 +41,77 @@ function pkill() {
 # =============================================================================
 
 function nginx.start() {
-  h2bg "Starting nginx..."
+  inf "Starting nginx..."
   run.set-all abort-on-error
 
   if [[ -z $(pids.matching nginx) ]]; then
     sudo /opt/homebrew/bin/nginx -g "daemon on;"
   else
-    success "nginx is already running."
+    ui.closer.kind-of-ok:
+    success "nginx is already running, $(pids.matching nginx | wc -l | tr -d ' ') processes."
+    return 0
   fi
 
   sleep 1
+
   if [[ -z $(pids.matching nginx) ]]; then
+    ui.closer.not-ok:
     error "nginx failed to start, please look at /var/log/nginx/error.log"
     [[ -f /var/log/nginx/error.log ]] && tail -n 20 /var/log/nginx/error.log
     return 1
   else
+    ui.closer.ok:
     success "nginx started successfully."
   fi
 }
 
 function nginx.stop() {
-  h2bg "Stopping nginx..."
+  inf "Stopping nginx..."
   
   if [[ -n $(pids.matching nginx) ]]; then
-    run "/opt/homebrew/bin/nginx -s quit"
-    sleep 2
+    sudo /opt/homebrew/bin/nginx -s quit >/dev/null 2>&1 || true
+    sleep 4
     
     # Force kill if still running
     if [[ -n $(pids.matching nginx) ]]; then
+      ui.closer.not-ok:
       warning "nginx didn't stop gracefully, force killing..."
-      pkill -9 "nginx"
+      sudo pkill -9 "nginx"
+    else
+      ui.closer.ok:
       success "nginx stopped successfully."
+      return
+    fi
+
+    inf "Checking if nginx has stopped..."
+
+    # Force kill if still running
+    if [[ -z $(pids.matching nginx) ]]; then
+      ui.closer.ok:
+      success "nginx stopped successfully."
+    else
+      ui.closer.not-ok:
+      error "nginx failed to stop."
     fi
   else
-    info "nginx is not running."
+    ui.closer.kind-of-ok:
+    success "nginx is not running."
   fi
 }
 
 function nginx.restart() {
-  h2bg "Restarting nginx..."
+  inf "Restarting nginx..."
   nginx.stop
   sleep 1
   nginx.start
+  ui.closer.ok:
 }
 
 function nginx.status() {
-  h2bg "nginx status..."
+  inf "nginx status..."
   
   if pgrep -f "nginx" >/dev/null; then
+    ui.closer.ok:
     success "nginx is running (PID: $(pgrep -f nginx | tr '\n' ' '))"
     
     # Try to get nginx status if available
@@ -90,6 +120,7 @@ function nginx.status() {
       curl -s http://127.0.0.1/nginx_status 2>/dev/null || echo "No status endpoint configured"
     fi
   else
+    ui.closer.kind-of-ok:
     warning "nginx is not running."
   fi
 }
@@ -99,43 +130,50 @@ function nginx.status() {
 # =============================================================================
 
 function haproxy.start() {
-  h2bg "Starting haproxy"
+  inf "Starting haproxy..."
   if [[ -z $(pids.matching haproxy) ]]; then
-    sudo /opt/homebrew/opt/haproxy/bin/haproxy -D -f /opt/homebrew/etc/haproxy.cfg;
+    /opt/homebrew/opt/haproxy/bin/haproxy -D -f /opt/homebrew/etc/haproxy.cfg;
     sleep 1
     if [[ -z $(pids.matching haproxy) ]]; then
+      ui.closer.not-ok:
       error "haproxy failed to start, try starting it by hand."
       return 1
     else
+      ui.closer.ok:
       success "haproxy started successfully."
     fi
   else
-    info "haproxy is already running, skipping start."; 
+    ui.closer.kind-of-ok:
+    info "haproxy is already running, skipping start."
   fi
 }
 
 function haproxy.stop() {
-  h2bg "Stopping haproxy..."
+  inf "Stopping haproxy..."
   
   if [[ -n $(pids.matching haproxy) ]]; then
-    pkill -9 "haproxy"    
+    pkill -9 "haproxy"
+    ui.closer.ok:
     success "haproxy stopped successfully."
   else
-    info "haproxy is not running."
+    ui.closer.kind-of-ok:
+    success "haproxy is not running."
   fi
 }
 
 function haproxy.restart() {
-  h2bg "Restarting haproxy..."
+  inf "Restarting haproxy..."
   haproxy.stop
   sleep 1
   haproxy.start
+  ui.closer.ok:
 }
 
 function haproxy.status() {
-  h2bg "haproxy status..."
+  inf "haproxy status..."
   
   if [[ -n $(pids.matching haproxy) ]]; then
+    ui.closer.ok:
     success "haproxy is running (PID: $(pgrep -f haproxy | tr '\n' ' '))"
     
     # Get haproxy admin URL and show stats
@@ -151,6 +189,7 @@ function haproxy.status() {
       fi
     fi
   else
+    ui.closer.kind-of-ok:
     warning "haproxy is not running."
   fi
 }
@@ -160,15 +199,17 @@ function haproxy.status() {
 # =============================================================================
 
 function envoy.start() {
-  h2bg "Starting envoy..."
+  inf "Starting envoy..."
   
   if ! command -v envoy >/dev/null 2>&1; then
-    error "envoy is not installed. Install with: brew install envoy"
+    ui.closer.kind-of-ok:
+    success "envoy is not installed. Install with: brew install envoy"
     return 1
   fi
   
   local envoy_config="$PROJECT_DIR/iac/envoy/envoy.yaml"
   if [[ ! -f "$envoy_config" ]]; then
+    ui.closer.not-ok:
     error "Envoy config not found: $envoy_config"
     return 1
   fi
@@ -176,6 +217,7 @@ function envoy.start() {
   if [[ -z $(pids.matching envoy) ]]; then
     # Validate config first
     if ! envoy --mode validate -c "$envoy_config" >/dev/null 2>&1; then
+      ui.closer.not-ok:
       error "Envoy configuration validation failed"
       envoy --mode validate -c "$envoy_config"
       return 1
@@ -186,45 +228,52 @@ function envoy.start() {
     sleep 2
     
     if pgrep -f "envoy.*envoy.yaml" >/dev/null; then
-      success "envoy started successfully."
+      ui.closer.ok:
     else
+      ui.closer.not-ok:
       error "envoy failed to start."
       return 1
     fi
   else
+    ui.closer.ok:
     success "envoy is already running."
   fi
 }
 
 function envoy.stop() {
-  h2bg "Stopping envoy..."
+  inf "Stopping envoy..."
   
   if [[ -n $(pids.matching envoy) ]]; then
     pkill -f "envoy.*envoy.yaml"
     sleep 2
     
     if ! pgrep -f "envoy.*envoy.yaml" >/dev/null; then
+      ui.closer.ok:
       success "envoy stopped successfully."
     else
+      ui.closer.not-ok:
       error "Failed to stop envoy."
       return 1
     fi
   else
-    info "envoy is not running."
+    ui.closer.kind-of-ok:
+    success "envoy is not running."
   fi
 }
 
 function envoy.restart() {
-  h2bg "Restarting envoy..."
+  inf "Restarting envoy..."
   envoy.stop
   sleep 1
   envoy.start
+  ui.closer.ok:
 }
 
 function envoy.status() {
-  h2bg "envoy status..."
+  inf "envoy status..."
   
   if pgrep -f "envoy.*envoy.yaml" >/dev/null; then
+    ui.closer.ok:
     success "envoy is running (PID: $(pgrep -f 'envoy.*envoy.yaml' | tr '\n' ' '))"
     
     # Check envoy admin interface
@@ -249,7 +298,8 @@ function envoy.status() {
 # =============================================================================
 
 function gomoku.start() {
-  h2bg "Starting Gomoku Cluster"
+  local workers="${1}"
+  inf "Starting Gomoku Cluster..."
 
   pgrep -f "gomoku-httpd" >/dev/null && {
     info "Stopping existing gomoku-httpd instances..."
@@ -258,49 +308,58 @@ function gomoku.start() {
 
   sleep 1
   if ! pgrep -f "gomoku-httpd" >/dev/null; then
-    "$SCRIPT_DIR/gomokud-ctl" start
+    [[ -z "$workers" ]] || workers="-w $workers"
+    "$SCRIPT_DIR/gomokud-ctl" start "${workers}"
     sleep 1
     if ! pgrep -f "gomoku-httpd" >/dev/null; then
+      ui.closer.not-ok:
       error "gomoku-httpd failed to start."
       return 1
     else
+      ui.closer.ok:
       success "gomoku-httpd started successfully."
     fi
   else
+    ui.closer.not-ok:
     error "Gomoku Cluster did not shutdown correctly."
     return 1
   fi
 }
 
 function gomoku.stop() {
-  h2bg "Stopping Gomoku Cluster..."
+  inf "Stopping Gomoku Cluster..."
   
   if pgrep -f "gomoku-httpd" >/dev/null; then
     "$SCRIPT_DIR/gomokud-ctl" stop
     sleep 2
     
     if ! pgrep -f "gomoku-httpd" >/dev/null; then
+      ui.closer.ok:
       success "gomoku-httpd stopped successfully."
     else
+      ui.closer.not-ok:
       error "Failed to stop gomoku-httpd."
       return 1
     fi
   else
-    info "gomoku-httpd is not running."
+    ui.closer.kind-of-ok:
+    success "gomoku-httpd is not running."
   fi
 }
 
 function gomoku.restart() {
-  h2bg "Restarting Gomoku Cluster..."
+  inf "Restarting Gomoku Cluster..."
   gomoku.stop
   sleep 1
   gomoku.start
+  ui.closer.ok:
 }
 
 function gomoku.status() {
-  h2bg "gomoku-httpd status..."
+  inf "gomoku-httpd status..."
   
   if pgrep -f "gomoku-httpd" >/dev/null; then
+    ui.closer.ok:
     local pids
     pids=$(pgrep -f "gomoku-httpd" | tr '\n' ' ')
     success "gomoku-httpd is running (PIDs: $pids)"
@@ -323,6 +382,7 @@ function gomoku.status() {
       fi
     done
   else
+    ui.closer.kind-of-ok:
     warning "gomoku-httpd is not running."
   fi
 }
@@ -332,12 +392,17 @@ function gomoku.status() {
 # =============================================================================
 
 function cmd_start() {
-  local proxy=""
+  local proxy="haproxy" # default to haproxy
   local components=()
-  
+  local workers=
   # Parse arguments
   while [[ $# -gt 0 ]]; do
     case $1 in
+      -w|--workers)
+        workers="$2"
+        shift 2
+        [[ ${workers} =~ ^[0-9]+$ ]] || { error "Invalid workers: $workers"; return 1; }
+        ;;
       -p|--proxy)
         proxy="$2"
         shift 2
@@ -347,8 +412,8 @@ function cmd_start() {
         shift 2
         ;;
       *)
-        error "Unknown option: $1"
-        return 1
+        # ignore
+        shift
         ;;
     esac
   done
@@ -373,7 +438,7 @@ function cmd_start() {
     else
       envoy.start
     fi
-    gomoku.start
+    gomoku.start "$workers"
     
     # Open admin interface
     if [[ "$proxy" == "haproxy" ]]; then
@@ -603,42 +668,48 @@ ${bldblu}Examples: Secondary Modes:${clr}
 # Main
 # =============================================================================
 
-declare -a argv=("$@")
-export argv
-
 function parse-args() {
-  # Main command dispatch
-  case "${argv[0]:-}" in
-    start)
-      cmd_start "${argv[@]:1}"
-      ;;
-    stop)
-      shift
-      cmd_stop "${argv[@]:1}"
-      ;;
-    restart)
-      shift
-      cmd_restart "${argv[@]:1}"
-      ;;
-    status)
-      shift
-      cmd_status "${argv[@]:1}"
-      ;;
-    htop)
-      shift
-      command -v htop >/dev/null 2>&1 || { echo "htop is not installed. Please install it first." >&2; return 1; }
-      htop -F 'nginx|haproxy|envoy|gomoku-httpd|gomoku`' "$@"
-      exit 0
-      ;;
-    ""|--help|-h|help)
-      show_usage "${argv[@]:0}"
-      ;;
-    *)
-      error "Unknown command: $1"
-      show_usage "${argv[@]:0}"
-      return 1
-      ;;
-  esac
+
+  while [[ $# -gt 0 ]]; do
+
+    # Main command dispatch
+    case "${1}" in
+      start)
+        shift
+        cmd_start "$@"
+        return
+        ;;
+      stop)
+        shift
+        cmd_stop "$@"
+        return
+        ;;
+      restart)
+        shift
+        cmd_restart "$@"
+        return
+        ;;
+      status)
+        shift
+        cmd_status "$@"
+        return
+        ;;
+      htop)
+        shift
+        command -v htop >/dev/null 2>&1 || { echo "htop is not installed. Please install it first." >&2; return 1; }
+        htop -F 'nginx|haproxy|envoy|gomoku-httpd|gomoku`' "$@"
+        exit 0
+        ;;
+      ""|--help|-h|help)
+        show_usage "$@"
+        ;;
+      *)
+        error "Unknown command: $1"
+        show_usage "$@"
+        return 1
+        ;;
+    esac
+  done
 
   return $?
 }
@@ -647,19 +718,13 @@ main() {
   parse-args "$@"
 }
 
-# Initialize bashmatic if available
-if [[ -f ~/.bashmatic/init ]]; then
-  # shellcheck disable=SC1090
-  source ~/.bashmatic/init >/dev/null 2>&1
-else
-  # Fallback functions if bashmatic is not available
-  function h2bg() { echo "==> $*"; }
-  function success() { echo "✓ $*"; }
-  function error() { echo "✗ $*" >&2; }
-  function warning() { echo "⚠ $*"; }
-  function info() { echo "ℹ $*"; }
-  function run() { echo "Running: $*"; eval "$*"; }
-  function run.set-all() { :; }
-fi
+declare -a ARGV=("$@")
+export ARGV
 
-main "$@"
+script.setup
+
+function warning() {
+  arrow.blk-on-ylw "$@"
+}
+
+main "${ARGV[@]}"

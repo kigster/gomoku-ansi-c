@@ -1,6 +1,5 @@
-#daemons-stop "$@"!/usr/bin/env bash
+#!/usr/bin/env bash
 # vim: ft=bash
-#
 
 GOMOKUD_BINARY="gomoku-httpd"
 GOMOKUD_EXECUTABLE="gomoku-httpd"
@@ -13,17 +12,33 @@ DEFAULT_HOST="0.0.0.0"
 DEFAULT_PORT=9500
 DEFAULT_FLAGS="-L debug -l log/${GOMOKUD_BINARY}.log"
 
+flag_verbose=false
+
+declare -i CPU_CORES=0
+CPU_CORES=$(getconf _NPROCESSORS_ONLN)
+export CPU_CORES
+
 function daemons-count() {
   (daemons-show || echo 0) | wc -l | tr -d ' '
 }
 
+# shellcheck disable=SC2120
 function daemons-show() {
-  ps -ef | grep "${GOMOKUD_BINARY_REGEX}" | grep -v grep
+  if [[ -z "$1" ]] ; then
+    echo "All ${GOMOKUD_BINARY} processes:"
+     ps -ef | grep "${GOMOKUD_BINARY_REGEX}" | grep -v grep
+  else
+     ps -ef "$1" r| grep "${GOMOKUD_BINARY_REGEX}" | grep -v grep | grep -v "grep" | $1
+  fi
 }
 
 function usage() {
   echo "USAGE:"
-  echo "   gomokud-ctl start|stop|show|htop|help"
+  echo "   gomokud-ctl start [ -w | --workers <workers> ] "
+  echo "               stop"
+  echo "               show"
+  echo "               htop"
+  echo "               help"
   echo ""
   echo "DESCRIPTION:"
   echo "   Starts ${GOMOKUD_BINARY} processes equal to the number of CPU cores."
@@ -32,20 +47,24 @@ function usage() {
 
 function parse-argv() {
   [[ -z "$*" ]] && usage && exit 0
+  local -i workers="$CPU_CORES"
 
   while :; do
     case $1 in
       start)
         shift
-        daemons-start "$@"
+        [[ $1 =~ ^-w$ ]] && shift
+        [[ $1 =~ ^[0-9]+$ ]] && workers="$1" && shift
+        daemons-start "$workers"
         ;;
       stop)
         shift
         daemons-stop "$@"
         ;;
-      show)
+      show|status)
         shift
-        daemons-stop "$@"
+        daemons-status "$1"
+        shift
         ;;
       htop)
         shift
@@ -56,6 +75,10 @@ function parse-argv() {
         shift
         usage
         exit 0
+        ;;
+      -v | --verbose)
+        flag_verbose=true
+        shift
         ;;
       --) # End of all options; anything after will be passed to the action function
         shift
@@ -79,12 +102,12 @@ function daemons-htop() {
 }
 
 function daemons-start() {
-  local nproc=$(getconf _NPROCESSORS_ONLN)
+  local nproc="${1}"
   local port hapoxy_port
   local i
   local cmd
 
-  echo -e "${txtylw}Starting ${nproc} ${GOMOKUD_BINARY} processes...${clr}"
+  ${flag_verbose} && echo -e "${txtylw}Starting ${nproc} ${GOMOKUD_BINARY} processes...${clr}"
 
   [[ -f ${GOMOKUD_BINARY} ]] || { make all; }
 
@@ -95,29 +118,33 @@ function daemons-start() {
     haproxy_port=$((DEFAULT_PORT + i + 100))
     cmd="${GOMOKUD_EXECUTABLE} -b ${DEFAULT_HOST}:${port} -a ${haproxy_port} -d ${DEFAULT_FLAGS}"
 
-    echo -e -n  "${txtgrn}booting: [${cmd}] ... ${clr}"
+    ${flag_verbose} && echo -e -n  "${txtgrn}booting: [${cmd}] ... ${clr}"
     eval "${cmd}" &>/dev/null
-    echo -e "with PID ${txtpur}$!${clr}, exit code $?"
+    ${flag_verbose} && echo -e "with PID ${txtpur}$!${clr}, exit code $?"
   done
 
   count_end=$(daemons-count)
 
-  echo -e "${txtylw}Started $((count_end - count_start)) ${GOMOKUD_BINARY} processes.${clr}"
-  echo -e "${txtgrn}Total running ${GOMOKUD_BINARY} processes: ${bldylw}${count_end}${clr}."
+  ${flag_verbose} && echo -e "${txtylw}Started $((count_end - count_start)) ${GOMOKUD_BINARY} processes.${clr}"
+  ${flag_verbose} && echo -e "${txtgrn}Total running ${GOMOKUD_BINARY} processes: ${bldylw}${count_end}${clr}."
 }
 
 function daemons-stop() {
   local count=$(daemons-count)
 
   if [[ ${count} -gt 0 ]]; then
-    echo -e "${txtylw}Found ${count} processes running, stopping them...${clr}"
+    ${flag_verbose} && echo -e "${txtylw}Found ${count} processes running, stopping them...${clr}"
     pkill -9 ${GOMOKUD_BINARY}
   else
-    echo -e "${txtgrn}No ${GOMOKUD_BINARY} processes found, nothing to stop.${clr}"
+    ${flag_verbose} && echo -e "${txtgrn}No ${GOMOKUD_BINARY} processes found, nothing to stop.${clr}"
   fi
 
   count=$(daemons-count)
-  echo -e "Currently remaining ${GOMOKUD_BINARY} processes: ${bldgrn}${count}${clr}"
+  ${flag_verbose} && echo -e "Currently remaining ${GOMOKUD_BINARY} processes: ${bldgrn}${count}${clr}"
+}
+
+function daemons-status() {
+  daemons-show "$@"
 }
 
 function main() {
