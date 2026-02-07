@@ -1,0 +1,36 @@
+# ingress.yaml - Kubernetes Ingress with TLS for gomoku.games
+# Assumes:
+#   - nginx-ingress controller is installed
+#   - cert-manager is installed with a ClusterIssuer named "letsencrypt-prod"
+#   - DNS for gomoku.games already points to the Ingress controller's external IP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gomoku-ingress
+  namespace: gomoku
+  labels:
+    app.kubernetes.io/name: gomoku
+    app.kubernetes.io/component: ingress
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "5"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - gomoku.games
+      secretName: gomoku-tls
+  rules:
+    - host: gomoku.games
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gomoku-frontend
+                port:
+                  number: 80

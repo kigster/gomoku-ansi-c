@@ -34,11 +34,11 @@ function daemons-show() {
 
 function usage() {
   echo "USAGE:"
-  echo "   gomokud-ctl start [ -w | --workers <workers> ] "
-  echo "               stop"
-  echo "               show"
-  echo "               htop"
-  echo "               help"
+  echo "   gomoku-httpd-ctl start [ -w | --workers <workers> ] "
+  echo "                    stop"
+  echo "                    show"
+  echo "                    htop"
+  echo "                    help"
   echo ""
   echo "DESCRIPTION:"
   echo "   Starts ${GOMOKUD_BINARY} processes equal to the number of CPU cores."
@@ -68,7 +68,8 @@ function parse-argv() {
         ;;
       htop)
         shift
-        command -v htop >/dev/null 2>&1 || { echo "htop is not installed. Please install it first." >&2; exit 1; }
+        command -v htop >/dev/null 2>&1 || \
+          { echo "htop is not installed. Please install it first." >&2; exit 1; }
         daemons-htop "$@"
         ;;
       -h | --help|help)  

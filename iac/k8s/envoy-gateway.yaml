@@ -1,0 +1,81 @@
+# envoy-gateway.yaml - Envoy proxy that load-balances across gomoku-httpd worker pods
+# Uses the envoy-gateway-config ConfigMap for its configuration
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: envoy-gateway
+  namespace: gomoku
+  labels:
+    app.kubernetes.io/name: gomoku
+    app.kubernetes.io/component: envoy-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gomoku
+      app.kubernetes.io/component: envoy-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gomoku
+        app.kubernetes.io/component: envoy-gateway
+    spec:
+      containers:
+        - name: envoy
+          image: envoyproxy/envoy:v1.28-latest
+          ports:
+            - name: http
+              containerPort: 10000
+              protocol: TCP
+            - name: admin
+              containerPort: 9901
+              protocol: TCP
+          volumeMounts:
+            - name: envoy-config
+              mountPath: /etc/envoy
+              readOnly: true
+          command: ["envoy"]
+          args: ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "gomoku-gateway"]
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: admin
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: admin
+            initialDelaySeconds: 3
+            periodSeconds: 5
+      volumes:
+        - name: envoy-config
+          configMap:
+            name: envoy-gateway-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: envoy-gateway
+  namespace: gomoku
+  labels:
+    app.kubernetes.io/name: gomoku
+    app.kubernetes.io/component: envoy-gateway
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: gomoku
+    app.kubernetes.io/component: envoy-gateway
+  ports:
+    - name: http
+      port: 10000
+      targetPort: http
+      protocol: TCP

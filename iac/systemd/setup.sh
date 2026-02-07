@@ -12,4 +12,4 @@ sudo cp gomoku-httpd /opt/gomoku/bin/
 sudo systemctl start gomoku-httpd.target
 
 # Check status
-./iac/systemd/gomokud-ctl status
+./iac/systemd/gomoku-httpd-ctl status
