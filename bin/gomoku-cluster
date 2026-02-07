@@ -7,19 +7,70 @@ set +e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-function script.setup() {
+declare -a LOG_FILES
+LOG_FILES=(
+  "/var/log/nginx/access.log" 
+  "/var/log/nginx/error.log" 
+  "/var/log/envoy.log" 
+  "/var/log/haproxy.log" 
+  "/var/log/gomoku-httpd.log" 
+  "/var/log/envoy.log"
+)
+export LOG_FILES
+
+function setup.bashmatic() {
   # Install bashmatic if not installed
   [[ -d ~/.bashmatic ]] || bash -c "$(curl -fsSL https://bashmatic.re1.re); bashmatic-install -q" >/dev/null 2>&1
   # shellcheck disable=SC1090
   source ~/.bashmatic/init >/dev/null 2>&1
-  script.dependencies
 }
 
-function script.dependencies() {
+function setup.log-files-are-ok() {
+  for file in "${LOG_FILES[@]}"; do
+    [[ -w "$file" ]] || {
+      error "Log file [${file}] either does not exist or is not writable." 
+      sleep 1
+      hint "HINT: Run the following command first: " "$(basename $0) setup"
+      return 1
+    }
+  done
+}
+
+function setup.sudo() {
+  h3 "Setting up sudo and the ownership of the log files..."
+  sudo -n date >/dev/null 2>&1 || {
+    h.yellow "sudo is not authenticated, please enter your password to authenticate:"
+    sudo -v
+    local code=$?
+    [[ $code -ne 0 ]] && {
+      error "sudo authentication failed."
+      return 1
+    }
+  }
+
+  run "sudo chmod 777 /var/log"
+
+  for file in "${LOG_FILES[@]}"; do
+    run "sudo mkdir -p $(dirname "$file")"
+    run "sudo touch $file"
+    run "sudo chown $USER $file"
+    run "sudo chmod 666 $file"
+  done
+
+  run "sudo chown $USER /var/log/nginx"
+  success "All log files exist and are writeable."
+}
+
+function setup.direnv() {
   command -v direnv >/dev/null 2>&1 || { package.install direnv; }
   command -v direnv >/dev/null 2>&1 && direnv allow .
 }
 
+function cmd_setup() {
+  setup.bashmatic
+  setup.sudo
+  setup.direnv
+}
 
 # We are replacing pkill using bashmatic's pid.matchin and pid.stop-and-kill functions.
 function pkill() {
@@ -76,7 +127,7 @@ function nginx.stop() {
     if [[ -n $(pids.matching nginx) ]]; then
       ui.closer.not-ok:
       warning "nginx didn't stop gracefully, force killing..."
-      sudo pkill -9 "nginx"
+      pkill -9 "nginx"
     else
       ui.closer.ok:
       success "nginx stopped successfully."
@@ -214,7 +265,7 @@ function envoy.start() {
     return 1
   fi
   
-  if [[ -z $(pids.matching envoy) ]]; then
+  if [[ -z "$(pids.matching envoy)" ]]; then
     # Validate config first
     if ! envoy --mode validate -c "$envoy_config" >/dev/null 2>&1; then
       ui.closer.not-ok:
@@ -224,11 +275,12 @@ function envoy.start() {
     fi
     
     # Start envoy in background
-    sudo nohup envoy -c "$envoy_config" >/dev/null 2>&1 &
+    nohup envoy -c "$envoy_config" 2>&1 >/var/log/envoy.log &
     sleep 2
     
-    if pgrep -f "envoy.*envoy.yaml" >/dev/null; then
+    if [[ -n $(pids.matching envoy) ]]; then
       ui.closer.ok:
+      success "envoy started successfully."
     else
       ui.closer.not-ok:
       error "envoy failed to start."
@@ -243,7 +295,7 @@ function envoy.start() {
 function envoy.stop() {
   inf "Stopping envoy..."
   
-  if [[ -n $(pids.matching envoy) ]]; then
+  if [[ -n "$(pids.matching envoy)" ]]; then
     pkill -f "envoy.*envoy.yaml"
     sleep 2
     
@@ -471,6 +523,8 @@ function cmd_start() {
       esac
     done
   fi
+  success "Everything booted as you requested." 
+  hint "To monitor run the following command:" "bin/gctl htop"
 }
 
 function cmd_stop() {
@@ -694,10 +748,25 @@ function parse-args() {
         cmd_status "$@"
         return
         ;;
+      setup)
+        shift
+        cmd_setup "$@"
+        return
+        ;;
       htop)
         shift
-        command -v htop >/dev/null 2>&1 || { echo "htop is not installed. Please install it first." >&2; return 1; }
-        htop -F 'nginx|haproxy|envoy|gomoku-httpd|gomoku`' "$@"
+        command -v htop >/dev/null 2>&1 || { 
+          warning "htop is not installed, attempting an install."
+          package.install htop
+          code=$?
+          [[ ${code} -eq 0 ]] && success "htop was installed, awesome!" || { 
+            error "htop couldn't be installed, please install it manually."
+            return ${code}
+          }
+        }
+        trap 'exit 0' SIGINT
+        htop -t -F 'nginx|haproxy|envoy|gomoku-httpd|gomoku`' "$@"
+
         exit 0
         ;;
       ""|--help|-h|help)
@@ -721,10 +790,19 @@ main() {
 declare -a ARGV=("$@")
 export ARGV
 
-script.setup
+setup.bashmatic
 
 function warning() {
   arrow.blk-on-ylw "$@"
 }
 
+function hint() {
+  panel-info-blue-black "$@"
+}
+
+setup.direnv
+
+[[ "$*" =~ setup ]] || setup.log-files-are-ok || exit 1
+
 main "${ARGV[@]}"
+
