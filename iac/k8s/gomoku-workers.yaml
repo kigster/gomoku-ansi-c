@@ -1,0 +1,126 @@
+# gomoku-workers.yaml - Unified worker deployment with topology spread
+# Replaces the per-AZ deployments (gomoku-workers-az-a, gomoku-workers-az-b)
+# with a single Deployment that uses topologySpreadConstraints for cross-zone distribution.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gomoku-workers
+  namespace: gomoku
+  labels:
+    app.kubernetes.io/name: gomoku
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gomoku
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gomoku
+        app.kubernetes.io/component: worker
+    spec:
+      topologySpreadConstraints:
+        # Spread across availability zones
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: gomoku
+              app.kubernetes.io/component: worker
+        # Spread across nodes within a zone
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: gomoku
+              app.kubernetes.io/component: worker
+      containers:
+        - name: gomoku-httpd
+          image: gomoku-httpd:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8787
+              protocol: TCP
+            - name: agent
+              containerPort: 8788
+              protocol: TCP
+          # 1 full CPU core per pod (single-threaded AI computation)
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "128Mi"
+            limits:
+              cpu: "1000m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 1
+---
+# Headless Service for Envoy STRICT_DNS discovery
+# clusterIP: None causes DNS to resolve to individual pod IPs
+apiVersion: v1
+kind: Service
+metadata:
+  name: gomoku-workers
+  namespace: gomoku
+  labels:
+    app.kubernetes.io/name: gomoku
+    app.kubernetes.io/component: worker
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: gomoku
+    app.kubernetes.io/component: worker
+  ports:
+    - name: http
+      port: 8787
+      targetPort: http
+      protocol: TCP
+    - name: agent
+      port: 8788
+      targetPort: agent
+      protocol: TCP
+---
+# HorizontalPodAutoscaler scales workers based on CPU utilization
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gomoku-workers
+  namespace: gomoku
+  labels:
+    app.kubernetes.io/name: gomoku
+    app.kubernetes.io/component: worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gomoku-workers
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

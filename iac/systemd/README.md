@@ -12,7 +12,7 @@ This directory contains systemd unit files and scripts for managing multiple gom
 | gomoku-httpd@.service | Template unit file for individual instances |
 | gomoku-httpd.target | Target to manage all instances as a group |
 | install.sh | Installation script |
-| gomokud-ctl | Control script for managing the daemon cluster |
+| gomoku-httpd-ctl | Control script for managing the daemon cluster |
 
 ## Systems Architecture Diagram
 
@@ -61,7 +61,7 @@ sudo cp ../../gomoku-httpd /opt/gomoku/bin/
 sudo systemctl start gomoku-httpd.target
 
 # 5. Check status
-./gomokud-ctl status
+./gomoku-httpd-ctl status
 ```
 
 ## Installation Options
@@ -89,35 +89,35 @@ Example with default settings:
 | gomoku-httpd@8788 | 8788 | 9788 |
 | gomoku-httpd@8789 | 8789 | 9789 |
 
-## Using gomokud-ctl
+## Using gomoku-httpd-ctl
 
-The gomokud-ctl script provides a convenient interface for managing the cluster:
+The gomoku-httpd-ctl script provides a convenient interface for managing the cluster:
 
 ```bash
 # Start all instances
-./gomokud-ctl start
+./gomoku-httpd-ctl start
 
 # Stop all instances
-./gomokud-ctl stop
+./gomoku-httpd-ctl stop
 
 # Restart all instances
-./gomokud-ctl restart
+./gomoku-httpd-ctl restart
 
 # Check status of all instances
-./gomokud-ctl status
+./gomoku-httpd-ctl status
 
 # List configured ports
-./gomokud-ctl list
+./gomoku-httpd-ctl list
 
 # Follow logs from all instances
-./gomokud-ctl logs
+./gomoku-httpd-ctl logs
 
 # Check health of all instances
-./gomokud-ctl health
+./gomoku-httpd-ctl health
 
 # Operate on specific port only
-./gomokud-ctl status --port 8787
-./gomokud-ctl restart --port 8787
+./gomoku-httpd-ctl status --port 8787
+./gomoku-httpd-ctl restart --port 8787
 ```
 
 # Start/stop individual instance

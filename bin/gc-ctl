@@ -805,6 +805,20 @@ function show_usage() {
 ${bldblu}USAGE:${clr} 
   ${bldylw}${binary} <command> [options]${clr}
 
+${bldblu}DESCRIPTION:${clr} 
+  Controller script for the Gomoku Cluster in development mode. This script can be used
+  to start/stop/restart and obtain status from the entire interconnected cluster.
+
+  You can either use haproxy or envoy as the reverse proxy. Provide -p <haproxy|envoy> to 
+  specify the proxy to use when starting all components.
+
+  ${bldylw}bin/gc-ctl start [ -p <haproxy|envoy> ]${clr} starts:
+     * ${bldylw}nginx${clr}    listening on ports 80 and 443
+     * ${bldylw}haproxy${clr}  load balancer listening on port 10000 as the front-end, and 8404 as the admin 
+     * ${bldylw}envoy${clr}    proxy listening on port 10000 as the front-end, and 9901 as the admin interface
+     * ${bldylw}gomoku${clr}   cluster listening on ports 9500-9509
+     * ${bldylw}frontend${clr} reactJS/Vite dev server listening on port 5173
+
 ${bldblu}Commands:${clr}
   ${bldylw}start     ${clr} # Start services
   ${bldylw}stop      ${clr} # Stop services  
@@ -908,6 +922,10 @@ function parse-args() {
 }
 
 main() {
+  [[ -z "$*" ]] && {
+    show_usage
+    exit 0
+  }
   parse-args "$@"
 }
 

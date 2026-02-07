@@ -10,7 +10,7 @@ VERSION         := $(shell grep VERSION src/gomoku/gomoku.h | awk '{print $$3}' 
 TAG             := $(shell echo "v$(VERSION)")
 BRANCH          := $(shell git branch --show)
 
-SCRIPT          := $(shell dirname $(MAKEFILE_PATH))/bin/gomokud-ctl
+SCRIPT          := $(shell dirname $(MAKEFILE_PATH))/bin/gomoku-httpd-ctl
 
 # installation prefix (can override)
 PREFIX 			?= /usr/local
@@ -65,7 +65,7 @@ DAEMON_TEST_CXXFLAGS = $(CXXFLAGS)
 # CMake build directory
 BUILD_DIR = build
 
-.PHONY: all clean test tag help cmake-build cmake-clean cmake-test install uninstall rebuild release json-c gomoku-httpd test-daemon test-gomoku-http test-client evals eval-tournament eval-tactical eval-llm
+.PHONY: all clean test tag help cmake-build cmake-clean cmake-test install uninstall rebuild release json-c gomoku-httpd test-daemon test-gomoku-http test-client evals eval-tournament eval-tactical eval-llm docker-build docker-build-frontend docker-build-all docker-run k8s-deploy k8s-delete
 
 help:		## Prints help message auto-generated from the comments.
 		@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[32m%-20s\033[35m %s\033[0\n", $$1, $$2}' | sed '/^$$/d' | sort
@@ -205,8 +205,19 @@ format: 	## Format all source and test files using clang-format
 		find src/gomoku src/net -maxdepth 1 -name '*.c**' | xargs clang-format -i
 		find tests -maxdepth 1 -name '*.c**' | xargs clang-format -i
 
-docker-build: 	## Builds the project docker container with the gomoku-httpd
+docker-build: 	## Builds the gomoku-httpd docker container
 		docker build -t gomoku-httpd:latest .
+
+docker-build-frontend: ## Builds the gomoku-frontend docker container
+		docker build -t gomoku-frontend:latest frontend/
+
+docker-build-all: docker-build docker-build-frontend ## Builds all docker containers
 
 docker-run: 	## Runs the gomoku-httpd docker container
 		docker run -p 8787:8787 gomoku-httpd:latest
+
+k8s-deploy: 	## Deploy all K8s resources with kustomize
+		kubectl apply -k iac/k8s/
+
+k8s-delete: 	## Delete all K8s resources
+		kubectl delete -k iac/k8s/

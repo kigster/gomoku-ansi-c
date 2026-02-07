@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# gomokud-ctl - Control script for gomoku-httpd systemd services
+# gomoku-httpd-ctl - Control script for gomoku-httpd systemd services
 #
 # Usage:
-#   gomokud-ctl <command> [options]
+#   gomoku-httpd-ctl <command> [options]
 #
 # Commands:
 #   start         Start all gomoku-httpd instances

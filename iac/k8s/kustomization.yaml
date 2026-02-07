@@ -8,18 +8,24 @@ namespace: gomoku
 resources:
   - namespace.yaml
   - configmaps.yaml
-  - gomoku-workers-az-a.yaml
-  - gomoku-workers-az-b.yaml
-  - loadbalancer-az-a.yaml
-  - loadbalancer-az-b.yaml
+  - gomoku-workers.yaml
+  - envoy-gateway.yaml
+  - frontend.yaml
+  - ingress.yaml
 
 # Common labels applied to all resources
 commonLabels:
   app.kubernetes.io/managed-by: kustomize
   app.kubernetes.io/part-of: gomoku-platform
 
-# Image customization (override in overlays)
+# Image customization (override in overlays or via kustomize edit)
 images:
   - name: gomoku-httpd
     newName: gomoku-httpd
     newTag: latest
+  - name: gomoku-frontend
+    newName: gomoku-frontend
+    newTag: latest
+  - name: envoyproxy/envoy
+    newName: envoyproxy/envoy
+    newTag: v1.28-latest
