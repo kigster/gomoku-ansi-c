@@ -12,7 +12,7 @@ export default function PreviousGames({ history }: PreviousGamesProps) {
     <div className="bg-neutral-800 rounded-xl p-6"
          style={{ fontSize: '14pt', fontWeight: 600 }}>
       <h3 className="font-heading text-xl font-bold text-amber-400 mb-4">Previous Games</h3>
-      <div className="overflow-y-auto" style={{ maxHeight: '500px' }}>
+      <div className="overflow-y-auto" style={{ maxHeight: '60vh' }}>
         <table className="w-full">
           <thead>
             <tr className="text-neutral-500 border-b border-neutral-700">

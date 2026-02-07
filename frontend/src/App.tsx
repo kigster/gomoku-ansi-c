@@ -178,7 +178,7 @@ export default function App() {
                 {phase === 'idle' && (
                   <>
                     <button
-                      onClick={startGame}
+                      onClick={() => { setShowSettings(false); startGame(); }}
                       className="w-full py-4 rounded-xl text-xl font-bold font-heading
                                  bg-amber-600 hover:bg-amber-500 active:bg-amber-700
                                  shadow-lg shadow-amber-900/30 transition-all
