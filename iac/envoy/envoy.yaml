@@ -1,13 +1,13 @@
 # Envoy configuration for Gomoku HTTP daemon load balancing
-# Replaces HAProxy with equivalent functionality plus request queueing
+# Frontend listens on port 10000, backends are gomoku-httpd instances on ports 9500-9509
 #
 # Key features:
 # - Circuit breaker with max_pending_requests for queueing (up to 1000 requests)
-# - HTTP health checks on /ready endpoint (503 when server is busy)
+# - HTTP health checks on /ready endpoint (200 when idle, 503 when busy)
 # - Least requests load balancing (routes to least loaded server)
 # - Automatic retry on 503 errors
 #
-# Usage: envoy -c envoy.yaml
+# Usage: envoy -c iac/envoy/envoy.yaml
 
 admin:
   address:
@@ -29,9 +29,10 @@ static_resources:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
                 stat_prefix: gomoku_http
                 codec_type: AUTO
-                # Extended timeouts for AI computation (up to 10 minutes)
+                # Extended timeout for AI computation (up to 10 minutes)
                 request_timeout: 600s
-                idle_timeout: 600s
+                common_http_protocol_options:
+                  idle_timeout: 600s
                 route_config:
                   name: gomoku_route
                   virtual_hosts:
@@ -44,8 +45,7 @@ static_resources:
                             cluster: gomoku_cluster
                             timeout: 600s
                             retry_policy:
-                              # Retry on 503 (service unavailable) errors
-                              retry_on: "503"
+                              retry_on: "5xx"
                               num_retries: 3
                               per_try_timeout: 600s
                               retry_back_off:
@@ -60,112 +60,90 @@ static_resources:
     - name: gomoku_cluster
       connect_timeout: 5s
       type: STATIC
-      # Least requests: routes to the endpoint with the fewest active requests
-      # Combined with health checks, this routes to idle servers first
       lb_policy: LEAST_REQUEST
 
-      # Circuit breaker configuration - THIS IS KEY FOR QUEUEING
-      # When all servers are busy, requests queue here instead of returning 503
       circuit_breakers:
         thresholds:
           - priority: DEFAULT
-            # Max concurrent connections to all endpoints combined
             max_connections: 100
-            # Max pending requests in queue (before returning 503)
             max_pending_requests: 1000
-            # Max concurrent requests to all endpoints
             max_requests: 100
-            # Max retries
             max_retries: 10
 
-      # Health check configuration
-      # Uses /ready endpoint which returns 503 when server is busy
       health_checks:
         - timeout: 2s
           interval: 1s
           unhealthy_threshold: 2
           healthy_threshold: 1
           http_health_check:
-            path: "/ready"
-          # Don't remove unhealthy hosts from cluster - just deprioritize them
-          # This allows requests to queue rather than fail
-          always_log_health_check_failures: true
+            path: "/health"
 
-      # Common HTTP protocol options
-      common_http_protocol_options:
-        idle_timeout: 600s
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          common_http_protocol_options:
+            idle_timeout: 600s
+          explicit_http_config:
+            http_protocol_options: {}
 
-      # Outlier detection - eject hosts that are failing
       outlier_detection:
         consecutive_5xx: 5
         interval: 10s
         base_ejection_time: 30s
         max_ejection_percent: 50
-        enforcing_consecutive_5xx: 100
 
       load_assignment:
         cluster_name: gomoku_cluster
         endpoints:
           - lb_endpoints:
-              # AZ-a servers (PRIMARY) - 5 gomoku-httpd instances
+              # gomoku-httpd instances on ports 9500-9509
               - endpoint:
                   address:
                     socket_address:
                       address: 127.0.0.1
                       port_value: 9500
-                load_balancing_weight: 100
               - endpoint:
                   address:
                     socket_address:
                       address: 127.0.0.1
                       port_value: 9501
-                load_balancing_weight: 100
               - endpoint:
                   address:
                     socket_address:
                       address: 127.0.0.1
                       port_value: 9502
-                load_balancing_weight: 100
               - endpoint:
                   address:
                     socket_address:
                       address: 127.0.0.1
                       port_value: 9503
-                load_balancing_weight: 100
               - endpoint:
                   address:
                     socket_address:
                       address: 127.0.0.1
                       port_value: 9504
-                load_balancing_weight: 100
-              # AZ-b servers (BACKUP) - 5 more gomoku-httpd instances
               - endpoint:
                   address:
                     socket_address:
                       address: 127.0.0.1
                       port_value: 9505
-                load_balancing_weight: 100
               - endpoint:
                   address:
                     socket_address:
                       address: 127.0.0.1
                       port_value: 9506
-                load_balancing_weight: 100
               - endpoint:
                   address:
                     socket_address:
                       address: 127.0.0.1
                       port_value: 9507
-                load_balancing_weight: 100
               - endpoint:
                   address:
                     socket_address:
                       address: 127.0.0.1
                       port_value: 9508
-                load_balancing_weight: 100
               - endpoint:
                   address:
                     socket_address:
                       address: 127.0.0.1
                       port_value: 9509
-                load_balancing_weight: 100

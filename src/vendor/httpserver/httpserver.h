@@ -2002,6 +2002,10 @@ enum hs_read_rc_e hs_read_request_and_exec_user_cb(http_request_t *request,
     _hs_buffer_init(&request->buffer, opts.initial_request_buf_capacity,
                     &request->server->memused);
     hsh_parser_init(&request->parser);
+    // Reset tokens and flags for keep-alive connections so stale data
+    // from the previous request does not corrupt the next request parse.
+    request->tokens.size = 0;
+    request->flags = HTTP_AUTOMATIC;
   }
 
   if (_hs_buffer_requires_read(&request->buffer)) {
