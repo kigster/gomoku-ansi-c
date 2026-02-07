@@ -13,8 +13,9 @@ LOG_FILES=(
   "/var/log/nginx/error.log" 
   "/var/log/envoy.log" 
   "/var/log/haproxy.log" 
-  "/var/log/gomoku-httpd.log" 
+  "/var/log/gomoku-httpd.log"
   "/var/log/envoy.log"
+  "/var/log/gomoku-frontend.log"
 )
 export LOG_FILES
 
@@ -95,7 +96,7 @@ function nginx.start() {
   inf "Starting nginx..."
   run.set-all abort-on-error
 
-  if [[ -z $(pids.matching nginx) ]]; then
+  if [[ -z $(pids.matching [n]ginx) ]]; then
     sudo /opt/homebrew/bin/nginx -g "daemon on;"
   else
     ui.closer.kind-of-ok:
@@ -105,7 +106,7 @@ function nginx.start() {
 
   sleep 1
 
-  if [[ -z $(pids.matching nginx) ]]; then
+  if [[ -z $(pids.matching [n]ginx) ]]; then
     ui.closer.not-ok:
     error "nginx failed to start, please look at /var/log/nginx/error.log"
     [[ -f /var/log/nginx/error.log ]] && tail -n 20 /var/log/nginx/error.log
@@ -119,12 +120,12 @@ function nginx.start() {
 function nginx.stop() {
   inf "Stopping nginx..."
   
-  if [[ -n $(pids.matching nginx) ]]; then
+  if [[ -n $(pids.matching [n]ginx) ]]; then
     sudo /opt/homebrew/bin/nginx -s quit >/dev/null 2>&1 || true
     sleep 4
     
     # Force kill if still running
-    if [[ -n $(pids.matching nginx) ]]; then
+    if [[ -n $(pids.matching [n]ginx) ]]; then
       ui.closer.not-ok:
       warning "nginx didn't stop gracefully, force killing..."
       pkill -9 "nginx"
@@ -137,7 +138,7 @@ function nginx.stop() {
     inf "Checking if nginx has stopped..."
 
     # Force kill if still running
-    if [[ -z $(pids.matching nginx) ]]; then
+    if [[ -z $(pids.matching [n]ginx) ]]; then
       ui.closer.ok:
       success "nginx stopped successfully."
     else
@@ -182,10 +183,10 @@ function nginx.status() {
 
 function haproxy.start() {
   inf "Starting haproxy..."
-  if [[ -z $(pids.matching haproxy) ]]; then
+  if [[ -z $(pids.matching [h]aproxy) ]]; then
     /opt/homebrew/opt/haproxy/bin/haproxy -D -f /opt/homebrew/etc/haproxy.cfg;
     sleep 1
-    if [[ -z $(pids.matching haproxy) ]]; then
+    if [[ -z $(pids.matching [h]aproxy) ]]; then
       ui.closer.not-ok:
       error "haproxy failed to start, try starting it by hand."
       return 1
@@ -202,7 +203,7 @@ function haproxy.start() {
 function haproxy.stop() {
   inf "Stopping haproxy..."
   
-  if [[ -n $(pids.matching haproxy) ]]; then
+  if [[ -n $(pids.matching [h]aproxy) ]]; then
     pkill -9 "haproxy"
     ui.closer.ok:
     success "haproxy stopped successfully."
@@ -223,7 +224,7 @@ function haproxy.restart() {
 function haproxy.status() {
   inf "haproxy status..."
   
-  if [[ -n $(pids.matching haproxy) ]]; then
+  if [[ -n $(pids.matching [h]aproxy) ]]; then
     ui.closer.ok:
     success "haproxy is running (PID: $(pgrep -f haproxy | tr '\n' ' '))"
     
@@ -250,35 +251,54 @@ function haproxy.status() {
 # =============================================================================
 
 function envoy.start() {
-  inf "Starting envoy..."
-  
+  hint "Starting envoy..."
+
+  inf "Checking if envoy is installed..."
   if ! command -v envoy >/dev/null 2>&1; then
-    ui.closer.kind-of-ok:
-    success "envoy is not installed. Install with: brew install envoy"
-    return 1
+    ui.closer.not-ok:
+
+    inf "Installing envoy..."
+    package.install envoy
+    
+    command -v envoy >/dev/null 2>&1 || {
+      ui.closer.not-ok:
+      error "envoy is not installed. Please install it manually."
+      return 1
+    }
+
+    ui.closer.ok:
+    success "envoy has been installed, awesome!"
+  else
+    ui.closer.ok:
   fi
   
   local envoy_config="$PROJECT_DIR/iac/envoy/envoy.yaml"
   if [[ ! -f "$envoy_config" ]]; then
-    ui.closer.not-ok:
     error "Envoy config not found: $envoy_config"
     return 1
   fi
   
-  if [[ -z "$(pids.matching envoy)" ]]; then
-    # Validate config first
-    if ! envoy --mode validate -c "$envoy_config" >/dev/null 2>&1; then
-      ui.closer.not-ok:
-      error "Envoy configuration validation failed"
-      envoy --mode validate -c "$envoy_config"
-      return 1
-    fi
-    
+  # Validate config first
+  inf "Validating envoy configuration..."
+  if ! envoy --mode validate -c "$envoy_config" >/dev/null 2>&1; then
+    ui.closer.not-ok:
+    error "Envoy configuration validation failed"
+    envoy --mode validate -c "$envoy_config"
+    return 1
+  else
+    ui.closer.ok:
+  fi
+
+  inf "Checking if envoy is already running..."
+  if [[ -z "$(pids.matching [e]nvoy)" ]]; then
+    ui.closer.not-ok:
+
+    inf "Envoy isn't running, so starting envoy in background..."
     # Start envoy in background
-    nohup envoy -c "$envoy_config" 2>&1 >/var/log/envoy.log &
-    sleep 2
-    
-    if [[ -n $(pids.matching envoy) ]]; then
+    nohup envoy -c "$envoy_config" --log-path /var/log/envoy.log &
+    sleep 1
+
+    if [[ -n $(pids.matching [e]nvoy) ]]; then
       ui.closer.ok:
       success "envoy started successfully."
     else
@@ -295,11 +315,11 @@ function envoy.start() {
 function envoy.stop() {
   inf "Stopping envoy..."
   
-  if [[ -n "$(pids.matching envoy)" ]]; then
-    pkill -f "envoy.*envoy.yaml"
+  if [[ -n "$(pids.matching [e]nvoy)" ]]; then
+    pkill -f "[e]nvoy"
     sleep 2
     
-    if ! pgrep -f "envoy.*envoy.yaml" >/dev/null; then
+    if ! pgrep -f "[e]nvoy" >/dev/null; then
       ui.closer.ok:
       success "envoy stopped successfully."
     else
@@ -324,9 +344,9 @@ function envoy.restart() {
 function envoy.status() {
   inf "envoy status..."
   
-  if pgrep -f "envoy.*envoy.yaml" >/dev/null; then
+  if [[ -n $(pids.matching [e]nvoy) ]]; then
     ui.closer.ok:
-    success "envoy is running (PID: $(pgrep -f 'envoy.*envoy.yaml' | tr '\n' ' '))"
+    success "envoy is running (PID: $(pgrep -f [e]nvoy | tr '\n' ' '))"
     
     # Check envoy admin interface
     if command -v curl >/dev/null 2>&1; then
@@ -346,6 +366,90 @@ function envoy.status() {
 }
 
 # =============================================================================
+# FRONTEND Functions
+# =============================================================================
+
+function frontend.start() {
+  inf "Starting frontend dev server..."
+
+  if [[ -n "$(pids.matching '[v]ite')" ]]; then
+    ui.closer.kind-of-ok:
+    success "frontend dev server is already running."
+    return 0
+  fi
+
+  local frontend_dir="$PROJECT_DIR/frontend"
+  if [[ ! -f "$frontend_dir/package.json" ]]; then
+    ui.closer.not-ok:
+    error "frontend/package.json not found. Is the frontend set up?"
+    return 1
+  fi
+
+  # Install deps if needed
+  if [[ ! -d "$frontend_dir/node_modules" ]]; then
+    inf "Installing frontend dependencies..."
+    (cd "$frontend_dir" && npm install) >/dev/null 2>&1
+    ui.closer.ok:
+  fi
+
+  # Start vite dev server in background
+  nohup bash -c "cd '$frontend_dir' && npm run dev" >/var/log/gomoku-frontend.log 2>&1 &
+  sleep 2
+
+  if [[ -n "$(pids.matching '[v]ite')" ]]; then
+    ui.closer.ok:
+    success "frontend dev server started (http://localhost:5173)."
+    open "http://localhost:5173"
+  else
+    ui.closer.not-ok:
+    error "frontend dev server failed to start. Check /var/log/gomoku-frontend.log"
+    return 1
+  fi
+}
+
+function frontend.stop() {
+  inf "Stopping frontend dev server..."
+
+  if [[ -n "$(pids.matching '[v]ite')" ]]; then
+    pkill -f "[v]ite"
+    sleep 1
+
+    if [[ -z "$(pids.matching '[v]ite')" ]]; then
+      ui.closer.ok:
+      success "frontend dev server stopped successfully."
+    else
+      ui.closer.not-ok:
+      error "Failed to stop frontend dev server."
+      return 1
+    fi
+  else
+    ui.closer.kind-of-ok:
+    success "frontend dev server is not running."
+  fi
+}
+
+function frontend.restart() {
+  inf "Restarting frontend dev server..."
+  frontend.stop
+  sleep 1
+  frontend.start
+  ui.closer.ok:
+}
+
+function frontend.status() {
+  inf "frontend dev server status..."
+
+  if [[ -n "$(pids.matching '[v]ite')" ]]; then
+    ui.closer.ok:
+    success "frontend dev server is running (PID: $(pids.matching '[v]ite' | tr '\n' ' '))"
+    echo "URL: http://localhost:5173"
+  else
+    ui.closer.kind-of-ok:
+    warning "frontend dev server is not running."
+  fi
+}
+
+# =============================================================================
 # GOMOKU Functions
 # =============================================================================
 
@@ -353,17 +457,17 @@ function gomoku.start() {
   local workers="${1}"
   inf "Starting Gomoku Cluster..."
 
-  pgrep -f "gomoku-httpd" >/dev/null && {
+  [[ -n $(pids.matching [g]omoku-httpd) ]] && {
     info "Stopping existing gomoku-httpd instances..."
     "$SCRIPT_DIR/gomokud-ctl" stop
   }
 
   sleep 1
-  if ! pgrep -f "gomoku-httpd" >/dev/null; then
+  if [[ -z $(pids.matching [g]omoku-httpd) ]]; then
     [[ -z "$workers" ]] || workers="-w $workers"
     "$SCRIPT_DIR/gomokud-ctl" start "${workers}"
     sleep 1
-    if ! pgrep -f "gomoku-httpd" >/dev/null; then
+    if [[ -n $(pids.matching [g]omoku-httpd) ]]; then
       ui.closer.not-ok:
       error "gomoku-httpd failed to start."
       return 1
@@ -381,11 +485,11 @@ function gomoku.start() {
 function gomoku.stop() {
   inf "Stopping Gomoku Cluster..."
   
-  if pgrep -f "gomoku-httpd" >/dev/null; then
+  if [[ -n $(pids.matching [g]omoku-httpd) ]]; then
     "$SCRIPT_DIR/gomokud-ctl" stop
     sleep 2
     
-    if ! pgrep -f "gomoku-httpd" >/dev/null; then
+    if [[ -z $(pids.matching [g]omoku-httpd) ]]; then
       ui.closer.ok:
       success "gomoku-httpd stopped successfully."
     else
@@ -410,11 +514,10 @@ function gomoku.restart() {
 function gomoku.status() {
   inf "gomoku-httpd status..."
   
-  if pgrep -f "gomoku-httpd" >/dev/null; then
+  if [[ -n $(pids.matching [g]omoku-httpd) ]]; then
     ui.closer.ok:
-    local pids
-    pids=$(pgrep -f "gomoku-httpd" | tr '\n' ' ')
-    success "gomoku-httpd is running (PIDs: $pids)"
+    local -a pids=( $(pids.matching [g]omoku-httpd) )
+    success "gomoku-httpd is running (PIDs: ${pids[*]})"
     
     echo "Checking individual instances:"
     # Check each expected port
@@ -491,7 +594,8 @@ function cmd_start() {
       envoy.start
     fi
     gomoku.start "$workers"
-    
+    frontend.start
+
     # Open admin interface
     if [[ "$proxy" == "haproxy" ]]; then
       local haproxy_admin_url
@@ -515,6 +619,9 @@ function cmd_start() {
           ;;
         gomoku-httpd|gomoku)
           gomoku.start
+          ;;
+        frontend)
+          frontend.start
           ;;
         *)
           error "Invalid component: $component"
@@ -547,6 +654,7 @@ function cmd_stop() {
   
   # If no components specified, stop all
   if [[ ${#components[@]} -eq 0 ]]; then
+    frontend.stop
     gomoku.stop
     haproxy.stop
     envoy.stop
@@ -566,6 +674,9 @@ function cmd_stop() {
           ;;
         gomoku-httpd|gomoku)
           gomoku.stop
+          ;;
+        frontend)
+          frontend.stop
           ;;
         *)
           error "Invalid component: $component"
@@ -596,6 +707,7 @@ function cmd_restart() {
   
   # If no components specified, restart all
   if [[ ${#components[@]} -eq 0 ]]; then
+    frontend.restart
     gomoku.restart
     haproxy.restart
     envoy.restart
@@ -615,6 +727,9 @@ function cmd_restart() {
           ;;
         gomoku-httpd|gomoku)
           gomoku.restart
+          ;;
+        frontend)
+          frontend.restart
           ;;
         *)
           error "Invalid component: $component"
@@ -652,6 +767,8 @@ function cmd_status() {
     envoy.status
     echo
     gomoku.status
+    echo
+    frontend.status
   else
     # Show status for specified components
     for component in "${components[@]}"; do
@@ -667,6 +784,9 @@ function cmd_status() {
           ;;
         gomoku-httpd|gomoku)
           gomoku.status
+          ;;
+        frontend)
+          frontend.status
           ;;
         *)
           error "Invalid component: $component"
@@ -700,20 +820,24 @@ ${bldblu}Stop/Restart/Status Options:${clr}
 
 ${bldblu}Components:${clr}
   ${bldylw}nginx     ${clr} Nginx web server
-  ${bldylw}haproxy   ${clr} HAProxy load balancer  
+  ${bldylw}haproxy   ${clr} HAProxy load balancer
   ${bldylw}envoy     ${clr} Envoy proxy
   ${bldylw}gomoku    ${clr} Gomoku-httpd cluster (alias: gomoku-httpd)
+  ${bldylw}frontend  ${clr} Vite React frontend dev server (http://localhost:5173)
 
 ${bldblu}Examples: Primary Modes:${clr}
-  ${bldylw}${binary} start --proxy haproxy         ${clr}# Start all with HAProxy
-  ${bldylw}${binary} start --proxy envoy           ${clr}# Start all with Envoy
+  ${bldylw}${binary} start --proxy haproxy         ${clr}# Start all with HAProxy (incl. frontend)
+  ${bldylw}${binary} start --proxy envoy           ${clr}# Start all with Envoy (incl. frontend)
 
 ${bldblu}Examples: Secondary Modes:${clr}
   ${bldylw}${binary} start -c nginx -c gomoku      ${clr}# Start only nginx and gomoku
+  ${bldylw}${binary} start -c frontend             ${clr}# Start only the frontend dev server
   ${bldylw}${binary} stop -c haproxy               ${clr}# Stop only haproxy
+  ${bldylw}${binary} stop -c frontend              ${clr}# Stop only the frontend dev server
   ${bldylw}${binary} restart -c envoy              ${clr}# Restart only envoy
   ${bldylw}${binary} status                        ${clr}# Show status of all components
   ${bldylw}${binary} status -c gomoku              ${clr}# Show status of gomoku only
+  ${bldylw}${binary} status -c frontend            ${clr}# Show frontend dev server status
   ${bldylw}${binary} htop                          ${clr}# Show top processes
 "
 }
@@ -765,7 +889,7 @@ function parse-args() {
           }
         }
         trap 'exit 0' SIGINT
-        htop -t -F 'nginx|haproxy|envoy|gomoku-httpd|gomoku`' "$@"
+        htop -t -F 'nginx|haproxy|envoy|gomoku-httpd|gomoku|vite' "$@"
 
         exit 0
         ;;

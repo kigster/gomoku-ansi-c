@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Dosis', sans-serif;
+  font-weight: 600;
+  font-size: 13pt;
+  background: linear-gradient(135deg, #e8e0d4 0%, #f5f0e8 25%, #ddd5c8 50%, #f0ebe3 75%, #e5ddd0 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+/* Wavy background decoration */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(210, 180, 140, 0.3) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(180, 150, 110, 0.2) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 0%, rgba(200, 170, 130, 0.15) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+h1, h2, h3, .font-heading {
+  font-family: 'Hanalei Fill', serif;
+}
+
+.board-wood {
+  background-color: #DEB887;
+  background-image:
+    repeating-linear-gradient(
+      87deg,
+      transparent,
+      transparent 1px,
+      rgba(139, 90, 43, 0.07) 1px,
+      rgba(139, 90, 43, 0.07) 3px
+    ),
+    repeating-linear-gradient(
+      93deg,
+      transparent,
+      transparent 2px,
+      rgba(160, 120, 76, 0.05) 2px,
+      rgba(160, 120, 76, 0.05) 5px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 15px,
+      rgba(139, 90, 43, 0.04) 15px,
+      rgba(139, 90, 43, 0.04) 30px
+    ),
+    radial-gradient(
+      ellipse at 30% 50%,
+      rgba(139, 90, 43, 0.06) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse at 70% 30%,
+      rgba(160, 120, 76, 0.05) 0%,
+      transparent 60%
+    );
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 2s ease-in-out infinite;
+}
+
+.game-panel {
+  background: linear-gradient(145deg, #2a2a2e 0%, #1a1a1e 40%, #222226 100%);
+  box-shadow:
+    0 0 60px 20px rgba(0, 0, 0, 0.25),
+    0 0 120px 40px rgba(0, 0, 0, 0.15),
+    0 25px 50px -12px rgba(0, 0, 0, 0.4);
+}
