@@ -9,6 +9,12 @@ export default defineConfig({
   base: './',
   plugins: [react()],
   server: {
+    host: '0.0.0.0',
+    allowedHosts: [
+      '0.0.0.0',
+      '172.16.10.89',
+      'macbook-pro-m3-kig.local'
+    ],
     proxy: {
       '/gomoku': {
         target: BACKEND,
