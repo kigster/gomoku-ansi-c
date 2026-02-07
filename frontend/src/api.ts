@@ -13,12 +13,21 @@ export async function postGameState(
   let delayMs = 100
   let attempt = 0
 
+  const url = `${API_BASE}/gomoku/play`
+
   while (true) {
-    const response = await fetch(`${API_BASE}/gomoku/play`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(state),
-    })
+    let response: Response
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state),
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const cause = err instanceof Error && err.cause ? ` cause: ${JSON.stringify(err.cause)}` : ''
+      throw new Error(`Network error posting to ${url}: ${msg}${cause} (type: ${err instanceof Error ? err.constructor.name : typeof err})`)
+    }
 
     if (response.ok) {
       return response.json()
