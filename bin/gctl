@@ -4,8 +4,48 @@
 set +e
 
 # Global variables
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+export SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+export OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+export DEFAULT_PROXY="envoy"
+
+export REGEX='nginx|haproxy|envoy|gomoku-httpd|gomoku|vite'
+
+declare -a UTILS
+UTILS=(btop htop ctop btm)
+export UTILS
+
+declare -a PACKAGES
+PACKAGES=(btop htop ctop bottom)
+export PACKAGES
+
+function filter.flag-for() {
+  local program="$1"
+  local regex="$2"
+  case "$program" in
+    btop)
+      echo -n "--filter gomoku"
+      return
+      ;;
+    htop)
+      echo -n "-F '$regex'"
+      return
+      ;;
+    btm)
+      echo -n ""
+      return
+      ;;
+    ctop)
+      echo -n "-f '$regex'"
+      return
+      ;;
+  esac
+  return 0
+}
+
+if [[ $OS == darwin ]]; then
+  BREW_HOME=$(brew --prefix)
+fi
 
 declare -a LOG_FILES
 LOG_FILES=(
@@ -67,10 +107,17 @@ function setup.direnv() {
   command -v direnv >/dev/null 2>&1 && direnv allow .
 }
 
+function setup.utils() {
+  for package in "${PACKAGES[@]}"; do
+    package.is-installed "$package" || { package.install "$package" || true; }
+  done
+}
+
 function cmd_setup() {
   setup.bashmatic
   setup.sudo
   setup.direnv
+  setup.utils 
 }
 
 # We are replacing pkill using bashmatic's pid.matchin and pid.stop-and-kill functions.
@@ -97,7 +144,7 @@ function nginx.start() {
   run.set-all abort-on-error
 
   if [[ -z $(pids.matching [n]ginx) ]]; then
-    sudo /opt/homebrew/bin/nginx -g "daemon on;"
+    sudo ${BREW_HOME}/bin/nginx -c ${PROJECT_DIR}/iac/config/nginx.conf -g "daemon on;"
   else
     ui.closer.kind-of-ok:
     success "nginx is already running, $(pids.matching nginx | wc -l | tr -d ' ') processes."
@@ -121,7 +168,7 @@ function nginx.stop() {
   inf "Stopping nginx..."
   
   if [[ -n $(pids.matching [n]ginx) ]]; then
-    sudo /opt/homebrew/bin/nginx -s quit >/dev/null 2>&1 || true
+    sudo ${BREW_HOME}/bin/nginx -s quit >/dev/null 2>&1 || true
     sleep 4
     
     # Force kill if still running
@@ -184,7 +231,7 @@ function nginx.status() {
 function haproxy.start() {
   inf "Starting haproxy..."
   if [[ -z $(pids.matching [h]aproxy) ]]; then
-    /opt/homebrew/opt/haproxy/bin/haproxy -D -f /opt/homebrew/etc/haproxy.cfg;
+    ${BREW_HOME}/opt/haproxy/bin/haproxy -D -f ${PROJECT_DIR}/iac/config/haproxy.cfg;
     sleep 1
     if [[ -z $(pids.matching [h]aproxy) ]]; then
       ui.closer.not-ok:
@@ -229,9 +276,9 @@ function haproxy.status() {
     success "haproxy is running (PID: $(pgrep -f haproxy | tr '\n' ' '))"
     
     # Get haproxy admin URL and show stats
-    if [[ -f /opt/homebrew/etc/haproxy.cfg ]]; then
+    if [[ -f ${BREW_HOME}/etc/haproxy.cfg ]]; then
       local haproxy_admin_url
-      haproxy_admin_url=$(grep -A 3 stats /opt/homebrew/etc/haproxy.cfg | grep bind | awk '{print $2}' | head -1)
+      haproxy_admin_url=$(grep -A 3 stats ${BREW_HOME}/etc/haproxy.cfg | grep bind | awk '{print $2}' | head -1)
       if [[ -n "$haproxy_admin_url" ]]; then
         echo "Admin interface: http://${haproxy_admin_url}/stats"
         if command -v curl >/dev/null 2>&1; then
@@ -405,7 +452,7 @@ function frontend.start() {
     error "frontend dev server failed to start. Check /var/log/gomoku-frontend.log"
     return 1
   fi
-}
+}  
 
 function frontend.stop() {
   inf "Stopping frontend dev server..."
@@ -547,9 +594,12 @@ function gomoku.status() {
 # =============================================================================
 
 function cmd_start() {
-  local proxy="envoy" # default to haproxy
+  local proxy=${DEFAULT_PROXY}
   local components=()
   local workers=
+
+  setup.sudo
+
   # Parse arguments
   while [[ $# -gt 0 ]]; do
     case $1 in
@@ -599,7 +649,7 @@ function cmd_start() {
     # Open admin interface
     if [[ "$proxy" == "haproxy" ]]; then
       local haproxy_admin_url
-      haproxy_admin_url=$(grep -A 3 stats /opt/homebrew/etc/haproxy.cfg | grep bind | awk '{print $2}' | head -1)
+      haproxy_admin_url=$(grep -A 3 stats ${BREW_HOME}/etc/haproxy.cfg | grep bind | awk '{print $2}' | head -1)
       [[ -n "$haproxy_admin_url" ]] && open "http://${haproxy_admin_url}/stats"
     else
       open "http://127.0.0.1:9901"
@@ -632,6 +682,29 @@ function cmd_start() {
   fi
   success "Everything booted as you requested." 
   hint "To monitor run the following command:" "bin/gctl htop"
+
+  sleep 1
+  h1  "Showing you the process table, which you can always see with the command:" "bin/gctl ps"
+  sleep 1
+}
+
+function cmd_ps() {
+  export GREP_COLOR='1;33'
+  local output=$(mktemp)
+
+  /bin/ps -e -r -o pid,ppid,cpu,rss,command | \
+    /usr/bin/grep -E -v 'gctl|htop|grep' | \
+    /usr/bin/grep --color=always -E '[g]omoku|[h]aproxy|[e]nvoy|[n]ginx|CPU' > "$output"
+
+  if [[ -s "$output" ]]; then
+    arrow.blk-on-ylw "Below are the processes that belong to the Gomoku Cluster booted locally, sorted by CPU usage:"
+    echo
+    cat "$output"
+    echo; hr   
+  else
+    error "No processes found that belong to the Gomoku Cluster."
+    return 1
+  fi
 }
 
 function cmd_stop() {
@@ -798,25 +871,51 @@ function cmd_status() {
   fi
 }
 
-function show_usage() {
-  local binary="$(basename "$0")"
+function cmd_observe() {
+  local tool="$1"
+  local regex="$2"
+  
 
+  if [[ -n "$1" ]] && array.includes "$1" "${UTILS[@]}"; then
+    tool="$1"
+  else  
+    error "Unknown utility: $1"
+    info "Available utilities: $(array.join ', ' "${UTILS[@]}")"
+    return 1
+  fi  
+
+  "$tool" $(filter.flag-for "$tool" "$regex")
+  return
+}
+
+function show_usage() {
+  # shellcheck disable=SC2155
+  local binary="$(basename "$0")"
+  # shellcheck disable=SC2154
+  local comment_color="${txtpur}${italic}"
   echo -e "
 ${bldblu}USAGE:${clr} 
   ${bldylw}${binary} <command> [options]${clr}
 
 ${bldblu}DESCRIPTION:${clr} 
-  Controller script for the Gomoku Cluster in development mode. This script can be used
-  to start/stop/restart and obtain status from the entire interconnected cluster.
+  Controller script for the Gomoku Cluster in the development mode. This script can be used
+  to start/stop/restart and obtain status from the entire interconnected cluster on a single
+  machine.
 
-  You can either use haproxy or envoy as the reverse proxy. Provide -p <haproxy|envoy> to 
-  specify the proxy to use when starting all components (although envoy is the default).
+${bldblu}COMMANDS:${clr} 
 
-  ${bldylw}bin/gc-ctl start [ -p <haproxy|envoy> ]${clr} starts:
+  ${comment_color}# When starting using ${bldylw}gctl start${comment_color} ou can either use haproxy or envoy as the 
+  ${comment_color}# reverse proxy. Provide ${bldylw}-p <haproxy|envoy>${comment_color} to specify the proxy to use 
+  # when starting all components.
+
+  ${comment_color}# Boot the entire cluster with the specified proxy. Optionally specify a component to start.
+  ${bldylw}bin/gctl start [ -p <haproxy|envoy> ] [ -c | -components <name> ] ${clr} 
+
+  ${bldblu}# components:${clr}
      * ${bldylw}nginx${clr}    listening on ports 80 and 443
-     * ${bldylw}haproxy${clr}  load balancer listening on port 10000 as the front-end, and 8404 as the admin 
-     * ${bldylw}envoy${clr}    proxy listening on port 10000 as the front-end, and 9901 as the admin interface
-     * ${bldylw}gomoku${clr}   cluster listening on ports 9500-9509
+     * ${bldylw}haproxy${clr}  load balancer listening on port 10000 as the front-end, and 8404 as the admin interface
+     * ${bldylw}envoy${clr}    Envoy proxy listening on port 10000 as the front-end, and 9901 as the admin interface
+     * ${bldylw}gomoku${clr}   Gomoku-httpd cluster listening on ports 9500-9509
      * ${bldylw}frontend${clr} reactJS/Vite dev server listening on port 5173
 
 ${bldblu}Commands:${clr}
@@ -824,6 +923,8 @@ ${bldblu}Commands:${clr}
   ${bldylw}stop      ${clr} # Stop services  
   ${bldylw}restart   ${clr} # Restart services
   ${bldylw}status    ${clr} # Show service status
+  ${bldylw}observe   ${clr} # Observe service with the specified tool (htop, btop, ctop, btm)
+  ${bldylw}ps        ${clr} # Show process status
 
 ${bldblu}Start Options:${clr}
   ${bldylw}-p, --proxy <haproxy|envoy>    ${clr} # Specify proxy to use (required for start all)
@@ -846,13 +947,19 @@ ${bldblu}Examples: Primary Modes:${clr}
 ${bldblu}Examples: Secondary Modes:${clr}
   ${bldylw}${binary} start -c nginx -c gomoku      ${clr}# Start only nginx and gomoku
   ${bldylw}${binary} start -c frontend             ${clr}# Start only the frontend dev server
+
   ${bldylw}${binary} stop -c haproxy               ${clr}# Stop only haproxy
   ${bldylw}${binary} stop -c frontend              ${clr}# Stop only the frontend dev server
+  
   ${bldylw}${binary} restart -c envoy              ${clr}# Restart only envoy
+  
   ${bldylw}${binary} status                        ${clr}# Show status of all components
   ${bldylw}${binary} status -c gomoku              ${clr}# Show status of gomoku only
   ${bldylw}${binary} status -c frontend            ${clr}# Show frontend dev server status
-  ${bldylw}${binary} htop                          ${clr}# Show top processes
+  ${bldylw}${binary} ps                            ${clr}# Show process status
+  ${bldylw}${binary} observe htop                  ${clr}# Observe processes with htop
+  ${bldylw}${binary} observe btop                  ${clr}# Observe processes with btop
+  ${bldylw}${binary} observe btm                   ${clr}# Observe processes with btm
 "
 }
 
@@ -891,24 +998,19 @@ function parse-args() {
         cmd_setup "$@"
         return
         ;;
-      htop)
+      observe)
         shift
-        command -v htop >/dev/null 2>&1 || { 
-          warning "htop is not installed, attempting an install."
-          package.install htop
-          code=$?
-          [[ ${code} -eq 0 ]] && success "htop was installed, awesome!" || { 
-            error "htop couldn't be installed, please install it manually."
-            return ${code}
-          }
-        }
-        trap 'exit 0' SIGINT
-        htop -t -F 'nginx|haproxy|envoy|gomoku-httpd|gomoku|vite' "$@"
-
-        exit 0
+        cmd_observe "${1:-btop}" "${REGEX}"
+        return
+        ;;
+      ps)
+        shift
+        cmd_ps "$@"
+        return
         ;;
       ""|--help|-h|help)
         show_usage "$@"
+        exit 0
         ;;
       *)
         error "Unknown command: $1"
@@ -947,4 +1049,3 @@ setup.direnv
 [[ "$*" =~ setup ]] || setup.log-files-are-ok || exit 1
 
 main "${ARGV[@]}"
-
