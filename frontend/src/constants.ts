@@ -7,7 +7,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   displayMode: 'stones',
   playerSide: 'X',
   boardSize: 19,
-  undoEnabled: false,
+  undoEnabled: true,
 }
 
 export const TIMEOUT_OPTIONS = [

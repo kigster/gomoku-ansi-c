@@ -547,7 +547,7 @@ function gomoku.status() {
 # =============================================================================
 
 function cmd_start() {
-  local proxy="haproxy" # default to haproxy
+  local proxy="envoy" # default to haproxy
   local components=()
   local workers=
   # Parse arguments
@@ -805,6 +805,20 @@ function show_usage() {
 ${bldblu}USAGE:${clr} 
   ${bldylw}${binary} <command> [options]${clr}
 
+${bldblu}DESCRIPTION:${clr} 
+  Controller script for the Gomoku Cluster in development mode. This script can be used
+  to start/stop/restart and obtain status from the entire interconnected cluster.
+
+  You can either use haproxy or envoy as the reverse proxy. Provide -p <haproxy|envoy> to 
+  specify the proxy to use when starting all components (although envoy is the default).
+
+  ${bldylw}bin/gc-ctl start [ -p <haproxy|envoy> ]${clr} starts:
+     * ${bldylw}nginx${clr}    listening on ports 80 and 443
+     * ${bldylw}haproxy${clr}  load balancer listening on port 10000 as the front-end, and 8404 as the admin 
+     * ${bldylw}envoy${clr}    proxy listening on port 10000 as the front-end, and 9901 as the admin interface
+     * ${bldylw}gomoku${clr}   cluster listening on ports 9500-9509
+     * ${bldylw}frontend${clr} reactJS/Vite dev server listening on port 5173
+
 ${bldblu}Commands:${clr}
   ${bldylw}start     ${clr} # Start services
   ${bldylw}stop      ${clr} # Stop services  
@@ -821,7 +835,7 @@ ${bldblu}Stop/Restart/Status Options:${clr}
 ${bldblu}Components:${clr}
   ${bldylw}nginx     ${clr} Nginx web server
   ${bldylw}haproxy   ${clr} HAProxy load balancer
-  ${bldylw}envoy     ${clr} Envoy proxy
+  ${bldylw}envoy     ${clr} Envoy proxy (default)
   ${bldylw}gomoku    ${clr} Gomoku-httpd cluster (alias: gomoku-httpd)
   ${bldylw}frontend  ${clr} Vite React frontend dev server (http://localhost:5173)
 
@@ -908,6 +922,10 @@ function parse-args() {
 }
 
 main() {
+  [[ -z "$*" ]] && {
+    show_usage
+    exit 0
+  }
   parse-args "$@"
 }
 

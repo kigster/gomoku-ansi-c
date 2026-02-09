@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import type { GameState, GameSettings, GamePhase, CellValue } from '../types'
 import { postGameState } from '../api'
+import { trackTimeout, trackCriticalTimeout } from '../analytics'
 
 function buildEmptyBoard(size: number): string[] {
   const row = Array(size).fill('.').join(' ')
@@ -58,8 +59,11 @@ export function useGameState(settings: GameSettings) {
   const [gameState, setGameState] = useState<GameState | null>(null)
   const [phase, setPhase] = useState<GamePhase>('idle')
   const [error, setError] = useState<string | null>(null)
-  const moveStartTime = useRef<number>(0)
+  const turnStartMs = useRef<number>(0)
   const humanTimeAccum = useRef<number>(0)
+  const aiTimeAccum = useRef<number>(0)
+  const lastHumanMoveMs = useRef<number>(0)
+  const lastAiMoveMs = useRef<number>(0)
 
   const buildInitialState = useCallback((): GameState => {
     const humanSide = settings.playerSide
@@ -84,21 +88,60 @@ export function useGameState(settings: GameSettings) {
     }
   }, [settings])
 
-  const sendToServer = useCallback(async (state: GameState) => {
+  const sendToServer = useCallback(async (
+    state: GameState,
+    timeoutMs?: number,
+    timeoutSec = 0,
+  ) => {
     setPhase('thinking')
     setError(null)
-    try {
-      const response = await postGameState(state)
-      setGameState(response)
-      if (response.winner !== 'none') {
-        setPhase('gameover')
-      } else {
-        moveStartTime.current = Date.now()
+    turnStartMs.current = Date.now()
+
+    let attempts = 0
+    let backoffMs = 1000
+    let totalWaitMs = 0
+    let criticalFired = false
+
+    while (true) {
+      try {
+        const response = await postGameState(state, 20, timeoutMs)
+
+        // Track AI timing (wall-clock from request to response)
+        const aiElapsed = Date.now() - turnStartMs.current
+        const aiPlayed = response.moves.length > state.moves.length
+        if (aiPlayed) {
+          lastAiMoveMs.current = aiElapsed
+          aiTimeAccum.current += aiElapsed
+        }
+
+        setGameState(response)
+        if (response.winner !== 'none') {
+          turnStartMs.current = 0
+          setPhase('gameover')
+        } else {
+          turnStartMs.current = Date.now()
+          setPhase('playing')
+        }
+        return
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'TimeoutError' && timeoutMs) {
+          attempts++
+          if (attempts === 1) {
+            trackTimeout(timeoutSec)
+          }
+          totalWaitMs += timeoutMs + backoffMs
+          if (totalWaitMs >= 60_000 && !criticalFired) {
+            criticalFired = true
+            trackCriticalTimeout(attempts)
+          }
+          await new Promise(r => setTimeout(r, backoffMs))
+          backoffMs = Math.min(backoffMs * 2, 30_000)
+          continue
+        }
+        setError(err instanceof Error ? err.message : 'Unknown error')
         setPhase('playing')
+        return
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error')
-      setPhase('playing')
     }
   }, [])
 
@@ -107,16 +150,22 @@ export function useGameState(settings: GameSettings) {
     setGameState(initial)
     setError(null)
     humanTimeAccum.current = 0
+    aiTimeAccum.current = 0
+    lastHumanMoveMs.current = 0
+    lastAiMoveMs.current = 0
+
+    const timeoutSec = settings.aiTimeout !== 'none' ? parseInt(settings.aiTimeout) : 0
+    const timeoutMs = timeoutSec > 0 ? (timeoutSec + 5) * 1000 : undefined
 
     if (settings.playerSide === 'O') {
       // AI plays first (X), send empty state to server
-      await sendToServer(initial)
+      await sendToServer(initial, timeoutMs, timeoutSec)
     } else {
       // Human plays first, wait for click
-      moveStartTime.current = Date.now()
+      turnStartMs.current = Date.now()
       setPhase('playing')
     }
-  }, [buildInitialState, settings.playerSide, sendToServer])
+  }, [buildInitialState, settings.playerSide, settings.aiTimeout, sendToServer])
 
   const makeMove = useCallback(async (row: number, col: number) => {
     if (!gameState || phase !== 'playing') return
@@ -128,8 +177,9 @@ export function useGameState(settings: GameSettings) {
     const turn = currentTurn(gameState)
     if (turn !== settings.playerSide) return
 
-    const elapsed = Date.now() - moveStartTime.current
+    const elapsed = Date.now() - turnStartMs.current
     humanTimeAccum.current += elapsed
+    lastHumanMoveMs.current = elapsed
     const moveKey = `${turn} (human)` as 'X (human)' | 'O (human)'
 
     const newBoardState = updateBoardState(
@@ -153,8 +203,10 @@ export function useGameState(settings: GameSettings) {
     setGameState(newState)
 
     // Send to server for AI's response
-    await sendToServer(newState)
-  }, [gameState, phase, settings.playerSide, sendToServer])
+    const timeoutSec = settings.aiTimeout !== 'none' ? parseInt(settings.aiTimeout) : 0
+    const timeoutMs = timeoutSec > 0 ? (timeoutSec + 5) * 1000 : undefined
+    await sendToServer(newState, timeoutMs, timeoutSec)
+  }, [gameState, phase, settings.playerSide, settings.aiTimeout, sendToServer])
 
   const board = gameState
     ? parseBoardState(gameState.board_state, gameState.board_size)
@@ -181,21 +233,45 @@ export function useGameState(settings: GameSettings) {
         }
       }
     }
+    // Recompute timing from remaining moves
+    let hTotal = 0, aTotal = 0, lastH = 0, lastA = 0
+    for (const move of newMoves) {
+      const ms = move.time_ms ?? 0
+      if (move['X (human)'] || move['O (human)']) {
+        hTotal += ms
+        lastH = ms
+      } else {
+        aTotal += ms
+        lastA = ms
+      }
+    }
+    humanTimeAccum.current = hTotal
+    aiTimeAccum.current = aTotal
+    lastHumanMoveMs.current = lastH
+    lastAiMoveMs.current = lastA
+
     setGameState({
       ...gameState,
       board_state: newBoard,
       moves: newMoves,
       winner: 'none',
     })
-    moveStartTime.current = Date.now()
+    turnStartMs.current = Date.now()
   }, [gameState, phase])
 
   const humanTimeMs = humanTimeAccum.current
+  const aiSide = settings.playerSide === 'X' ? 'O' : 'X'
+  const aiTimeMs = gameState ? gameState[aiSide].time_ms : 0
 
   const resetGame = useCallback(() => {
     setGameState(null)
     setPhase('idle')
     setError(null)
+    humanTimeAccum.current = 0
+    aiTimeAccum.current = 0
+    lastHumanMoveMs.current = 0
+    lastAiMoveMs.current = 0
+    turnStartMs.current = 0
   }, [])
 
   return {
@@ -206,6 +282,13 @@ export function useGameState(settings: GameSettings) {
     moveCount,
     winner,
     humanTimeMs,
+    aiTimeMs,
+    humanTotalMs: humanTimeAccum.current,
+    aiTotalMs: aiTimeAccum.current,
+    lastHumanMoveMs: lastHumanMoveMs.current,
+    lastAiMoveMs: lastAiMoveMs.current,
+    turnStartMs: turnStartMs.current,
+    isHumanTurn: phase === 'playing',
     startGame,
     makeMove,
     undoMove,

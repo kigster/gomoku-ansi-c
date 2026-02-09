@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import type { GameSettings } from './types'
 import { DEFAULT_SETTINGS } from './constants'
 import { useGameState } from './hooks/useGameState'
+import { trackGameStart, trackGameFinish } from './analytics'
 import NameModal from './components/NameModal'
 import SettingsPanel from './components/SettingsPanel'
 import Board from './components/Board'
@@ -91,6 +92,13 @@ export default function App() {
     moveCount,
     winner,
     humanTimeMs,
+    aiTimeMs,
+    humanTotalMs,
+    aiTotalMs,
+    lastHumanMoveMs,
+    lastAiMoveMs,
+    turnStartMs,
+    isHumanTurn,
     startGame,
     makeMove,
     undoMove,
@@ -104,9 +112,19 @@ export default function App() {
       const { stats: updated, history } = recordResult(playerName, youWon, humanTimeMs)
       setStats(updated)
       setGameHistory(history)
+
+      if (winner === 'X' || winner === 'O') {
+        trackGameFinish(
+          winner,
+          settings.playerSide,
+          playerName,
+          Math.round(humanTimeMs / 1000),
+          Math.round(aiTimeMs / 1000),
+        )
+      }
     }
     prevPhaseRef.current = phase
-  }, [phase, winner, playerName, settings.playerSide, humanTimeMs])
+  }, [phase, winner, playerName, settings.playerSide, humanTimeMs, aiTimeMs])
 
   const [showHistory, setShowHistory] = useState(false)
   const historyBtnRef = useRef<HTMLButtonElement>(null)
@@ -178,7 +196,7 @@ export default function App() {
                 {phase === 'idle' && (
                   <>
                     <button
-                      onClick={() => { setShowSettings(false); startGame(); }}
+                      onClick={() => { setShowSettings(false); trackGameStart(settings); startGame(); }}
                       className="w-full py-4 rounded-xl text-xl font-bold font-heading
                                  bg-amber-600 hover:bg-amber-500 active:bg-amber-700
                                  shadow-lg shadow-amber-900/30 transition-all
@@ -249,6 +267,12 @@ export default function App() {
                 moveCount={moveCount}
                 error={error}
                 stats={stats}
+                humanTotalMs={humanTotalMs}
+                aiTotalMs={aiTotalMs}
+                lastHumanMoveMs={lastHumanMoveMs}
+                lastAiMoveMs={lastAiMoveMs}
+                turnStartMs={turnStartMs}
+                isHumanTurn={isHumanTurn}
               />
               <Board
                 board={board}

@@ -9,6 +9,7 @@ function delay(ms: number): Promise<void> {
 export async function postGameState(
   state: GameState,
   maxRetries = 20,
+  timeoutMs?: number,
 ): Promise<GameState> {
   let delayMs = 100
   let attempt = 0
@@ -18,12 +19,19 @@ export async function postGameState(
   while (true) {
     let response: Response
     try {
-      response = await fetch(url, {
+      const options: RequestInit = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(state),
-      })
+      }
+      if (timeoutMs) {
+        options.signal = AbortSignal.timeout(timeoutMs)
+      }
+      response = await fetch(url, options)
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'TimeoutError') {
+        throw err
+      }
       const msg = err instanceof Error ? err.message : String(err)
       const cause = err instanceof Error && err.cause ? ` cause: ${JSON.stringify(err.cause)}` : ''
       throw new Error(`Network error posting to ${url}: ${msg}${cause} (type: ${err instanceof Error ? err.constructor.name : typeof err})`)

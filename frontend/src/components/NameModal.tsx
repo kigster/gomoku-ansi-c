@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { trackEntered, trackAbandoned } from '../analytics'
 
 interface NameModalProps {
   onSubmit: (name: string) => void
@@ -7,9 +8,16 @@ interface NameModalProps {
 export default function NameModal({ onSubmit }: NameModalProps) {
   const [name, setName] = useState('')
 
+  useEffect(() => {
+    const handler = () => trackAbandoned()
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [])
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (name.trim()) {
+      trackEntered(name.trim())
       onSubmit(name.trim())
     }
   }
