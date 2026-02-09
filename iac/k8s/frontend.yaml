@@ -23,7 +23,14 @@ spec:
       containers:
         - name: nginx
           image: gomoku-frontend:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
+          env:
+            - name: BACKEND_URL
+              value: "envoy-gateway.gomoku.svc.cluster.local:10000"
+            - name: BACKEND_PROTO
+              value: "http"
+            - name: BACKEND_HOST
+              value: "envoy-gateway.gomoku.svc.cluster.local"
           ports:
             - name: http
               containerPort: 80

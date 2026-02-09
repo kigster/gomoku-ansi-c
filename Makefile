@@ -213,6 +213,14 @@ docker-build-frontend: ## Builds the gomoku-frontend docker container
 
 docker-build-all: docker-build docker-build-frontend ## Builds all docker containers
 
+docker-build-amd64: ## Builds gomoku-httpd for linux/amd64 (for GCP/GKE)
+		docker buildx build --platform linux/amd64 -t gomoku-httpd:latest --load .
+
+docker-build-frontend-amd64: ## Builds gomoku-frontend for linux/amd64 (for GCP/GKE)
+		docker buildx build --platform linux/amd64 -t gomoku-frontend:latest --load frontend/
+
+docker-build-all-amd64: docker-build-amd64 docker-build-frontend-amd64 ## Builds all containers for linux/amd64
+
 docker-run: 	## Runs the gomoku-httpd docker container
 		docker run -p 8787:8787 gomoku-httpd:latest
 

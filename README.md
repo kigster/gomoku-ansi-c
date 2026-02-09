@@ -2,6 +2,12 @@
 
 [![CI](https://github.com/kigster/gomoku-ansi-c/actions/workflows/ci.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/ci.yml)
 
+## Play the Game!
+
+You can now play the game on Google Cloud:
+
+[Gomoku Online](https://app.gomoku.games)
+
 ## Table of Contents
 
 1. This document: GamePlay, Single-User Terminal Usage, Building, CLI.

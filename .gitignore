@@ -59,4 +59,27 @@ compile_commands.json     # Optional, but often generated and ignorable
 nohup.out
 # Vendored library build artifacts
 src/vendor/json-c/build/
+/.env
+**/.vite
 
+# Terraform
+# Terraform generated files
+.terraform/
+.terraform.lock.hcl
+
+# Terraform state files
+*.tfstate
+*.tfstate.*
+*.tfrun
+
+# Sensitive variable files
+*.tfvars
+*.tfvars.json
+
+# Crash log files
+crash.log
+
+# You can add other files that are environment specific or contain secrets
+# such as:
+# *.override.tf
+# *.override.tf.json
