@@ -42,7 +42,7 @@ spec:
       containers:
         - name: gomoku-httpd
           image: gomoku-httpd:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8787

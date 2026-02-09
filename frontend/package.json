@@ -10,7 +10,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "docker-build": "[[ -d frontend ]] && cd frontend; docker build -t gomoku-frontend:latest ."
   },
   "dependencies": {
     "react": "^18.3.1",

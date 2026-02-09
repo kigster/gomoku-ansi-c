@@ -23,5 +23,11 @@ variable "min_instances" {
 variable "max_instances" {
   description = "Maximum number of instances to scale up to"
   type        = number
-  default     = 100
+  default     = 20
+}
+
+variable "frontend_image" {
+  description = "The full Docker image path for the frontend (nginx + React SPA)"
+  type        = string
+  default     = "placeholder"
 }

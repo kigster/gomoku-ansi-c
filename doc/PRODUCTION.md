@@ -1,379 +1,262 @@
 # Production Deployment Guide
 
-This document describes how to deploy the Gomoku application to a Google Kubernetes Engine (GKE) cluster on Google Cloud Platform.
+This project supports two production deployment targets on Google Cloud Platform. Choose the one that fits your needs.
 
-## Architecture
+| | Cloud Run | GKE (Kubernetes) |
+|---|---|---|
+| **Complexity** | Low — serverless, no cluster to manage | High — full K8s cluster, Envoy, cert-manager |
+| **Cost at idle** | $0 (scales to zero) | ~$140/mo (2 x e2-standard-4 nodes always on) |
+| **Cost under load** | Pay-per-request + CPU time | Fixed node cost, autoscales pods within nodes |
+| **Cold start** | 1-2s on first request after idle | None (pods always running) |
+| **Config location** | `iac/cloud_run/` | `iac/k8s/` + `bin/gcp-create-cluster` |
+| **Deploy command** | `cd iac/cloud_run && ./deploy.sh` | `bin/gcp-create-cluster setup && bin/gcp-create-cluster deploy` |
+| **Custom domain SSL** | Google-managed (automatic) | cert-manager + Let's Encrypt |
+| **Load balancing** | Cloud Run built-in | Envoy gateway (LEAST_REQUEST, circuit breakers) |
 
-```
-Internet
-  |
-  v
-[K8s Ingress + TLS (cert-manager / letsencrypt)]
-  |
-  v
-[gomoku-frontend (nginx + React SPA, 2 replicas)]
-  |  serves static assets
-  |  proxies /gomoku/* internally to:
-  v
-[envoy-gateway (Envoy proxy, 2 replicas)]
-  |  LEAST_REQUEST load balancing
-  |  circuit breakers, retries on 5xx
-  |  health checks on /health
-  v
-[gomoku-workers (gomoku-httpd, HPA 2-20 replicas)]
-  |  headless Service for pod discovery
-  |  1 CPU per pod (single-threaded AI)
-  |  topologySpreadConstraints for cross-zone distribution
-```
+---
 
-All API traffic stays internal to the cluster. The frontend nginx proxies `/gomoku/*` requests to the Envoy gateway, which load-balances across gomoku-httpd worker pods. The Ingress controller handles TLS termination with certificates provisioned by cert-manager.
+## Option 1: Cloud Run (Recommended)
 
-## Prerequisites
+Simpler, cheaper at low traffic, zero maintenance. Full documentation is in [`iac/cloud_run/README.md`](../iac/cloud_run/README.md).
 
-### Tools
+### Architecture
 
-- `gcloud` CLI ([install](https://cloud.google.com/sdk/docs/install))
-- `kubectl` ([install](https://kubernetes.io/docs/tasks/tools/))
-- `docker` ([install](https://docs.docker.com/get-docker/))
+Very simple:
 
-### GCP Setup
+![cloud-run](img/gcp-diagram.png)
+
+### Quick Deploy
 
 ```bash
-# Set your project
-export PROJECT_ID="your-gcp-project-id"
+export PROJECT_ID="fine-booking-486503-k7"
+cd iac/cloud_run
+./deploy.sh
+```
+
+### Service URLs
+
+| Service  | URL |
+|----------|-----|
+| Frontend | https://gomoku-frontend-hdnatxbb3a-wl.a.run.app |
+| Backend  | https://gomoku-httpd-hdnatxbb3a-wl.a.run.app |
+
+### Update Individual Components
+
+```bash
+REGION="us-central1"
+
+# Frontend only
+IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/gomoku-repo/gomoku-frontend:latest"
+docker buildx build --platform linux/amd64 -t "$IMAGE" --load frontend/
+docker push "$IMAGE"
+gcloud run services update gomoku-frontend --region=$REGION --image=$IMAGE
+
+# Backend only
+IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/gomoku-repo/gomoku-httpd:latest"
+docker buildx build --platform linux/amd64 -t "$IMAGE" --load .
+docker push "$IMAGE"
+gcloud run services update gomoku-httpd --region=$REGION --image=$IMAGE
+```
+
+### Custom Domain (gomoku.games)
+
+Cloud Run uses Google-managed SSL certificates with HTTP-01 validation. No certbot or DNS provider API credentials needed — just add DNS records and Google handles the rest.
+
+```bash
+# 1. Verify domain ownership (adds a TXT record)
+gcloud domains verify gomoku.games
+
+# 2. Create domain mapping
+gcloud run domain-mappings create \
+    --service=gomoku-frontend \
+    --domain=gomoku.games \
+    --region=us-central1
+
+# 3. Add DNS records in DnsMadeEasy (A records for apex domain):
+#    @ → 216.239.32.21, 216.239.34.21, 216.239.36.21, 216.239.38.21
+#
+#    Or for a subdomain (app.gomoku.games), just one CNAME:
+#    app → ghs.googlehosted.com.
+
+# 4. Check SSL provisioning status
+gcloud run domain-mappings describe --domain=gomoku.games --region=us-central1
+```
+
+### Monitoring
+
+```bash
+# Live logs
+gcloud run services logs tail gomoku-httpd --region=us-central1
+gcloud run services logs tail gomoku-frontend --region=us-central1
+
+# Health checks
+curl https://gomoku-frontend-hdnatxbb3a-wl.a.run.app/nginx-health
+curl https://gomoku-frontend-hdnatxbb3a-wl.a.run.app/health
+```
+
+Cloud Console dashboards:
+- [Cloud Run overview](https://console.cloud.google.com/run?project=fine-booking-486503-k7)
+- [Frontend metrics](https://console.cloud.google.com/run/detail/us-central1/gomoku-frontend/metrics?project=fine-booking-486503-k7)
+- [Backend metrics](https://console.cloud.google.com/run/detail/us-central1/gomoku-httpd/metrics?project=fine-booking-486503-k7)
+
+### Terraform State
+
+Stored remotely in GCS for team collaboration:
+
+```
+gs://gomoku-tfstate-fine-booking/cloud-run/gomoku/
+```
+
+Any collaborator with GCP project access can run `terraform init` to connect.
+
+---
+
+## Option 2: GKE (Kubernetes)
+
+Full Kubernetes deployment with Envoy gateway for advanced load balancing. More complex to set up and operate, but gives fine-grained control over networking, circuit breaking, and pod-level scaling.
+
+### Architecture
+
+```mermaid
+flowchart LR
+    Browser -- "HTTPS :443" --> Ingress
+
+    subgraph "GKE Cluster"
+        Ingress["nginx-ingress<br/>+ cert-manager TLS"]
+        Ingress -- ":80" --> FE["gomoku-frontend<br/>nginx + React SPA<br/>2 replicas"]
+        FE -- "/gomoku/* /health<br/>:10000" --> Envoy["envoy-gateway<br/>LEAST_REQUEST LB<br/>circuit breakers<br/>2 replicas"]
+        Envoy -- ":8787" --> Workers["gomoku-workers<br/>gomoku-httpd<br/>HPA 2-20 replicas"]
+    end
+
+    style Ingress fill:#4285F4,color:#fff
+    style FE fill:#34A853,color:#fff
+    style Envoy fill:#FBBC04,color:#000
+    style Workers fill:#EA4335,color:#fff
+```
+
+### Prerequisites
+
+```bash
+export PROJECT_ID="fine-booking-486503-k7"
 export REGION="us-central1"
 export CLUSTER_NAME="gomoku-cluster"
-
-gcloud config set project $PROJECT_ID
-gcloud config set compute/region $REGION
 ```
 
-### Enable Required APIs
+Ensure these are set in your `.envrc` / `.env` file (the script reads them from there).
+
+### Setup (One-Time)
+
+Creates the GKE cluster, Cloud NAT, Artifact Registry, builds and pushes images:
 
 ```bash
-gcloud services enable \
-  container.googleapis.com \
-  artifactregistry.googleapis.com \
-  compute.googleapis.com
+bin/gcp-create-cluster setup
 ```
 
-## Step 1: Create GKE Cluster
+This will:
+1. Create a private GKE zonal cluster (2 x e2-standard-4 nodes)
+2. Set up Cloud NAT for outbound internet from private nodes
+3. Create Artifact Registry repository
+4. Build both Docker images for linux/amd64
+5. Push images to Artifact Registry
+
+### Deploy
+
+Installs nginx-ingress, cert-manager, and deploys all K8s resources:
 
 ```bash
-gcloud container clusters create $CLUSTER_NAME \
-  --region $REGION \
-  --num-nodes 2 \
-  --machine-type e2-standard-4 \
-  --enable-autoscaling \
-  --min-nodes 1 \
-  --max-nodes 5 \
-  --release-channel regular
-
-# Get credentials for kubectl
-gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION
+bin/gcp-create-cluster deploy
 ```
 
-## Step 2: Create Artifact Registry Repository
+This will:
+1. Install nginx-ingress controller and wait for external IP
+2. Prompt you to update DNS for `gomoku.games` to the external IP
+3. Install cert-manager with Let's Encrypt ClusterIssuer
+4. Update image references in kustomization.yaml
+5. Apply all K8s manifests via `kubectl apply -k iac/k8s/`
+
+### Custom Domain (gomoku.games)
+
+GKE uses cert-manager with Let's Encrypt HTTP-01 challenges via the nginx-ingress controller.
+
+1. The `deploy` command prints the ingress external IP
+2. Point `gomoku.games` A record to that IP in DnsMadeEasy
+3. cert-manager automatically requests and renews the TLS certificate
+
+### Monitoring
 
 ```bash
-export REGISTRY="${REGION}-docker.pkg.dev/${PROJECT_ID}/gomoku"
-
-gcloud artifacts repositories create gomoku \
-  --repository-format docker \
-  --location $REGION
-
-# Configure Docker authentication
-gcloud auth configure-docker ${REGION}-docker.pkg.dev
-```
-
-## Step 3: Build and Push Docker Images
-
-### Backend (gomoku-httpd)
-
-```bash
-docker build -t ${REGISTRY}/gomoku-httpd:latest .
-docker push ${REGISTRY}/gomoku-httpd:latest
-```
-
-### Frontend (gomoku-frontend)
-
-```bash
-docker build -t ${REGISTRY}/gomoku-frontend:latest frontend/
-docker push ${REGISTRY}/gomoku-frontend:latest
-```
-
-Or use the Makefile shortcut to build both:
-
-```bash
-make docker-build-all
-```
-
-Then tag and push:
-
-```bash
-docker tag gomoku-httpd:latest ${REGISTRY}/gomoku-httpd:latest
-docker tag gomoku-frontend:latest ${REGISTRY}/gomoku-frontend:latest
-docker push ${REGISTRY}/gomoku-httpd:latest
-docker push ${REGISTRY}/gomoku-frontend:latest
-```
-
-## Step 4: Install nginx-ingress Controller
-
-```bash
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.9.5/deploy/static/provider/cloud/deploy.yaml
-```
-
-Wait for the controller to get an external IP:
-
-```bash
-kubectl get svc -n ingress-nginx ingress-nginx-controller -w
-```
-
-Note the `EXTERNAL-IP` -- this is the IP your DNS must point to.
-
-## Step 5: Install cert-manager for TLS
-
-```bash
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.3/cert-manager.yaml
-
-# Wait for cert-manager pods to be ready
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=120s
-```
-
-Create a ClusterIssuer for Let's Encrypt:
-
-```bash
-cat <<'EOF' | kubectl apply -f -
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: letsencrypt-prod
-spec:
-  acme:
-    server: https://acme-v02.api.letsencrypt.org/directory
-    email: your-email@example.com
-    privateKeySecretRef:
-      name: letsencrypt-prod
-    solvers:
-      - http01:
-          ingress:
-            class: nginx
-EOF
-```
-
-Replace `your-email@example.com` with your actual email address for certificate expiry notifications.
-
-## Step 6: Configure DNS
-
-Point your `gomoku.games` DNS A record to the external IP of the nginx-ingress controller (from Step 4). If you already have DNS configured, verify it resolves to the correct IP:
-
-```bash
-dig gomoku.games +short
-```
-
-## Step 7: Deploy to Kubernetes
-
-Update the image references in kustomization to point to your Artifact Registry:
-
-```bash
-cd iac/k8s
-
-# Update image references
-kustomize edit set image \
-  gomoku-httpd=${REGISTRY}/gomoku-httpd:latest \
-  gomoku-frontend=${REGISTRY}/gomoku-frontend:latest
-```
-
-Deploy all resources:
-
-```bash
-kubectl apply -k iac/k8s/
-```
-
-Or from the project root:
-
-```bash
-make k8s-deploy
-```
-
-## Step 8: Verify Deployment
-
-### Check Pod Status
-
-```bash
+# Pod status
 kubectl get pods -n gomoku
-```
 
-Expected output shows frontend, envoy-gateway, and worker pods all `Running`:
+# Resource usage
+kubectl top pods -n gomoku
 
-```
-NAME                               READY   STATUS    RESTARTS   AGE
-envoy-gateway-xxxxx-xxxxx          1/1     Running   0          1m
-envoy-gateway-xxxxx-xxxxx          1/1     Running   0          1m
-gomoku-frontend-xxxxx-xxxxx        1/1     Running   0          1m
-gomoku-frontend-xxxxx-xxxxx        1/1     Running   0          1m
-gomoku-workers-xxxxx-xxxxx         1/1     Running   0          1m
-gomoku-workers-xxxxx-xxxxx         1/1     Running   0          1m
-gomoku-workers-xxxxx-xxxxx         1/1     Running   0          1m
-gomoku-workers-xxxxx-xxxxx         1/1     Running   0          1m
-```
-
-### Check Services
-
-```bash
-kubectl get svc -n gomoku
-```
-
-### Check Ingress and TLS Certificate
-
-```bash
-kubectl get ingress -n gomoku
-kubectl get certificate -n gomoku
-```
-
-The certificate may take a few minutes to be issued by Let's Encrypt.
-
-### Test the Application
-
-```bash
-# Health check via Ingress
-curl -s https://gomoku.games/nginx-health
-
-# Test API endpoint (start a game with AI moving first)
-curl -s https://gomoku.games/gomoku/play \
-  -H 'Content-Type: application/json' \
-  -d '{"board_state":[],"moves":[],"board_size":15,"search_depth":3}'
-```
-
-Open https://gomoku.games/ in a browser to verify the React frontend loads and games play to completion.
-
-## Scaling
-
-### Manual Scaling
-
-```bash
-# Scale workers
-kubectl scale deployment gomoku-workers -n gomoku --replicas=8
-
-# Scale frontend
-kubectl scale deployment gomoku-frontend -n gomoku --replicas=3
-```
-
-### Autoscaling
-
-The HorizontalPodAutoscaler automatically scales workers between 2 and 20 replicas based on 70% CPU utilization:
-
-```bash
-kubectl get hpa -n gomoku
-```
-
-To adjust autoscaling parameters:
-
-```bash
-kubectl edit hpa gomoku-workers -n gomoku
-```
-
-## Monitoring
-
-### View Logs
-
-```bash
 # Worker logs
 kubectl logs -n gomoku -l app.kubernetes.io/component=worker --tail=100
 
-# Envoy gateway logs
-kubectl logs -n gomoku -l app.kubernetes.io/component=envoy-gateway --tail=100
-
-# Frontend logs
-kubectl logs -n gomoku -l app.kubernetes.io/component=frontend --tail=100
-```
-
-### Envoy Admin Interface
-
-Port-forward to access the Envoy admin dashboard:
-
-```bash
+# Envoy admin dashboard
 kubectl port-forward -n gomoku svc/envoy-gateway 9901:9901
-```
+# Then visit http://localhost:9901
 
-Then visit http://localhost:9901 to view cluster stats, upstream health, and connection pools.
-
-### Resource Usage
-
-```bash
-kubectl top pods -n gomoku
-kubectl top nodes
-```
-
-## Troubleshooting
-
-### Pods Not Starting
-
-```bash
-kubectl describe pod <pod-name> -n gomoku
-kubectl logs <pod-name> -n gomoku
-```
-
-### Certificate Not Issuing
-
-```bash
-kubectl describe certificate gomoku-tls -n gomoku
-kubectl describe order -n gomoku
-kubectl logs -n cert-manager -l app.kubernetes.io/name=cert-manager
-```
-
-### Envoy Not Discovering Workers
-
-```bash
-# Check headless service resolves to pod IPs
-kubectl run -it --rm debug --image=busybox -n gomoku -- nslookup gomoku-workers.gomoku.svc.cluster.local
-
-# Check Envoy cluster status
-kubectl port-forward -n gomoku svc/envoy-gateway 9901:9901
-curl http://localhost:9901/clusters
-```
-
-### 503 Errors Under Load
-
-All workers may be busy computing AI moves. Check HPA status and consider increasing `maxReplicas`:
-
-```bash
+# HPA status (worker autoscaling)
 kubectl get hpa -n gomoku
+```
+
+### Scaling
+
+```bash
+# Manual scaling
+kubectl scale deployment gomoku-workers -n gomoku --replicas=8
+
+# HPA automatically scales workers between 2-20 based on CPU
 kubectl describe hpa gomoku-workers -n gomoku
 ```
 
-## Updating
-
-### Rolling Update (Zero Downtime)
+### Updating
 
 ```bash
+REGISTRY="${REGION}-docker.pkg.dev/${PROJECT_ID}/gomoku"
+
 # Build and push new images
-docker build -t ${REGISTRY}/gomoku-httpd:v1.2.0 .
-docker push ${REGISTRY}/gomoku-httpd:v1.2.0
+docker buildx build --platform linux/amd64 -t ${REGISTRY}/gomoku-httpd:latest --load .
+docker buildx build --platform linux/amd64 -t ${REGISTRY}/gomoku-frontend:latest --load frontend/
+docker push ${REGISTRY}/gomoku-httpd:latest
+docker push ${REGISTRY}/gomoku-frontend:latest
 
-docker build -t ${REGISTRY}/gomoku-frontend:v1.2.0 frontend/
-docker push ${REGISTRY}/gomoku-frontend:v1.2.0
-
-# Update image tags
-cd iac/k8s
-kustomize edit set image \
-  gomoku-httpd=${REGISTRY}/gomoku-httpd:v1.2.0 \
-  gomoku-frontend=${REGISTRY}/gomoku-frontend:v1.2.0
-
-kubectl apply -k .
+# Rolling update (triggers new pods)
+kubectl rollout restart deployment gomoku-workers -n gomoku
+kubectl rollout restart deployment gomoku-frontend -n gomoku
 ```
 
 ### Teardown
 
 ```bash
-make k8s-delete
-
-# Or manually
+# Delete K8s resources
 kubectl delete -k iac/k8s/
+
+# Delete the cluster entirely
+gcloud container clusters delete $CLUSTER_NAME --zone ${REGION}-a
 ```
 
-To also delete the GKE cluster:
+---
 
-```bash
-gcloud container clusters delete $CLUSTER_NAME --region $REGION
-```
+## Troubleshooting
+
+### Cloud Run
+
+| Problem | Fix |
+|---------|-----|
+| 405 on POST | Check `VITE_API_BASE` in frontend `.env` — must be empty for production |
+| CPU < 1 with concurrency > 1 | Cloud Run requires CPU >= 1000m when concurrency > 1 |
+| Memory < 512Mi | CPU always-allocated requires memory >= 512Mi |
+| Image not updating | Use `gcloud run services update` to force a new revision with `:latest` |
+| ARM64 image on Cloud Run | Always build with `--platform linux/amd64` |
+
+### GKE
+
+| Problem | Fix |
+|---------|-----|
+| Pods stuck in ImagePullBackOff | Private nodes need Cloud NAT; check `gomoku-nat` exists |
+| Certificate not issuing | Check `kubectl describe certificate -n gomoku` and cert-manager logs |
+| 503 under load | Check HPA: `kubectl get hpa -n gomoku`; increase `maxReplicas` |
+| Envoy not discovering workers | Verify headless service: `kubectl run debug --image=busybox -n gomoku -- nslookup gomoku-workers` |

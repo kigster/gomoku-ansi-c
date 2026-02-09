@@ -13,18 +13,20 @@ resources:
   - frontend.yaml
   - ingress.yaml
 
-# Common labels applied to all resources
-commonLabels:
-  app.kubernetes.io/managed-by: kustomize
-  app.kubernetes.io/part-of: gomoku-platform
+# Common labels applied to all resources (including selectors for fresh deploy)
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: kustomize
+      app.kubernetes.io/part-of: gomoku-platform
+    includeSelectors: true
 
 # Image customization (override in overlays or via kustomize edit)
 images:
   - name: gomoku-httpd
-    newName: gomoku-httpd
+    newName: us-central1-docker.pkg.dev/fine-booking-486503-k7/gomoku/gomoku-httpd
     newTag: latest
   - name: gomoku-frontend
-    newName: gomoku-frontend
+    newName: us-central1-docker.pkg.dev/fine-booking-486503-k7/gomoku/gomoku-frontend
     newTag: latest
   - name: envoyproxy/envoy
     newName: envoyproxy/envoy

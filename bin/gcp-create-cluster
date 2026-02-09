@@ -1,0 +1,242 @@
+#!/usr/bin/env bash
+# vim: ft=bash
+
+set +e
+[[ -d ~/.bashmatic ]] || bash -c "$(curl -fsSL https://bashmatic.re1.re); bashmatic-install -q" >/dev/null 2>&1
+source ~/.bashmatic/init >/dev/null 2>&1
+set -e
+
+
+function setup() {
+  direnv allow . >/dev/null 2>&1
+
+  set -eo pipefail
+
+  command -v gcloud 2>&1 >/dev/null || {
+    error "Please install gcloud CLI command."
+    exit 1
+  }
+
+  [[ -z $PROJECT_ID || -z $REGION || -z $CLUSTER_NAME ]] && {
+    echo "
+      You must set in your .env:
+      PROJECT_ID=...
+      REGION=...
+      CLUSTER_NAME=...
+      \n"
+      exit 1
+  }
+
+  # Derive the zone from the region (use first zone: e.g. us-central1-a)
+  export ZONE="${REGION}-a"
+
+  run "gcloud config set project $PROJECT_ID"
+  run "gcloud config set compute/region $REGION"
+  run "gcloud config set compute/zone $ZONE"
+  run "gcloud services enable container.googleapis.com artifactregistry.googleapis.com compute.googleapis.com"
+
+  info "Creating the GKE zonal cluster [$CLUSTER_NAME] in zone [$ZONE]..."
+
+  # Use a zonal private cluster to:
+  # - Stay within the 12 vCPU quota (2 nodes × 4 vCPUs = 8)
+  # - Satisfy the compute.vmExternalIpAccess org policy (no external IPs on nodes)
+  if gcloud container clusters describe ${CLUSTER_NAME} --zone $ZONE --project $PROJECT_ID >/dev/null 2>&1; then
+    info "Cluster [$CLUSTER_NAME] already exists, skipping creation."
+  else
+    gcloud container clusters create ${CLUSTER_NAME} \
+      --zone ${ZONE} \
+      --project ${PROJECT_ID} \
+      --num-nodes 2 \
+      --machine-type e2-standard-4 \
+      --enable-autoscaling \
+      --min-nodes 1 \
+      --max-nodes 4 \
+      --release-channel regular \
+      --enable-private-nodes \
+      --master-ipv4-cidr 172.16.0.0/28 \
+      --enable-ip-alias \
+      --no-enable-master-authorized-networks \
+      --scopes=cloud-platform
+  fi
+
+  # Set up Cloud NAT so private nodes can pull images from the internet
+  info "Setting up Cloud NAT for private cluster..."
+  if gcloud compute routers describe gomoku-router --region $REGION --project $PROJECT_ID >/dev/null 2>&1; then
+    info "Cloud Router already exists."
+  else
+    gcloud compute routers create gomoku-router \
+      --project $PROJECT_ID \
+      --network default \
+      --region $REGION
+  fi
+
+  if gcloud compute routers nats describe gomoku-nat --router gomoku-router --region $REGION --project $PROJECT_ID >/dev/null 2>&1; then
+    info "Cloud NAT already exists."
+  else
+    gcloud compute routers nats create gomoku-nat \
+      --project $PROJECT_ID \
+      --router gomoku-router \
+      --region $REGION \
+      --auto-allocate-nat-external-ips \
+      --nat-all-subnet-ip-ranges
+  fi
+
+  # Get credentials for kubectl
+  gcloud container clusters get-credentials "${CLUSTER_NAME}" --zone $ZONE --project $PROJECT_ID
+
+  export REGISTRY="${REGION}-docker.pkg.dev/${PROJECT_ID}/gomoku"
+
+  info "Creating artifacts repository: [$REGISTRY]"
+
+  gcloud artifacts repositories create gomoku \
+    --repository-format docker \
+    --location $REGION 2>/dev/null || info "Artifact registry already exists."
+
+  info "Configuring Docker Authentication..."
+  gcloud auth configure-docker ${REGION}-docker.pkg.dev
+
+  info "Building Docker containers for linux/amd64 (GKE nodes are x86_64)..."
+  make docker-build-all-amd64
+
+  warning "Pushing Images to GCP..."
+
+  docker tag gomoku-httpd:latest ${REGISTRY}/gomoku-httpd:latest
+  docker tag gomoku-frontend:latest ${REGISTRY}/gomoku-frontend:latest
+  docker push ${REGISTRY}/gomoku-httpd:latest
+  docker push ${REGISTRY}/gomoku-frontend:latest
+}
+
+function deploy() {
+  set -eo pipefail
+  direnv allow . >/dev/null 2>&1
+
+  export REGISTRY="${REGION}-docker.pkg.dev/${PROJECT_ID}/gomoku"
+
+  [[ -z $PROJECT_ID || -z $REGION || -z $CLUSTER_NAME ]] && {
+    error "
+      You must set in your .env:
+      PROJECT_ID=...
+      REGION=...
+      CLUSTER_NAME=...
+      "
+      exit 1
+  }
+
+  export ZONE="${REGION}-a"
+
+  # Ensure kubectl is pointing at the right cluster
+  info "Connecting to GKE cluster [$CLUSTER_NAME] in zone [$ZONE]..."
+  gcloud container clusters get-credentials $CLUSTER_NAME --zone $ZONE --project $PROJECT_ID
+
+  info "Installing nginx ingress controller..."
+  kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.9.5/deploy/static/provider/cloud/deploy.yaml
+
+  info "Waiting for ingress controller external IP (up to 5 minutes)..."
+  local external_ip=""
+  local attempts=0
+  while [[ -z "$external_ip" || "$external_ip" == "<pending>" ]] && (( attempts < 60 )); do
+    external_ip=$(kubectl get svc -n ingress-nginx ingress-nginx-controller \
+      -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+    if [[ -z "$external_ip" || "$external_ip" == "<pending>" ]]; then
+      sleep 5
+      ((attempts++))
+    fi
+  done
+
+  if [[ -n "$external_ip" && "$external_ip" != "<pending>" ]]; then
+    success "Ingress external IP: $external_ip"
+  else
+    warning "Could not obtain external IP after 5 minutes."
+    warning "Check manually: kubectl get svc -n ingress-nginx ingress-nginx-controller"
+  fi
+
+  export PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+  [[ -z $PROJECT_NUMBER ]] && {
+    error "Could not determine the project number."
+    exit 1
+  }
+
+
+  warning "Your domain gomoku.games must resolve to: $external_ip"
+  echo "Press Enter when DNS is updated (or Ctrl-C to abort)..."
+  read -r
+
+  # Install cert-manager
+  info "Installing cert-manager..."
+  kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.3/cert-manager.yaml
+
+  info "Waiting for cert-manager to be ready..."
+  kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager \
+    -n cert-manager --timeout=120s
+
+  info "Creating ClusterIssuer for Let's Encrypt..."
+  cat <<'EOF' | kubectl apply -f -
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: kigster@gmail.com
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+EOF
+
+  echo "Verifying DNS:"
+  dig gomoku.games +short
+
+  info "Deploying to K8S..."
+
+  # Update image references in kustomization.yaml to point at GCP Artifact Registry
+  local kustomization_file="iac/k8s/kustomization.yaml"
+  if command -v kustomize >/dev/null 2>&1; then
+    pushd iac/k8s >/dev/null
+    kustomize edit set image \
+      gomoku-httpd=${REGISTRY}/gomoku-httpd:latest \
+      gomoku-frontend=${REGISTRY}/gomoku-frontend:latest
+    popd >/dev/null
+  else
+    # Fallback: sed-based image replacement when kustomize CLI is not installed
+    sed -i.bak \
+      -e "s|newName: gomoku-httpd|newName: ${REGISTRY}/gomoku-httpd|" \
+      -e "s|newName: gomoku-frontend|newName: ${REGISTRY}/gomoku-frontend|" \
+      "$kustomization_file"
+    rm -f "${kustomization_file}.bak"
+    info "Updated image references in $kustomization_file"
+  fi
+
+  kubectl apply -k iac/k8s/
+
+  info "Waiting for pods to start..."
+  kubectl wait --for=condition=ready pod -l app.kubernetes.io/part-of=gomoku-platform \
+    -n gomoku --timeout=180s 2>/dev/null || true
+
+  info "Checking pod status:"
+  kubectl get pods -n gomoku
+
+  info "Checking services:"
+  kubectl get svc -n gomoku
+
+  info "Checking ingress:"
+  kubectl get ingress -n gomoku
+
+  success "Deployment complete!"
+  info "The site should be available at https://gomoku.games once DNS propagates and TLS is issued."
+  open "https://gomoku.games" 2>/dev/null || true
+}
+
+function usage() {
+    usage-box "usage: $0 [ setup ] [ deploy ]"
+    exit 0
+}
+
+for func in "$@"; do
+  is.a-function "${func}" && {
+    $func || usage
+  }
+done
