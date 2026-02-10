@@ -204,6 +204,7 @@ uninstall: 	## Uninstall the binary from the prefix
 format: 	## Format all source and test files using clang-format
 		find src/gomoku src/net -maxdepth 1 -name '*.c**' | xargs clang-format -i
 		find tests -maxdepth 1 -name '*.c**' | xargs clang-format -i
+		find bin -type f | xargs shfmt -i 2 -w
 
 docker-build: 	## Builds the gomoku-httpd docker container
 		docker build -t gomoku-httpd:latest .

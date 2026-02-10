@@ -37,14 +37,16 @@ Below is the screenshot from the web version of this game:
 1. In this document: Game Play, Single-User Terminal Usage, Building, CLI.
 2. [HTTPD Game Server and the Test Client](doc/HTTPD.md)
 3. [Implementation details, modules, and code organization](doc/DEVELOPER.md)
+4. [Cluster Management (local dev)](CLUSTER.md)
 
 ### Deployment
 
-1. [Kubernetes](iac/k8s/README.md)
-2. [Deployment to Production on GCP](doc/PRODUCTIONS.md)
-3. [SystemD Deployment](iac/systemd/README.md)
-4. [Envoy](iac/envoy/README.md)
-5. [Google Cloud Run](iac/cloud_run/README.md) — how the <https://app.gomoku.games> is deployed.
+1. [Cluster Management (local dev with `gctl`)](CLUSTER.md)
+2. [Deployment to Production on GKE](doc/PRODUCTION.md)
+3. [Kubernetes manifests](iac/k8s/README.md)
+4. [SystemD Deployment](iac/systemd/README.md)
+5. [Envoy](iac/envoy/README.md)
+6. [Google Cloud Run](iac/cloud_run/README.md)
 
 ## Introduction
 
@@ -75,62 +77,7 @@ This repo contains what can be thought of three separate versions of the game th
    - Utility `gomoku-http-client` can be used to start a networked game against the port 10000 (haproxy and envoy's frontend). or via SSL to `nginx` listening on ports 80 and 443.
    - Using this client you can play the networked game play against the cluster of `gomoku-httpd` processes. The client does not have any AI logic related to the gameplay, it simply mirrors back to the server what the previous server responded just before.  It does so until either a draw or one side wins.
 
-Before we dive into the gameplay, let's briefly explain the cluster mode:
-
-### Cluster Operations
-
-You can operate the cluster using the `gctl` utility located in the `bin` folder. Here is it's help command:
-
-<img src="doc/img/cluster-manager.png" width="700" border="1" style="border-radius: 10px"/>
-
-#### Starting
-
-```bash
-gctl start
-```
-
-This starts nginx, haproxy, and the `gomoku-httpd` cluster.
-
-You can also atart individual components:
-
-```bash
-gctl start -p haproxy
-```
-
-This will boot `halroxy`only.
-
-> [!IMPORTANT]
-> Nake sure that your nginx uses nginx.conf from `iac/config` folder, same with haproxy — `iac/config/haproxy.cfg` should be used for haproxy configuration.
-
-#### Stopping
-
-```bash
-gctl stop
-```
-
-#### Checking Up
-
-For `haproxy` status dashboard, open the URL [http://127.0.0.1:8404/stats](http://127.0.0.1:8404/stats)
-
-```bash
-gctl status
-```
-
-OR
-
-```bash
-gctl htop
-```
-
-This may or may not stop nginx (which often runs as root). But it will stop everything else.
-
-#### Cluster Architecture
-
-The below picture shows the cluster architecture as a sequence diagram.
-
-![uml](doc/img/haproxy-design-sequence.png)
-
-There is more information about this mode in the `iac` folder and the `httpd` document linked to at the top.
+For details on running the local cluster (starting/stopping workers, proxy config generation, monitoring) see [CLUSTER.md](CLUSTER.md). For production Kubernetes deployment, see [doc/PRODUCTION.md](doc/PRODUCTION.md).
 
 ## Game Play
 

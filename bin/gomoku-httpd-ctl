@@ -24,11 +24,11 @@ function daemons-count() {
 
 # shellcheck disable=SC2120
 function daemons-show() {
-  if [[ -z "$1" ]] ; then
+  if [[ -z "$1" ]]; then
     echo "All ${GOMOKUD_BINARY} processes:"
-     ps -ef | grep "${GOMOKUD_BINARY_REGEX}" | grep -v grep
+    ps -ef | grep "${GOMOKUD_BINARY_REGEX}" | grep -v grep
   else
-     ps -ef "$1" r| grep "${GOMOKUD_BINARY_REGEX}" | grep -v grep | grep -v "grep" | $1
+    ps -ef "$1" r | grep "${GOMOKUD_BINARY_REGEX}" | grep -v grep | grep -v "grep" | $1
   fi
 }
 
@@ -51,49 +51,52 @@ function parse-argv() {
 
   while :; do
     case $1 in
-      start)
-        shift
-        [[ $1 =~ ^-w$ ]] && shift
-        [[ $1 =~ ^[0-9]+$ ]] && workers="$1" && shift
-        daemons-start "$workers"
-        ;;
-      stop)
-        shift
-        daemons-stop "$@"
-        ;;
-      show|status)
-        shift
-        daemons-status "$1"
-        shift
-        ;;
-      htop)
-        shift
-        command -v htop >/dev/null 2>&1 || \
-          { echo "htop is not installed. Please install it first." >&2; exit 1; }
-        daemons-htop "$@"
-        ;;
-      -h | --help|help)  
-        shift
-        usage
-        exit 0
-        ;;
-      -v | --verbose)
-        flag_verbose=true
-        shift
-        ;;
-      --) # End of all options; anything after will be passed to the action function
-        shift
-        break
-        ;;
-      -?*)
-        printf 'WARN: Unknown option (ignored): %s\n' "$1" >&2
-        exit 127
-        shift
-        ;;
-      *)
-        [[ -z "$1" ]] && break
-        shift
-        ;;
+    start)
+      shift
+      [[ $1 =~ ^-w$ ]] && shift
+      [[ $1 =~ ^[0-9]+$ ]] && workers="$1" && shift
+      daemons-start "$workers"
+      ;;
+    stop)
+      shift
+      daemons-stop "$@"
+      ;;
+    show | status)
+      shift
+      daemons-status "$1"
+      shift
+      ;;
+    htop)
+      shift
+      command -v htop >/dev/null 2>&1 ||
+        {
+          echo "htop is not installed. Please install it first." >&2
+          exit 1
+        }
+      daemons-htop "$@"
+      ;;
+    -h | --help | help)
+      shift
+      usage
+      exit 0
+      ;;
+    -v | --verbose)
+      flag_verbose=true
+      shift
+      ;;
+    --) # End of all options; anything after will be passed to the action function
+      shift
+      break
+      ;;
+    -?*)
+      printf 'WARN: Unknown option (ignored): %s\n' "$1" >&2
+      exit 127
+      shift
+      ;;
+    *)
+      [[ -z "$1" ]] && break
+      shift
+      ;;
     esac
   done
 }
@@ -114,12 +117,12 @@ function daemons-start() {
 
   mkdir -p log
 
-  for ((i=0; i<nproc; i++)); do
+  for ((i = 0; i < nproc; i++)); do
     port=$((DEFAULT_PORT + i))
     haproxy_port=$((DEFAULT_PORT + i + 100))
     cmd="${GOMOKUD_EXECUTABLE} -b ${DEFAULT_HOST}:${port} -a ${haproxy_port} -d ${DEFAULT_FLAGS}"
 
-    ${flag_verbose} && echo -e -n  "${txtgrn}booting: [${cmd}] ... ${clr}"
+    ${flag_verbose} && echo -e -n "${txtgrn}booting: [${cmd}] ... ${clr}"
     eval "${cmd}" &>/dev/null
     ${flag_verbose} && echo -e "with PID ${txtpur}$!${clr}, exit code $?"
   done
@@ -153,5 +156,3 @@ function main() {
 }
 
 main "$@"
-
-
