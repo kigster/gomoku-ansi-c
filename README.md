@@ -1,16 +1,40 @@
-# Gomoku Terminal Game
-
 [![CI](https://github.com/kigster/gomoku-ansi-c/actions/workflows/ci.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/ci.yml)
 
-## Play the Game!
+# Gomoku (Five-in-a-Row) Game
 
-You can now play the game on Google Cloud:
+Gomoku is an old Japanese game that is also popular in the Eastern Europe, where it's called "крестики и нолики". The game is simlar to "tic-tac-toe", but played on a board that's 15x15 or 19x19 squares.
 
-[Gomoku Online](https://app.gomoku.games)
+This mono-repo contains sources for:
+
+1. The terminal game played on a single computer. Once you build the sources, the executable called `./gomoku` is the one that plays in the Terminal. It accepts many CLI arguments, so run `./gomoku -h` to get a full picture.
+
+2. The network server version, whose executable is `./gomoku-httpd`. While this program shares the majority of the algorithm with the terminal version, it's a bit simpler in fact due to it being completely stateless: it does not need to maintain any caches, it receives a game state, and responds with game state. This executable also accepts command line arguments that configure it, and it binds itself to a port on which it listens for `POST /gomoku/play` or `GET /health` and `GET /ready` HTTP requests. The `/gomoku/play` endpoint expects to receive JSON data structure completely describing the game initial parameters, and the current state. The daemon decides on the move, appends it to the JSON, and sends a reponse back, latest move added to the move list.
+
+   - This process also listens on an additional port used by `haproxy` to determine it's current status and stop sending it traffic while it's busy deciding on the move.
+   - In addition it supports `envoy` proxy, and provides health checks for it as well.
+   - The difference between `haproxy` and `envoy` is that if all backends are busy, haproxy will start returning HTTP 503, while envoy has a frontend queue that will queue up (to a point) incoming requests.
+
+3. There is a tiny utility `./gomoku-http-client` which is meant to play against a cluster of gomoku daemons behind a reverse proxy. It starts the game, sends JSON to the server, receives JSON back, and like in the game of ping-pong, sends the same exact JSON back for another server to pick up and respond to. So this client has no AI-playing logic. It merely exists for testing (and performance testing) the cluster of `gomoku-httpd` daemons.
+
+> [!TIP]
+> In our testing, with 10 `gomoku-httpd` services, `haproxy` started returning 503s when about 16 `./gomoku-http-clients` started playing simultaneously (all on the same MacBook Pro). However, when `envoy` was used not a single 503 showed up while the same cluster was being tested by 36 clients simultaneously.
+
+## Have Some Fun — Play the Game
+
+Below is the screenshot from the web version of this game:
+
+> [!IMPORTANT]
+> Note that unless running this cluster on Google Cloud became too expensive and I shut it down, you can play the game at the following URL:
+>
+> [https://app.gomoku.games](https://app.gomoku.games)
+>
+> This is running on Google Run Infrastructure which only boots frontend and backend containers when requested.
+
+<img src="doc/img/gomoku-web-version.png" width="700" border="1" style="border-radius: 10px" text-align="center"/>
 
 ## Table of Contents
 
-1. This document: GamePlay, Single-User Terminal Usage, Building, CLI.
+1. In this document: Game Play, Single-User Terminal Usage, Building, CLI.
 2. [HTTPD Game Server and the Test Client](doc/HTTPD.md)
 3. [Implementation details, modules, and code organization](doc/DEVELOPER.md)
 
@@ -20,29 +44,21 @@ You can now play the game on Google Cloud:
 2. [Deployment to Production on GCP](doc/PRODUCTIONS.md)
 3. [SystemD Deployment](iac/systemd/README.md)
 4. [Envoy](iac/envoy/README.md)
-5. [Google Cloud Run](iac/cloud_run/README.md)
+5. [Google Cloud Run](iac/cloud_run/README.md) — how the <https://app.gomoku.games> is deployed.
 
-> [!TIP]
-> This is an ANSI-C implementation of the Gomoku (Five-in-a-Row) game featuring gameplay against an AI opponent, AI vs AI, or Human vs Human.
->
-> The AI algorithm supports flexible search depth and utilizes MiniMax algorithm with Alpha-Beta pruning, and many additional optimizations.
->
-> If you are interested in a theory of Gomoku game-play and various approaches to algorithmic AI, we refer you to the [summary of various scientific publications on the subject](.artifacts/README.md).
+## Introduction
 
 This game was popular in the former Soviet Union, but it was called "crosses and naughts" (крестики и нолики). Other variations exist called [Renju](https://en.wikipedia.org/wiki/Renju), which attempt to balance the well known fact of the first move advantage in Gomoku.
 
 In this implementation, the default first player is a human, so you will have a default advantage unless you swap with AI using `-x` and `-o` flags.
 
-> [!IMPORTANT]
+> [!TIP]
 > This project was developed in collaboration with Claude Code, OpenAI Codex, while the original **evaluation function** was written and heavily tuned by the author as early as 2010.
-
-> [!NOTE]
 > Any mention of "playing against the AI" does not imply gameplay against LLMs, or any other form of 'true' artificial intelligence. Here, by "AI Player" we simply mean that a given player is the computer algorithm.
-
-## Introduction
-
-> [!NOTE]
-> For detailed breakdown of the source files and their functions we refer to the [Developer Documentation](doc/DEVELOPER.md) document.
+>
+> Also note that this is an ANSI-C implementation of the Gomoku (Five-in-a-Row) game featuring gameplay against an AI opponent, AI vs AI, or Human vs Human. The AI algorithm supports flexible search depth and utilizes MiniMax algorithm with Alpha-Beta pruning, and many additional optimizations.
+>
+> If you are interested in a theory of Gomoku game-play and various approaches to algorithmic AI, we refer you to the [summary of various scientific publications on the subject](.artifacts/README.md).
 
 ### The Few Versions of the Game
 
@@ -54,9 +70,9 @@ This repo contains what can be thought of three separate versions of the game th
    This games shares the AI engine with the terminal game, except the caches which are not thread safe and wont work for JSON requests representing different games.
 
 3. Gomoku Cluster behind nginx and haproxy (or envoy).  It's controlled with `bin/gomoku-cluster` script, or in short `gctl`.
-   - Since the `gomoku-httpd` daemon is single threaded, for running it as a backend on the web requires a swarm of processes, behind a reverse proxy such as `haproxy` or `envoy`. 
-   - `gomoku-httpd` has separate health checks endpoints implemented for both `haproxy` and `envoy` to be able to probe the state of the backend process. 
-   - Utility `gomoku-http-client` can be used to start a networked game against the port 10000 (haproxy and envoy's frontend). or via SSL to `nginx` listening on ports 80 and 443. 
+   - Since the `gomoku-httpd` daemon is single threaded, for running it as a backend on the web requires a swarm of processes, behind a reverse proxy such as `haproxy` or `envoy`.
+   - `gomoku-httpd` has separate health checks endpoints implemented for both `haproxy` and `envoy` to be able to probe the state of the backend process.
+   - Utility `gomoku-http-client` can be used to start a networked game against the port 10000 (haproxy and envoy's frontend). or via SSL to `nginx` listening on ports 80 and 443.
    - Using this client you can play the networked game play against the cluster of `gomoku-httpd` processes. The client does not have any AI logic related to the gameplay, it simply mirrors back to the server what the previous server responded just before.  It does so until either a draw or one side wins.
 
 Before we dive into the gameplay, let's briefly explain the cluster mode:
@@ -81,9 +97,9 @@ You can also atart individual components:
 gctl start -p haproxy
 ```
 
-This will boot `halroxy`only. 
+This will boot `halroxy`only.
 
-> [!IMPORTANT] 
+> [!IMPORTANT]
 > Nake sure that your nginx uses nginx.conf from `iac/config` folder, same with haproxy — `iac/config/haproxy.cfg` should be used for haproxy configuration.
 
 #### Stopping
@@ -100,7 +116,7 @@ For `haproxy` status dashboard, open the URL [http://127.0.0.1:8404/stats](http:
 gctl status
 ```
 
-OR 
+OR
 
 ```bash
 gctl htop
@@ -110,7 +126,7 @@ This may or may not stop nginx (which often runs as root). But it will stop ever
 
 #### Cluster Architecture
 
-The below picture shows the cluster architecture as a sequence diagram. 
+The below picture shows the cluster architecture as a sequence diagram.
 
 ![uml](doc/img/haproxy-design-sequence.png)
 
@@ -118,9 +134,9 @@ There is more information about this mode in the `iac` folder and the `httpd` do
 
 ## Game Play
 
-Gomoku, or "five in a row," is a traditional two-player strategy game played on a (15x15) or (19x19) board, where the goal is to be the first to align FIVE pieces (black or white, or crosses and naughts) horizontally, vertically, or diagonally. 
+Gomoku, or "five in a row," is a traditional two-player strategy game played on a (15x15) or (19x19) board, where the goal is to be the first to align FIVE pieces (black or white, or crosses and naughts) horizontally, vertically, or diagonally.
 
-Black (X) goes first. 
+Black (X) goes first.
 
 > [!IMPORTANT]
 > Note that six in a row is NOT a win.
