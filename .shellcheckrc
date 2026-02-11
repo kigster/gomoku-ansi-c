@@ -1,0 +1,5 @@
+# SC2154: Variables referenced but not assigned — these come from bashmatic (color vars, UI vars)
+disable=SC2154
+
+# SC2034: Variable appears unused — arrays used via nameref (local -n) in cmd_for_each
+disable=SC2034

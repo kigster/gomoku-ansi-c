@@ -10,10 +10,13 @@
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-WZ48C60CT2"></script>
     <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-WZ48C60CT2');
+      // do not send GA events from dev hosts and such.
+      if (document.domain == 'gomoku.games') {
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-WZ48C60CT2');
+      }
     </script>
   </head>
   <body>

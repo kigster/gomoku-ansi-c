@@ -6,7 +6,6 @@ set +e
 source ~/.bashmatic/init >/dev/null 2>&1
 set -e
 
-
 function setup() {
   direnv allow . >/dev/null 2>&1
 
@@ -24,7 +23,7 @@ function setup() {
       REGION=...
       CLUSTER_NAME=...
       \n"
-      exit 1
+    exit 1
   }
 
   # Derive the zone from the region (use first zone: e.g. us-central1-a)
@@ -119,7 +118,7 @@ function deploy() {
       REGION=...
       CLUSTER_NAME=...
       "
-      exit 1
+    exit 1
   }
 
   export ZONE="${REGION}-a"
@@ -134,7 +133,7 @@ function deploy() {
   info "Waiting for ingress controller external IP (up to 5 minutes)..."
   local external_ip=""
   local attempts=0
-  while [[ -z "$external_ip" || "$external_ip" == "<pending>" ]] && (( attempts < 60 )); do
+  while [[ -z "$external_ip" || "$external_ip" == "<pending>" ]] && ((attempts < 60)); do
     external_ip=$(kubectl get svc -n ingress-nginx ingress-nginx-controller \
       -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
     if [[ -z "$external_ip" || "$external_ip" == "<pending>" ]]; then
@@ -155,7 +154,6 @@ function deploy() {
     error "Could not determine the project number."
     exit 1
   }
-
 
   warning "Your domain gomoku.games must resolve to: $external_ip"
   echo "Press Enter when DNS is updated (or Ctrl-C to abort)..."
@@ -231,8 +229,8 @@ EOF
 }
 
 function usage() {
-    usage-box "usage: $0 [ setup ] [ deploy ]"
-    exit 0
+  usage-box "usage: $0 [ setup ] [ deploy ]"
+  exit 0
 }
 
 for func in "$@"; do

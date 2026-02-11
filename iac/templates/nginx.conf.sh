@@ -1,18 +1,60 @@
+#!/usr/bin/env bash
+# Generate haproxy.cfg with a dynamic number of backend workers.
+# Usage: haproxy.cfg.sh <num_workers>
+# shellcheck disable=SC2155
+set -euo pipefail
+
+# Usage:
+# bash nginx.conf.sh <backend_port> <LETSENCRYPT_certificate> <LETSENCRYPT_private_key>
+# Example:
+# bash nginx.conf.sh \
+#   10000 \
+#   _www \
+#   /Users/stevejobs/.letsencrypt/live/gomoku.games/fullchain.pem \
+#   /Users/stevejobs/.letsencrypt/live/gomoku.games/privkey.pem
+
+export BACKEND_PORT="${1:-10000}"
+export NGINX_USER="${2:-"${USER}"}"
+export LETSENCRYPT_CERTIFICATE="${3:-${HOME}/.letsencrypt/live/dev.gomoku.games/fullchain.pem}"
+export LETSENCRYPT_PRIVATE_KEY="${4:-${HOME}/.letsencrypt/live/dev.gomoku.games/privkey.pem}"
+
+export SCRIPT_DIR="$(cd "$(dirname "$(dirname "${BASH_SOURCE[0]}")")" && pwd -P)"
+export PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+export FRONTEND_DIR="${PROJECT_DIR}/frontend/dist"
+
+# https://nginx.org/en/docs/events.html#:~:text=select%20%E2%80%94%20standard%20method.,%2C%20NetBSD%202.0%2C%20and%20macOS.
+declare CONNECTION_METHOD
+
+if [[ $OS == darwin ]]; then
+  export CONNECTION_METHOD=kqueue
+elif [[ $OS == linux ]]; then
+  export CONNECTION_METHOD=epoll
+fi
+
+cat <<'HEADER'
 # nginx.conf - Load Balancer Configuration
 # This config runs on both LB boxes (AZ-a and AZ-b)
 # nginx handles SSL termination, static assets, and routes dynamic requests to HAProxy
+HEADER
 
-user _www;
+echo "
+user ${NGINX_USER} staff;
+"
+cat <<'HEADER'
 worker_processes 6;
 error_log /var/log/nginx/error.log warn;
 pid /var/run/nginx.pid;
 
 events {
-    worker_connections 256;
-    # use epoll;
-    use kqueue;
+    worker_connections 1024;
     multi_accept on;
+HEADER
+
+echo "    use ${CONNECTION_METHOD};   
 }
+"
+
+cat <<'HEADER'
 
 http {
     include mime.types;
@@ -46,18 +88,18 @@ http {
     limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
 
     # Upstream to local HAProxy pool
-    # HAProxy listens on port 10000 with SO_REUSEPORT (5 processes)
-    upstream haproxy_backend {
+    # HAProxy/Envoy listen on port 10000 with SO_REUSEPORT
+    upstream gomoku_backend {
         server 127.0.0.1:10000;
         keepalive 32;
     }
 
     # =========================================================================
-    # Gomoku API Server (api.gomoku.example.com)
+    # Gomoku UI Server (Dev Version)
     # =========================================================================
     server {
         listen 80;
-        server_name gomoku.games;
+        server_name dev.gomoku.games;
         
         # Redirect HTTP to HTTPS
         return 301 https://$server_name$request_uri;
@@ -66,11 +108,16 @@ http {
     server {
         listen 443 ssl;
         http2 on;
-        server_name gomoku.games;
+        server_name dev.gomoku.games;
+HEADER
 
+echo "
         # SSL Configuration
-        ssl_certificate /Users/kig/.letsencrypt/live/gomoku.games/fullchain.pem;
-        ssl_certificate_key /Users/kig/.letsencrypt/live/gomoku.games/privkey.pem;
+        ssl_certificate ${LETSENCRYPT_CERTIFICATE};
+        ssl_certificate_key ${LETSENCRYPT_PRIVATE_KEY};
+"
+
+cat <<'MIDDLE'
         ssl_session_timeout 1d;
         ssl_session_cache shared:SSL:50m;
         ssl_session_tickets off;
@@ -91,17 +138,21 @@ http {
             return 200 "healthy\n";
             add_header Content-Type text/plain;
         }
+MIDDLE
 
+echo "
         # Static assets (if any)
-        location /app {
-            alias /Users/kig/gomoku-ansi-c/web/public;
+        location / {
+            root ${PROJECT_DIR}/frontend/dist/;
             expires 30d;
-            add_header Cache-Control "public, immutable";
+            add_header Cache-Control public;
         }
+"
+cat << 'FOOTER'
 
         # API routes - proxy to HAProxy
         location /health {
-            proxy_pass http://haproxy_backend;
+            proxy_pass http://gomoku_backend/health;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
@@ -115,7 +166,7 @@ http {
             # Optional rate limiting
             limit_req zone=api_limit burst=20 nodelay;
 
-            proxy_pass http://haproxy_backend;
+            proxy_pass http://gomoku_backend;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
@@ -133,22 +184,6 @@ http {
             proxy_buffer_size 4k;
             proxy_buffers 8 4k;
         }
-
-        # Default - return 404
-        location / {
-            return 404 '{"error": "Not found"}';
-            add_header Content-Type application/json;
-        }
     }
-
-    # =========================================================================
-    # Additional sites can be added here following the same pattern
-    # =========================================================================
-    
-    # Example: Another site that also uses the gomoku backend
-    # server {
-    #     listen 443 ssl http2;
-    #     server_name another-site.example.com;
-    #     ...
-    # }
 }
+FOOTER

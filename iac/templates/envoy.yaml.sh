@@ -1,3 +1,12 @@
+#!/usr/bin/env bash
+# Generate envoy.yaml with a dynamic number of backend workers.
+# Usage: envoy.yaml.sh <num_workers>
+set -euo pipefail
+
+WORKERS="${1:-10}"
+BASE_PORT=9500
+
+cat <<'HEADER'
 # envoy.yaml - Auto-generated from iac/templates/envoy.yaml.sh
 # Frontend listens on port 10000, backends are gomoku-httpd instances.
 #
@@ -89,63 +98,16 @@ static_resources:
         cluster_name: gomoku_cluster
         endpoints:
           - lb_endpoints:
-              # gomoku-httpd instance 1
+HEADER
+
+for ((i = 0; i < WORKERS; i++)); do
+	port=$((BASE_PORT + i))
+	cat <<EOF
+              # gomoku-httpd instance $((i + 1))
               - endpoint:
                   address:
                     socket_address:
                       address: 127.0.0.1
-                      port_value: 9500
-              # gomoku-httpd instance 2
-              - endpoint:
-                  address:
-                    socket_address:
-                      address: 127.0.0.1
-                      port_value: 9501
-              # gomoku-httpd instance 3
-              - endpoint:
-                  address:
-                    socket_address:
-                      address: 127.0.0.1
-                      port_value: 9502
-              # gomoku-httpd instance 4
-              - endpoint:
-                  address:
-                    socket_address:
-                      address: 127.0.0.1
-                      port_value: 9503
-              # gomoku-httpd instance 5
-              - endpoint:
-                  address:
-                    socket_address:
-                      address: 127.0.0.1
-                      port_value: 9504
-              # gomoku-httpd instance 6
-              - endpoint:
-                  address:
-                    socket_address:
-                      address: 127.0.0.1
-                      port_value: 9505
-              # gomoku-httpd instance 7
-              - endpoint:
-                  address:
-                    socket_address:
-                      address: 127.0.0.1
-                      port_value: 9506
-              # gomoku-httpd instance 8
-              - endpoint:
-                  address:
-                    socket_address:
-                      address: 127.0.0.1
-                      port_value: 9507
-              # gomoku-httpd instance 9
-              - endpoint:
-                  address:
-                    socket_address:
-                      address: 127.0.0.1
-                      port_value: 9508
-              # gomoku-httpd instance 10
-              - endpoint:
-                  address:
-                    socket_address:
-                      address: 127.0.0.1
-                      port_value: 9509
+                      port_value: ${port}
+EOF
+done
