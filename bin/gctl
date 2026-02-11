@@ -48,8 +48,6 @@ export LOG_FILES
 declare -a PACKAGES=(clang-format shfmt btop htop ctop bottom)
 export PACKAGES
 
-export HTOP_REGEX='|nginx|haproxy|envoy|gomoku-httpd|vite'
-
 # Component order for stop/restart/status (reverse of start)
 declare -a STOP_ORDER=(frontend gomoku envoy haproxy nginx)
 export STOP_ORDER
@@ -772,7 +770,7 @@ cmd_ps() {
 cmd_observe() {
   local tool="${1:-btop}"
   case "$tool" in
-  htop) htop -F "$HTOP_REGEX" ;;
+  htop) htop -F "gomoku" ;;
   btop) btop --filter gomoku ;;
   btm | bottom) btm ;;
   ctop) ctop ;;
