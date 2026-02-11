@@ -1,7 +1,6 @@
 # Cluster Management
 
 This document covers running the Gomoku cluster locally on a development machine using the `gctl` controller script. For production deployment on Kubernetes, see [doc/PRODUCTION.md](doc/PRODUCTION.md).
-
 ## Overview
 
 Since `gomoku-httpd` is single-threaded, serving web traffic requires a swarm of worker processes behind a reverse proxy. The local cluster consists of:
@@ -26,12 +25,27 @@ The sequence diagram below illustrates the request flow:
 
 ![Cluster architecture](doc/img/haproxy-design-sequence.png)
 
+# Managing Cluster in Development using `gctl`
+
+> [!IMPORTANT]
+> We'll only say this once, but get `direnv` working so that `bin` folder is added to your `$PATH` when you cd into the project.This is why we use `gctl` in these examples, and not `bin/gctl`.
+
+## `gctl` Help Screen
+
+Nothing tells you more about a utility than its help page. `gctl` has two: regular `-h` and `details`:
+
+![gctl-help](doc/img/gctl-help.png)
+
+### And the Details
+
+![gctl-details](doc/img/gctl-details.png)
+
 ## Prerequisites
 
 Before first use, run the one-time setup:
 
 ```bash
-bin/gctl setup
+gctl setup
 ```
 
 This will:
@@ -44,16 +58,16 @@ This will:
 
 ```bash
 # Start the full cluster with Envoy (default) and 10 workers
-bin/gctl start
+gctl start
 
 # Start with 16 workers
-bin/gctl start -w 16
+gctl start -w 16
 
 # Start with HAProxy instead of Envoy
-bin/gctl start -p haproxy
+gctl start -p haproxy
 
 # Start with HAProxy and 8 workers
-bin/gctl start -p haproxy -w 8
+gctl start -p haproxy -w 8
 ```
 
 When you run `gctl start`, the script automatically generates the proxy configuration (haproxy.cfg or envoy.yaml) from templates in `iac/templates/` to match the requested number of workers. This means you no longer need to manually edit config files when changing worker counts.
@@ -64,34 +78,34 @@ When you run `gctl start`, the script automatically generates the proxy configur
 
 ```bash
 # Start the entire cluster (envoy is the default proxy)
-bin/gctl start [-p <haproxy|envoy>] [-w <workers>]
+gctl start [-p <haproxy|envoy>] [-w <workers>]
 
 # Stop all components
-bin/gctl stop
+gctl stop
 
 # Restart everything
-bin/gctl restart
+gctl restart
 
 # Check status of all components
-bin/gctl status
+gctl status
 ```
 
 ### Operating Individual Components
 
-Use `-c` / `--component` to target specific services:
+You can pass components to `start`, `stop`, and `restart`, such as `nginx`, `frontend`, `envoy`, `haproxy`, `gomoku`.
 
 ```bash
 # Start only nginx and gomoku workers
-bin/gctl start -c nginx -c gomoku
+gctl start nginx gomoku
 
 # Restart only envoy
-bin/gctl restart -c envoy
+gctl restart envoy
 
 # Stop only the frontend dev server
-bin/gctl stop -c frontend
+gctl stop frontend
 
 # Check status of gomoku workers
-bin/gctl status -c gomoku
+gctl status gomoku
 ```
 
 Available component names: `nginx`, `haproxy`, `envoy`, `gomoku` (alias: `gomoku-httpd`), `frontend`.
@@ -100,20 +114,20 @@ Available component names: `nginx`, `haproxy`, `envoy`, `gomoku` (alias: `gomoku
 
 ```bash
 # Show cluster processes sorted by CPU usage
-bin/gctl ps
+gctl ps
 
 # Launch a monitoring tool filtered to Gomoku processes
-bin/gctl observe btop
-bin/gctl observe htop
-bin/gctl observe ctop
-bin/gctl observe btm
+gctl observe btop
+gctl observe htop
+gctl observe ctop
+gctl observe btm
 ```
 
 ### Setup
 
 ```bash
 # First-time setup: log files, utilities, direnv
-bin/gctl setup
+gctl setup
 ```
 
 ## Dynamic Config Generation
