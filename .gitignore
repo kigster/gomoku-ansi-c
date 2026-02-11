@@ -1,6 +1,7 @@
 /build
 /iac/config/haproxy.cfg
 /iac/config/nginx.conf
+/.idea
 gomoku
 gomoku-httpd
 gomoku-http-client
