@@ -7,6 +7,18 @@ set +e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
+declare -a PACKAGES_TO_INSTALL
+PACKAGES_TO_INSTALL=(  
+  "nginx"
+  "haproxy"
+  "envoy"
+  "btop"
+  "ctop"
+  "btm"
+  "htop"
+)
+export PACKAGES_TO_INSTALL
+
 declare -a LOG_FILES
 LOG_FILES=(
   "/var/log/nginx/access.log" 
@@ -67,10 +79,16 @@ function setup.direnv() {
   command -v direnv >/dev/null 2>&1 && direnv allow .
 }
 
+function setup.packages() {
+  for package in "${PACKAGES_TO_INSTALL[@]}"; do
+    package.installed "$package" || package.install "$package"
+  done
+}
 function cmd_setup() {
   setup.bashmatic
   setup.sudo
   setup.direnv
+  setup.packages
 }
 
 # We are replacing pkill using bashmatic's pid.matchin and pid.stop-and-kill functions.

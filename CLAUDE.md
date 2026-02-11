@@ -1,10 +1,8 @@
 # Gomoku Project
 
-Welcome to Gomoku Project — it's nearly complete. You are going need to be an expert in Kubernetes, and Google Public Cloud and deploying to such. Please ensure you have maximum knowledge on the subject.
+Welcome to Gomoku Project.
 
-## Play the Game
-
-[Game Online](https://app.gomoku.games)
+Gomoku, also called "five in a row", is an abstract strategy board game. It is traditionally played with Go pieces (black and white stones) on a 15×15 Go board while in the past a 19×19 board was standard. Because pieces are typically not moved or removed from the board, gomoku may also be played as a paper-and-pencil game. The game is known in several countries under different names, like "crosses and naughts", etc.
 
 ## Gomoku Components
 
@@ -20,92 +18,39 @@ Currently, building the game with `make clean all` results in:
 
 * We also now have the cluster version that works locally in development (on a MacBook):
 
-  * in development it's started with `bin/gctl start [ -p envoy ]`
+  * in development, first run `bin/gctl setup` to get everything installed and setup. The bash setup function is an aggregation function which calls four more specific setups.
+  * in the development we should be starting the game cluster with `bin/gctl start` (starts envoy reverse proxy, nginx, gomoku-httpd). 
+  * or `bin/gctl start [ -p haproxy ]` to use haproxy instead
   * stopped with `gctl stop`
-  * restarted with `gctl rstart`
-  * monitored with `gctl htop`
+  * restarted with `gctl restart`
+  * monitored with `gctl observe [ htop | btop | ctop | btm ]`
+  * monitored with `gctl ps` — prints all the processes related to the cluster using a custom format ps sequence: PID, PPID, %CPU, %MEM, ARGS
 
 * We also now how the GCP / Kubernetes configuration for deploying this to GCP.
 * The script is `bin/gcp-create-cluster` and it conains two functions (and identical arguments)s: `setup` and `deploy`. We already successfully ran `setup`,  but `deploy` is giving errors.
 
-You are free to run `bin/gcp-create-cluster setup` again to see the output.
+## Tasks to Accomplish Today
 
-## Tasks to Accomplish
+### 1. First Task for Claude
 
-### 1. Evalueate and Validate Kubernetes Setup
+Please read in detail and understand the various nuanced versions of Gomoku Rules including Tournament rules, Renju, summarize this article: https://en.wikipedia.org/wiki/Gomoku into a markdown file RULES.md.
 
-I want you to validate the k8s setup and configuration in `iac/k8s` folder, validate the script `bin/gcp-create-cluste` and fix any issues you may find.  I would prefer that envoy gateway sat in front of the gomoku-httpd daemons, becuase it's able to maintain an inbound queue, while hapoxy or direct conenction does not.
+Let's give each variation a name (such as "renju") and list each name and what the rules are in the document at the root of the repo called RULES.md.
 
-Important to note: the game will be running on the domain <https://gomoku.games>, the DNS for which I manage elsewhere. Once the game is up and running on GCP, I will point the domain to the IP/CNAME, and get the SSL certificate (unless Google does that). 
+Finally, let's add a new CLI argument `-g | --game-type [gomoku|renju|...]` and JSON member `"game_type": [ "renju" | etc ]` and then modify the game engine to support variout game rules. The default game play should be exactly as it is right now. We'll call this "simplified" or "street" version.
 
-If Google insists on a new domain, I can create `app.gomoku.games` or Google cna propose something else.
 
-##  2. Run the `setup` one  more time
+### 2. We need to fix and improve `bin/gctl` script.
 
-You want to see what GCP responds with when the `bin/gcp-create-cluster setup` is executed. Run it once.
+Right now the script relies on function `pids.matching()` from the bashmatic library that's located at the same level as this project, and you are permitted read only access. The functions are in ../bashmatic/lib/pids.sh
 
-After than, run `bin/gcp-create-cluster deploy` and figure out what is wrong, and why it's not deploying.
+We need to add internal functions for detecting if processes are running (but excluding the current `grep`) and fix the overridden `pkill` function. It's currently not correctly detecting what's running and what's not.
 
-In the Terminal I am currently logged into a Google Cloud account as an admin.
+Also, nginx is the only component that must be startee via sudo.
 
-## Docker Containers
+I also recommend that we don't just start nginx and haproxy and let them use their default config file, but point each at the file in this repo: `iac/config/haproxy.cfg` and `iac/config/nginx.conf`.
 
-There should be two docker containers ready for you: 
+Nginx Config in particular references /Users/kig/.letsencrypt folder where the SSL certificates are stored for dev.gomoku.games. But something doesn't work in that config. The config must do two things: point the static assets to 
 
-1. docker-httpd:latest
-2. docker-frontend:latest
+Right now, detecting running processes is not working, killing them is not working, and sometimes starting them is not working. The script has a lot of duplication.
 
-The second receives `VITE_API_BASE` environment (at least in develpoment). For production there may be other methods.s
-
-## Summary
-
-This task is about deploying the backend and the front-end of the game to GCP, and ideally using envoy gateway to round robin across `gomoku-httpd` daemon containers.
-
-# Building Front-End Application 
-
-Claude: stop reading. Everything below hss already been checked into main.
-
----
-
-Put the files for this app inside `frontend` folder only.
-
-Let's use:
-
-* Vite
-* React
-* TypeScript
-* TailwindCSS
-
-When the user opens the site, the UI loads and at the center should be a 19x19 grid. The UI should be clean, modern, and use a consistent color palette.
-
-Upon first loading this app, a modal pops up asking the user for their name (and in brackets explain, this is just so that we can address you properly, it's not saved anywhere).
-
-Once the user enters the name, the modal goes away, and the user can start the game by clicking a big and obvious [ Start Game ] button.
-
-However, there should be a pretty visible panel (or a button called "settings" that opens up a settings modal). Settings panel has various controls arranged in a table.
-
-The following are the controls:
-
-1. AI Search Depth: [ slider from 2 to 5 ]
-2. AI Search Radius: [ slider from 1 to 4 ]
-3. AI Timeout: [ none by default, a drop down with 30s, 60s, 120s, 300s ]
-4. Game Display: [ radio buttons: black & white stones OR crosses and naughts ]
-5. Which side do you want to play: [ X or O | or Black or White ] (depends on what they chose above).
-
-The board itself should be at least 400px x 400px, with vertical and horizontal lines creating 19 squares vertically and 19 horizontally.
-
-If the user chose black and white stones, they should look like circular stones.
-
-I placed the images representing the stones here: frontend/assets/images
-
-There is a PNG file for white stone and black stone. If the user chooses stones, they must be placed on the intersection of the lines, not inside the squares.
-
-If the user chooses X and O they must be placed inside the square. You can either generate X and O images or use blown up unicode characters. Make X black and O white.
-
-If not difficult, it would be great if the settings panel had a dropdown for a "Theme" which would change colors of the background and other text. But this is not necessary.
-
-The most important part is that the board looks like it's made from wood. Someething like <https://uat.www.lysol.com/content/dam/lysol-us/article-detail-pages/hard-wood.jpg>
-
-Once the user presses the "Start", the game begins. If the user is the first player the game waits for the first move. Once the move is made, it sends the same JSON that gomoku-httpd expects to receive, and waits for the answer. Once the answer is received, it renders the last move, and waits for the player to move again.
-
-If the player chooses white or O, the game immediately sends the JSON to the server so the server can make the first move.
