@@ -13,7 +13,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "test_client_utils.h"
@@ -27,6 +29,8 @@
 #define COLOR_GREEN "\033[32m"
 #define COLOR_RED "\033[31m"
 #define COLOR_BOLD_YELLOW "\033[1;33m"
+#define COLOR_BOLD_RED "\033[1;31m"
+#define COLOR_BOLD_GREEN "\033[1;32m"
 #define COLOR_BG_RED "\033[41m"
 #define COLOR_RESET "\033[0m"
 
@@ -70,8 +74,29 @@ static int error_tracker_total(const error_tracker_t *tracker) {
   return total;
 }
 
-// Forward declaration for use in http_post_with_retry
+//===============================================================================
+// PLAYER TIMING
+//===============================================================================
+
+typedef struct {
+  double waited_total; // Client wall-clock time waiting for server (seconds)
+  double server_total; // Server computation time from JSON time_ms (seconds)
+} player_timing_t;
+
+typedef struct {
+  player_timing_t *timing_x;
+  player_timing_t *timing_o;
+  int is_o_turn;
+  struct timespec start;
+  int padding;
+} tick_context_t;
+
+// Forward declarations
 static void print_board_with_padding(const char *json, int padding, int red_bg);
+static void print_timing_lines(int padding, double x_waited, double x_server,
+                                double x_queued, double o_waited,
+                                double o_server, double o_queued);
+static void timer_tick_fn(void *ctx);
 
 //===============================================================================
 // HTTP CLIENT
@@ -79,11 +104,13 @@ static void print_board_with_padding(const char *json, int padding, int red_bg);
 
 /**
  * Send HTTP POST request and receive response.
+ * Calls tick_cb(tick_ctx) approximately every second while waiting for data.
  * Returns response body (caller must free) or NULL on error.
  * If http_status is non-NULL, the HTTP status code is stored there.
  */
 static char *http_post(const char *host, int port, const char *path,
-                       const char *body, int *http_status) {
+                       const char *body, int *http_status,
+                       void (*tick_cb)(void *), void *tick_ctx) {
   // Create socket
   int sock = socket(AF_INET, SOCK_STREAM, 0);
   if (sock < 0) {
@@ -140,7 +167,7 @@ static char *http_post(const char *host, int port, const char *path,
   }
   free(request);
 
-  // Receive response
+  // Receive response, calling tick_cb every ~1 second while waiting
   char *response = malloc(BUFFER_SIZE);
   if (!response) {
     close(sock);
@@ -148,11 +175,29 @@ static char *http_post(const char *host, int port, const char *path,
   }
 
   size_t total = 0;
-  ssize_t n;
-  while ((n = recv(sock, response + total, BUFFER_SIZE - total - 1, 0)) > 0) {
-    total += (size_t)n;
-    if (total >= BUFFER_SIZE - 1)
+  while (1) {
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(sock, &readfds);
+    struct timeval tv = {1, 0};
+
+    int ready = select(sock + 1, &readfds, NULL, NULL, &tv);
+    if (ready > 0) {
+      ssize_t n = recv(sock, response + total, BUFFER_SIZE - total - 1, 0);
+      if (n <= 0)
+        break;
+      total += (size_t)n;
+      if (total >= BUFFER_SIZE - 1)
+        break;
+    } else if (ready == 0) {
+      // Timeout — tick the timer display
+      if (tick_cb)
+        tick_cb(tick_ctx);
+    } else {
+      if (errno == EINTR)
+        continue;
       break;
+    }
   }
   response[total] = '\0';
   close(sock);
@@ -210,18 +255,22 @@ static char *http_post(const char *host, int port, const char *path,
  * Retries with delays: 0.1s, 0.2s, 0.4s, 0.8s, 1.6s, 3.2s, ...
  * Records all non-2xx status codes in the error tracker.
  * While retrying 503s, re-renders the board with a red background.
+ * Passes tick context through to http_post for live timer updates.
  * Returns response body (caller must free) or NULL on non-retryable error.
  */
 static char *http_post_with_retry(const char *host, int port, const char *path,
                                   const char *body, int max_retries,
                                   error_tracker_t *tracker,
-                                  const char *last_game_state, int padding) {
+                                  const char *last_game_state, int padding,
+                                  tick_context_t *tick_ctx) {
   double delay_sec = 0.1;
   int attempt = 0;
 
   while (1) {
     int http_status = 0;
-    char *response = http_post(host, port, path, body, &http_status);
+    char *response =
+        http_post(host, port, path, body, &http_status,
+                  tick_ctx ? timer_tick_fn : NULL, tick_ctx);
 
     if (response) {
       return response; // Success
@@ -245,6 +294,34 @@ static char *http_post_with_retry(const char *host, int port, const char *path,
     // Re-render the board with red background to indicate 503 state
     if (last_game_state) {
       print_board_with_padding(last_game_state, padding, 1);
+
+      // Also re-render timing lines after the red board
+      if (tick_ctx) {
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        double elapsed =
+            (double)(now.tv_sec - tick_ctx->start.tv_sec) +
+            (double)(now.tv_nsec - tick_ctx->start.tv_nsec) / 1e9;
+
+        double x_waited = tick_ctx->timing_x->waited_total;
+        double o_waited = tick_ctx->timing_o->waited_total;
+        if (tick_ctx->is_o_turn)
+          o_waited += elapsed;
+        else
+          x_waited += elapsed;
+
+        // Queued uses pre-request values (doesn't update until response)
+        double x_queued = tick_ctx->timing_x->waited_total -
+                          tick_ctx->timing_x->server_total;
+        double o_queued = tick_ctx->timing_o->waited_total -
+                          tick_ctx->timing_o->server_total;
+
+        printf("\n");
+        print_timing_lines(padding, x_waited,
+                           tick_ctx->timing_x->server_total, x_queued,
+                           o_waited, tick_ctx->timing_o->server_total,
+                           o_queued);
+      }
     }
 
     // Sleep with the current delay
@@ -288,7 +365,7 @@ static const char *get_winner(const char *json) {
 
 /**
  * Print the board state from JSON response with colored pieces.
- * X is displayed in yellow, O is displayed in green.
+ * X is displayed in bold yellow, O is displayed in bold red.
  * If red_bg is non-zero, the entire board is rendered with a red background.
  */
 static void print_board_with_padding(const char *json, int padding,
@@ -339,10 +416,11 @@ static void print_board_with_padding(const char *json, int padding,
     // Print line content with colors for X and O
     for (const char *c = quote_start + 1; c < quote_end; c++) {
       if (*c == 'X') {
-        printf("%s%sX%s", red_bg ? COLOR_BG_RED : "", COLOR_YELLOW,
+        printf("%s%sX%s", red_bg ? COLOR_BG_RED : "", COLOR_BOLD_YELLOW,
                COLOR_RESET);
       } else if (*c == 'O') {
-        printf("%s%sO%s", red_bg ? COLOR_BG_RED : "", COLOR_GREEN, COLOR_RESET);
+        printf("%s%sO%s", red_bg ? COLOR_BG_RED : "", COLOR_BOLD_RED,
+               COLOR_RESET);
       } else {
         putchar(*c);
       }
@@ -354,6 +432,118 @@ static void print_board_with_padding(const char *json, int padding,
 
   if (red_bg)
     printf("%s", COLOR_RESET);
+}
+
+//===============================================================================
+// TIMING DISPLAY
+//===============================================================================
+
+/**
+ * Extract cumulative server time_ms for X and O from the JSON response.
+ * The JSON has top-level objects: "X": { ... "time_ms": VALUE } and similar
+ * for "O". Values are in milliseconds.
+ */
+static void parse_server_times(const char *json, double *x_time_ms,
+                                double *o_time_ms) {
+  *x_time_ms = 0.0;
+  *o_time_ms = 0.0;
+
+  // Find "X": { ... "time_ms": VALUE ... }
+  const char *p = strstr(json, "\"X\":");
+  if (p) {
+    const char *brace = strchr(p, '{');
+    if (brace) {
+      const char *end_brace = strchr(brace, '}');
+      const char *tm = strstr(brace, "\"time_ms\"");
+      if (tm && end_brace && tm < end_brace) {
+        const char *colon = strchr(tm, ':');
+        if (colon && colon < end_brace) {
+          *x_time_ms = strtod(colon + 1, NULL);
+        }
+      }
+    }
+  }
+
+  // Find "O": { ... "time_ms": VALUE ... }
+  p = strstr(json, "\"O\":");
+  if (p) {
+    const char *brace = strchr(p, '{');
+    if (brace) {
+      const char *end_brace = strchr(brace, '}');
+      const char *tm = strstr(brace, "\"time_ms\"");
+      if (tm && end_brace && tm < end_brace) {
+        const char *colon = strchr(tm, ':');
+        if (colon && colon < end_brace) {
+          *o_time_ms = strtod(colon + 1, NULL);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Print the player timing table (header + separator + 2 data rows = 4 lines).
+ * Header/separator: bold green.  X row: red.  O row: yellow.
+ */
+static void print_timing_lines(int padding, double x_waited, double x_server,
+                                double x_queued, double o_waited,
+                                double o_server, double o_queued) {
+  if (x_queued < 0)
+    x_queued = 0;
+  if (o_queued < 0)
+    o_queued = 0;
+
+  printf("%*s%sPlayer \xe2\x94\x83  Wait \xe2\x94\x83 Server "
+         "\xe2\x94\x83 Queue \xe2\x94\x83%s\033[K\n",
+         padding, "", COLOR_BOLD_GREEN, COLOR_RESET);
+  printf("%*s%s\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81"
+         "\xe2\x94\x81\xe2\x94\x81\xe2\x95\x8b\xe2\x94\x81\xe2\x94\x81"
+         "\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81"
+         "\xe2\x95\x8b\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81"
+         "\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x95\x8b"
+         "\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81"
+         "\xe2\x94\x81\xe2\x94\x81\xe2\x94\xab%s\033[K\n",
+         padding, "", COLOR_BOLD_GREEN, COLOR_RESET);
+  printf("%*s%sX      \xe2\x94\x83 %4.0fs \xe2\x94\x83  %4.0fs "
+         "\xe2\x94\x83 %4.0fs \xe2\x94\x83%s\033[K\n",
+         padding, "", COLOR_RED, x_waited, x_server, x_queued, COLOR_RESET);
+  printf("%*s%sO      \xe2\x94\x83 %4.0fs \xe2\x94\x83  %4.0fs "
+         "\xe2\x94\x83 %4.0fs \xe2\x94\x83%s\033[K\n",
+         padding, "", COLOR_YELLOW, o_waited, o_server, o_queued, COLOR_RESET);
+}
+
+/**
+ * Timer tick callback — called every ~1 second while waiting for the server.
+ * Moves cursor up 4 lines and reprints the timing table with updated
+ * waited time for the current player.
+ */
+static void timer_tick_fn(void *ctx) {
+  tick_context_t *tc = (tick_context_t *)ctx;
+
+  struct timespec now;
+  clock_gettime(CLOCK_MONOTONIC, &now);
+  double elapsed = (double)(now.tv_sec - tc->start.tv_sec) +
+                   (double)(now.tv_nsec - tc->start.tv_nsec) / 1e9;
+
+  double x_waited = tc->timing_x->waited_total;
+  double o_waited = tc->timing_o->waited_total;
+  if (tc->is_o_turn)
+    o_waited += elapsed;
+  else
+    x_waited += elapsed;
+
+  // Queued uses pre-request values (doesn't update until response arrives)
+  double x_queued =
+      tc->timing_x->waited_total - tc->timing_x->server_total;
+  double o_queued =
+      tc->timing_o->waited_total - tc->timing_o->server_total;
+
+  // Move cursor up 4 lines to overwrite the timing table in-place
+  printf("\033[4F");
+  print_timing_lines(tc->padding, x_waited, tc->timing_x->server_total,
+                     x_queued, o_waited, tc->timing_o->server_total,
+                     o_queued);
+  fflush(stdout);
 }
 
 //===============================================================================
@@ -505,35 +695,81 @@ int main(int argc, char *argv[]) {
   const char *winner = "none";
   error_tracker_t errors = {0};
 
+  // Player timing state
+  player_timing_t timing_x = {0.0, 0.0};
+  player_timing_t timing_o = {0.0, 0.0};
+
+  // Print initial timing display before the first request
+  printf("\033[2J\033[H"); // Clear screen
+  for (int i = 0; i < 3; i++)
+    printf("\n"); // Padding
+  printf("\n");   // Blank line before timing
+  print_timing_lines(3, 0, 0, 0, 0, 0, 0);
+
   while (strcmp(winner, "none") == 0) {
+    // X plays on even moves (0, 2, 4...), O on odd (1, 3, 5...)
+    int is_o_turn = (move_num % 2 == 1);
+
+    // Set up timer context for live display updates
+    tick_context_t tick_ctx = {.timing_x = &timing_x,
+                               .timing_o = &timing_o,
+                               .is_o_turn = is_o_turn,
+                               .padding = 3};
+    clock_gettime(CLOCK_MONOTONIC, &tick_ctx.start);
+
     // Send to server (with retry on 503 errors; board turns red during retries)
-    char *response = http_post_with_retry(
-        host, port, "/gomoku/play", game_state, 0, &errors, game_state, 3);
+    char *response = http_post_with_retry(host, port, "/gomoku/play",
+                                          game_state, 0, &errors, game_state,
+                                          3, &tick_ctx);
     if (!response) {
       fprintf(stderr, "Error: Failed to communicate with server\n");
       free(game_state);
       return 1;
     }
 
+    // Calculate how long we waited for this response
+    struct timespec end;
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    double elapsed = (double)(end.tv_sec - tick_ctx.start.tv_sec) +
+                     (double)(end.tv_nsec - tick_ctx.start.tv_nsec) / 1e9;
+
+    // Add elapsed wall-clock time to the current player's waited total
+    if (is_o_turn)
+      timing_o.waited_total += elapsed;
+    else
+      timing_x.waited_total += elapsed;
+
     free(game_state);
     game_state = response;
+
+    // Parse cumulative server times from the JSON response
+    double x_ms = 0, o_ms = 0;
+    parse_server_times(game_state, &x_ms, &o_ms);
+    timing_x.server_total = x_ms / 1000.0;
+    timing_o.server_total = o_ms / 1000.0;
 
     // Always print the board with padding (normal background)
     print_board_with_padding(game_state, 3, 0);
 
     move_num++;
-    const char *label = NULL;
-    int x = 0, y = 0;
-    // Print move info below the board (with left padding to match)
-    if (test_client_get_last_move(game_state, &label, &x, &y)) {
-      printf("\n%*sMove %d: %s plays [%d, %d]\n", 3, "", move_num, label, x, y);
-    } else {
-      printf("\n%*sMove %d: (unable to parse last move)\n", 3, "", move_num);
-    }
 
     if (verbose) {
-      // Additional debug info in verbose mode could go here
+      const char *label = NULL;
+      int x = 0, y = 0;
+      if (test_client_get_last_move(game_state, &label, &x, &y)) {
+        printf("%*sMove %d: %s plays [%d, %d]\n", 3, "", move_num, label, x,
+               y);
+      }
     }
+
+    // Print timing status lines below the board
+    double x_queued = timing_x.waited_total - timing_x.server_total;
+    double o_queued = timing_o.waited_total - timing_o.server_total;
+
+    printf("\n");
+    print_timing_lines(3, timing_x.waited_total, timing_x.server_total,
+                       x_queued, timing_o.waited_total, timing_o.server_total,
+                       o_queued);
 
     // Check for winner after move
     winner = get_winner(game_state);
@@ -542,6 +778,13 @@ int main(int argc, char *argv[]) {
   // Print the final board (already printed in loop, but print again for
   // clarity)
   print_board_with_padding(game_state, 3, 0);
+
+  // Final timing
+  double x_queued = timing_x.waited_total - timing_x.server_total;
+  double o_queued = timing_o.waited_total - timing_o.server_total;
+  printf("\n");
+  print_timing_lines(3, timing_x.waited_total, timing_x.server_total, x_queued,
+                     timing_o.waited_total, timing_o.server_total, o_queued);
 
   printf("\n");
   if (strcmp(winner, "X") == 0) {
