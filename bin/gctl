@@ -10,6 +10,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 export SCRIPT_DIR
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 export PROJECT_DIR
+
+export PROJECT_ROOT="$(pwd -P)"
+
+[[ -s "${PROJECT_DIR}/Makefile" ]] || {
+  error "PROJECT_DIR is not valid." "PROJECT_DIR: ${PROJECT_DIR}"
+  return 1
+}
+
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 export OS
 export DEFAULT_PROXY="envoy"
@@ -304,6 +312,8 @@ nginx.start() {
   if cluster.is-running "[n]ginx"; then
     ui.closer.ok:
     success "nginx started."
+    (sleep 2 && open "https://dev.gomoku.games" 2>/dev/null || true) &
+    return 0
   else
     ui.closer.not-ok:
     error "nginx failed to start — check /var/log/nginx/error.log"
@@ -477,7 +487,8 @@ frontend.build() {
   }
   (cd "$frontend_dir" && npm run build) >/dev/null 2>&1
   ui.closer.ok:
-  sudo chmod -R 711 "${PROJECT_DIR}/frontend/dist"
+  sudo find "${PROJECT_DIR}/frontend/dist/" -type d -exec chmod 711 {} +
+  sudo chmod -R 755 "${PROJECT_DIR}/frontend/dist/"
   success "frontend assets built."
 }
 

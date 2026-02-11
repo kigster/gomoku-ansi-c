@@ -14,11 +14,11 @@ set -euo pipefail
 #   /Users/stevejobs/.letsencrypt/live/gomoku.games/privkey.pem
 
 export BACKEND_PORT="${1:-10000}"
-export NGINX_USER="${2:-"_www"}"
-export LETSENCRYPT_CERTIFICATE="${3:-${HOME}/.letsencrypt/live/gomoku.games/fullchain.pem}"
-export LETSENCRYPT_PRIVATE_KEY="${4:-${HOME}/.letsencrypt/live/gomoku.games/privkey.pem}"
+export NGINX_USER="${2:-"${USER}"}"
+export LETSENCRYPT_CERTIFICATE="${3:-${HOME}/.letsencrypt/live/dev.gomoku.games/fullchain.pem}"
+export LETSENCRYPT_PRIVATE_KEY="${4:-${HOME}/.letsencrypt/live/dev.gomoku.games/privkey.pem}"
 
-export SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+export SCRIPT_DIR="$(cd "$(dirname "$(dirname "${BASH_SOURCE[0]}")")" && pwd -P)"
 export PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 export FRONTEND_DIR="${PROJECT_DIR}/frontend/dist"
 
@@ -35,8 +35,12 @@ cat <<'HEADER'
 # nginx.conf - Load Balancer Configuration
 # This config runs on both LB boxes (AZ-a and AZ-b)
 # nginx handles SSL termination, static assets, and routes dynamic requests to HAProxy
+HEADER
 
-user _www;
+echo "
+user ${NGINX_USER} staff;
+"
+cat <<'HEADER'
 worker_processes 6;
 error_log /var/log/nginx/error.log warn;
 pid /var/run/nginx.pid;
@@ -139,7 +143,7 @@ MIDDLE
 echo "
         # Static assets (if any)
         location / {
-            alias ${PROJECT_DIR}/frontend/dist;
+            root ${PROJECT_DIR}/frontend/dist/;
             expires 30d;
             add_header Cache-Control public;
         }
