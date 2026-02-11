@@ -6,13 +6,14 @@ set +e
 # =============================================================================
 # Globals
 # =============================================================================
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 export SCRIPT_DIR
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 export PROJECT_DIR
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 export OS
 export DEFAULT_PROXY="envoy"
+export NGINX_USER="_www"
 
 declare -i DEFAULT_WORKERS=10
 if [[ ${OS} == darwin ]]; then
@@ -43,6 +44,8 @@ export HTOP_REGEX='|nginx|haproxy|envoy|gomoku-httpd|vite'
 
 # Component order for stop/restart/status (reverse of start)
 declare -a STOP_ORDER=(frontend gomoku envoy haproxy nginx)
+export STOP_ORDER
+export START_COMPONENTS=(nginx haproxy envoy gomoku frontend)
 
 # =============================================================================
 # Process Management — self-contained, no bashmatic dependency
@@ -110,6 +113,7 @@ setup.bashmatic() {
 
 setup.log-files-are-ok() {
   for file in "${LOG_FILES[@]}"; do
+    [[ $file =~ nginx ]] && continue
     [[ -w "$file" ]] || {
       error "Log file [${file}] either does not exist or is not writable."
       sleep 1
@@ -123,7 +127,10 @@ setup.sudo() {
   h3 "Setting up sudo and the ownership of the log files..."
   sudo -n date >/dev/null 2>&1 || {
     h.yellow "sudo is not authenticated, please enter your password to authenticate:"
-    sudo -v || { error "sudo authentication failed."; return 1; }
+    sudo -v || {
+      error "sudo authentication failed."
+      return 1
+    }
   }
 
   run "sudo chmod 777 /var/log"
@@ -133,7 +140,7 @@ setup.sudo() {
     run "sudo chown $USER $file"
     run "sudo chmod 666 $file"
   done
-  run "sudo chown $USER /var/log/nginx"
+  run "sudo chown -R $NGINX_USER /var/log/nginx"
   success "All log files exist and are writeable."
 }
 
@@ -163,24 +170,75 @@ cmd_setup() {
   setup.utils
 }
 
+cmd_certificates() {
+  inf "Generating certificates..."
+  local domain_config="${HOME}/.dnsmadeeasy/credentials.ini"
+  local certificates_dir="${HOME}/.letsencrypt"
+  [[ -s "${domain_config}" ]] || {
+    error "DNS Made Easy API keys were not found." "Expected to find them in ${domain_config}."
+    return 1
+  }
+  command -v certbot >/dev/null 2>&1 || {
+    package.install certbot
+    command -v certbot >/dev/null 2>&1 || {
+      error "certbot is not installed."
+      return 1
+    }
+  }
+  certbot certonly \
+    --dns-dnsmadeeasy \
+    --dns-dnsmadeeasy-credentials "${HOME}/.dnsmadeeasy/credentials.ini" \
+    -d dev.gomoku.games \
+    --dns-dnsmadeeasy-propagation-seconds 120 \
+    --work-dir "${certificates_dir}" \
+    --config-dir "${certificates_dir}" \
+    --logs-dir "${certificates_dir}/log"
+  success "certificates generated."
+  ui.closer.ok:
+}
+
 # =============================================================================
 # Config Generation
 # =============================================================================
 
-generate.configs() {
+cmd_configs() {
   local workers="${1:-10}"
-  local proxy="${2:-${DEFAULT_PROXY}}"
   local template_dir="$PROJECT_DIR/iac/templates"
+  local output
 
-  h3 "Generating $proxy config for ${workers} workers..."
-  if [[ "$proxy" == "haproxy" ]]; then
-    local output="${BREW_HOME}/etc/haproxy.cfg"
-    bash "$template_dir/haproxy.cfg.sh" "$workers" >"$output"
-    success "Generated $output with $workers workers."
+  local nginx_config
+  nginx_config="$(nginx -h 2>&1 | grep -- '-c.*default' | tr -d ')' | awk 'BEGIN{FS="default: "}{print $2}')"
+
+  local nginx_home
+  nginx_home="$(dirname "${nginx_config}")"
+
+  h3 "Generating haproxy.cfg config for ${workers} workers..."
+  output="${BREW_HOME}/etc/haproxy.cfg"
+  bash "$template_dir/haproxy.cfg.sh" "$workers" >"$output"
+  success "haproxy.cfg config generated."
+
+  h3 "Generating envoy.yaml config for ${workers} workers..."
+  output="$PROJECT_DIR/iac/envoy/envoy.yaml"
+  bash "$template_dir/envoy.yaml.sh" "$workers" >"$output"
+  success "envoy.yaml config generated."
+
+  h3 "Generating nginx.conf..."
+  output="$PROJECT_DIR/iac/config/nginx.conf"
+  bash "$template_dir/nginx.conf.sh" >"$output"
+  success "nginx.conf config generated."
+
+  if [[ -f ${nginx_home}/nginx.conf ]]; then
+    run "sudo mv ${nginx_home}/nginx.conf ${nginx_home}/nginx.conf.bak"
+    run "sudo ln -nfs ${PROJECT_DIR}/iac/config/nginx.conf ${nginx_home}/nginx.conf"
+    success "${nginx_home}/nginx.conf has been symlinked."
+  elif [[ -d ${nginx_home} ]]; then
+    run "sudo ln -nfs ${PROJECT_DIR}/iac/config/nginx.conf ${nginx_home}/nginx.conf"
+    success "${nginx_home}/nginx.conf has been symlinked."
   else
-    local output="$PROJECT_DIR/iac/envoy/envoy.yaml"
-    bash "$template_dir/envoy.yaml.sh" "$workers" >"$output"
-    success "Generated $output with $workers workers."
+    error "Couldn't determine nginx home directory. " \
+      "Run 'nginx -h' to see the default nginx.conf file location," \
+      "and ensure that the enclosing directory exists."
+    return 1
   fi
 }
 
@@ -237,7 +295,10 @@ nginx.start() {
     return 0
   fi
 
-  sudo "${BREW_HOME}/bin/nginx" -g "daemon on;" 2>/dev/null
+  info "Testing nginx configuration..."
+  run.set-next abort-on-error
+  run "sudo ${BREW_HOME}/bin/nginx -t"
+  run "sudo ${BREW_HOME}/bin/nginx -g \"daemon on;\""
   sleep 2
 
   if cluster.is-running "[n]ginx"; then
@@ -278,7 +339,11 @@ nginx.stop() {
   success "nginx stopped."
 }
 
-nginx.restart() { nginx.stop; sleep 1; nginx.start; }
+nginx.restart() {
+  nginx.stop
+  sleep 1
+  nginx.start
+}
 nginx.status() {
   component.status "nginx" "[n]ginx"
   if cluster.is-running "[n]ginx" && command -v curl >/dev/null 2>&1; then
@@ -313,7 +378,11 @@ haproxy.start() {
 }
 
 haproxy.stop() { component.stop "haproxy" "[h]aproxy"; }
-haproxy.restart() { haproxy.stop; sleep 1; haproxy.start; }
+haproxy.restart() {
+  haproxy.stop
+  sleep 1
+  haproxy.start
+}
 haproxy.status() {
   component.status "haproxy" "[h]aproxy"
   if cluster.is-running "[h]aproxy" && [[ -f "${BREW_HOME}/etc/haproxy.cfg" ]]; then
@@ -333,14 +402,20 @@ envoy.start() {
     ui.closer.not-ok:
     inf "Installing envoy..."
     package.install envoy
-    command -v envoy >/dev/null 2>&1 || { error "envoy is not installed."; return 1; }
+    command -v envoy >/dev/null 2>&1 || {
+      error "envoy is not installed."
+      return 1
+    }
     ui.closer.ok:
   else
     ui.closer.ok:
   fi
 
   local envoy_config="$PROJECT_DIR/iac/envoy/envoy.yaml"
-  [[ -f "$envoy_config" ]] || { error "Envoy config not found: $envoy_config"; return 1; }
+  [[ -f "$envoy_config" ]] || {
+    error "Envoy config not found: $envoy_config"
+    return 1
+  }
 
   inf "Validating envoy configuration..."
   if envoy --mode validate -c "$envoy_config" >/dev/null 2>&1; then
@@ -373,7 +448,11 @@ envoy.start() {
 }
 
 envoy.stop() { component.stop "envoy" "[e]nvoy"; }
-envoy.restart() { envoy.stop; sleep 1; envoy.start; }
+envoy.restart() {
+  envoy.stop
+  sleep 1
+  envoy.start
+}
 envoy.status() {
   component.status "envoy" "[e]nvoy"
   if cluster.is-running "[e]nvoy" && command -v curl >/dev/null 2>&1; then
@@ -389,8 +468,24 @@ envoy.status() {
 # FRONTEND (Vite)
 # =============================================================================
 
+frontend.build() {
+  inf "Building frontend assets..."
+  local frontend_dir="$PROJECT_DIR/frontend"
+  [[ -d "$frontend_dir/dist" ]] || {
+    error "frontend/dist directory not found."
+    return 1
+  }
+  (cd "$frontend_dir" && npm run build) >/dev/null 2>&1
+  ui.closer.ok:
+  sudo chmod -R 711 "${PROJECT_DIR}/frontend/dist"
+  success "frontend assets built."
+}
+
 frontend.start() {
   inf "Starting frontend dev server..."
+
+  # This is for nginx to serve static assets
+  frontend.build
 
   if cluster.is-running "[v]ite"; then
     ui.closer.kind-of-ok:
@@ -399,7 +494,10 @@ frontend.start() {
   fi
 
   local frontend_dir="$PROJECT_DIR/frontend"
-  [[ -f "$frontend_dir/package.json" ]] || { error "frontend/package.json not found."; return 1; }
+  [[ -f "$frontend_dir/package.json" ]] || {
+    error "frontend/package.json not found."
+    return 1
+  }
 
   if [[ ! -d "$frontend_dir/node_modules" ]]; then
     inf "Installing frontend dependencies..."
@@ -422,7 +520,11 @@ frontend.start() {
 }
 
 frontend.stop() { component.stop "frontend" "[v]ite"; }
-frontend.restart() { frontend.stop; sleep 1; frontend.start; }
+frontend.restart() {
+  frontend.stop
+  sleep 1
+  frontend.start
+}
 frontend.status() {
   component.status "frontend" "[v]ite"
   cluster.is-running "[v]ite" && echo "  URL: http://localhost:5173"
@@ -488,7 +590,11 @@ gomoku.stop() {
   success "gomoku-httpd stopped."
 }
 
-gomoku.restart() { gomoku.stop; sleep 1; gomoku.start; }
+gomoku.restart() {
+  gomoku.stop
+  sleep 1
+  gomoku.start
+}
 gomoku.status() {
   component.status "gomoku-httpd" "[g]omoku-httpd" "gomoku-http-client"
   if cluster.is-running "[g]omoku-httpd" "gomoku-http-client"; then
@@ -517,12 +623,15 @@ component.dispatch() {
   local action="$1" component="$2"
   shift 2
   case "$component" in
-    nginx)              "nginx.${action}" "$@" ;;
-    haproxy)            "haproxy.${action}" "$@" ;;
-    envoy)              "envoy.${action}" "$@" ;;
-    gomoku | gomoku-httpd) "gomoku.${action}" "$@" ;;
-    frontend)           "frontend.${action}" "$@" ;;
-    *) error "Unknown component: $component"; return 1 ;;
+  nginx) "nginx.${action}" "$@" ;;
+  haproxy) "haproxy.${action}" "$@" ;;
+  envoy) "envoy.${action}" "$@" ;;
+  gomoku | gomoku-httpd) "gomoku.${action}" "$@" ;;
+  frontend) "frontend.${action}" "$@" ;;
+  *)
+    error "Unknown component: $component"
+    return 1
+    ;;
   esac
 }
 
@@ -537,8 +646,15 @@ cmd_for_each() {
   local -a components=()
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      -c | --component) components+=("$2"); shift 2 ;;
-      *) error "Unknown option: $1"; cmd_help; return 1 ;;
+    *)
+      if array.includes "$1" "${START_COMPONENTS[@]}"; then
+        components+=("$1")
+        shift 1
+      else
+        error "Unknown component or directive: $1"
+        return 1
+      fi
+      ;;
     esac
   done
   [[ ${#components[@]} -eq 0 ]] && components=("${default_order[@]}")
@@ -558,14 +674,32 @@ cmd_start() {
   local -a components=()
   local workers=
 
+  run.set-all abort-on-error
+
   while [[ $# -gt 0 ]]; do
     case $1 in
-      -w | --workers) workers="$2"; shift 2
-        [[ ${workers} =~ ^[0-9]+$ ]] || { error "Invalid workers: $workers"; return 1; }
-        ;;
-      -p | --proxy) proxy="$2"; shift 2 ;;
-      -c | --component) components+=("$2"); shift 2 ;;
-      *) shift ;;
+    -w | --workers)
+      workers="$2"
+      shift 2
+      [[ ${workers} =~ ^[0-9]+$ ]] || {
+        error "Invalid workers: $workers"
+        return 1
+      }
+      ;;
+    -p | --proxy)
+      proxy="$2"
+      shift 2
+      ;;
+
+    *)
+      if array.includes "$1" "${START_COMPONENTS[@]}"; then
+        components+=("$1")
+        shift 1
+      else
+        error "Unknown component or directive: $1"
+        return 1
+      fi
+      ;;
     esac
   done
 
@@ -573,10 +707,11 @@ cmd_start() {
     error "Invalid proxy: $proxy. Must be 'haproxy' or 'envoy'"
     return 1
   }
+
   [[ -z "$workers" ]] && workers=${DEFAULT_WORKERS}
+  cmd_configs "$workers"
 
   if [[ ${#components[@]} -eq 0 ]]; then
-    generate.configs "$workers" "$proxy"
     nginx.start
     if [[ "$proxy" == "haproxy" ]]; then haproxy.start; else envoy.start; fi
     gomoku.start "$workers"
@@ -600,9 +735,9 @@ cmd_start() {
   cmd_ps
 }
 
-cmd_stop()    { cmd_for_each stop    STOP_ORDER  "$@"; }
-cmd_restart() { cmd_for_each restart STOP_ORDER  "$@"; }
-cmd_status()  { cmd_for_each status  STOP_ORDER  "$@"; }
+cmd_stop() { cmd_for_each stop STOP_ORDER "$@"; }
+cmd_restart() { cmd_for_each restart STOP_ORDER "$@"; }
+cmd_status() { cmd_for_each status STOP_ORDER "$@"; }
 
 cmd_ps() {
   export GREP_COLOR='1;33'
@@ -626,11 +761,14 @@ cmd_ps() {
 cmd_observe() {
   local tool="${1:-btop}"
   case "$tool" in
-    htop) htop -F "$HTOP_REGEX" ;;
-    btop) btop --filter gomoku ;;
-    btm | bottom) btm ;;
-    ctop) ctop ;;
-    *) error "Unknown tool: $tool. Use: htop, btop, ctop, btm"; return 1 ;;
+  htop) htop -F "$HTOP_REGEX" ;;
+  btop) btop --filter gomoku ;;
+  btm | bottom) btm ;;
+  ctop) ctop ;;
+  *)
+    error "Unknown tool: $tool. Use: htop, btop, ctop, btm"
+    return 1
+    ;;
   esac
 }
 
@@ -645,9 +783,11 @@ ${bldblu}DETAILS:${clr}
   which can start, stop, or examine the entire set of components that the cluster
   comprises. It can also start/stop individual components of the cluster.
 
-  On MacOS we replace default nginx.conf and haproxy.cfg with symlinks into this
-  repo's folder: ./iac/config/nginx.conf and ./iac/config/haproxy.cfg
-  respectively during ${bldylw}gctl setup${clr}.
+  We use nginx and either haproxy or envoy as the reverse proxy. Therefore 
+  we need to overrwrite the default nginx.conf and haproxy.cfg with symlinks into
+  this repo: sz./iac/config/nginx.conf and ./iac/config/haproxy.cfg.
+
+  Every time you start the cluster we overwrite the default nginx.conf and haproxy.cfg.
 
   ${bldcyn}The components:${clr}
 
@@ -677,29 +817,44 @@ ${bldblu}USAGE:${clr}
   ${bldylw}${binary} <command> [options]${clr}
 
 ${bldblu}DESCRIPTION:${clr}
-  ${bldylw}WARNING: ${txtred}This script manages the Gomoku Cluster in development mode.
-  It is not intended for production use.${clr}
+  ${bldylw}WARNING: ${bldred}This script manages the Gomoku Cluster in development mode.
+           It is not intended for production use.${clr}
 
   Proxy configs are auto-generated from templates in ${bldylw}iac/templates/${clr}
-  to match the number of workers (${bldylw}-w${clr} flag).
+  to match the number of workers (${bldylw}-w${clr} flag), point to the proper SSL 
+  certificates, and choose the appropriate event polling mechanism for 
+  the OS (epoll or kqueue).
 
 ${bldblu}COMMANDS:${clr}
-  ${c}# Boot the entire cluster. Envoy is the default proxy.${clr}
-  ${bldylw}${binary} start [ -p <haproxy|envoy> ] [ -w <workers> ] [ -c <component> ... ]${clr}
+  ${c}# First-time setup: create log files, install utilities.${clr}
+  ${bldylw}${binary} setup${clr}
 
+  ${c}# Generate SSL certificates for dev.gomoku.games.${clr}
+  ${bldylw}${binary} certificates${clr}
+
+  ${c}# Generate haproxy, envoy and nginx configs into iac/config/ folder.${clr}
+  ${bldylw}${binary} configs${clr}
+
+  ${c}# Boot the entire cluster. Envoy is the default proxy. Components are listed below.${clr}
+  ${bldylw}${binary} start [ -p <haproxy|envoy> ] [ -w <workers> ] [ <component> ... ] ${clr}
+
+${bldblu}START OPTIONS:${clr}
+  ${bldylw}-p, --proxy <haproxy|envoy>${clr}    Reverse proxy (default: envoy)
+  ${bldylw}-w, --workers <N>${clr}              Number of workers (default: ${DEFAULT_WORKERS})
+  ${bldylw}component${clr}                      Item(s) from the following component list:
+                                 $(array.join ", " "${START_COMPONENTS[@]}")
+
+${bldblu}OTHER COMMANDS:${clr}
   ${c}# Stop / restart / query status of the cluster or individual components.${clr}
-  ${bldylw}${binary} stop    [ -c <component> ... ]${clr}
-  ${bldylw}${binary} restart [ -c <component> ... ]${clr}
-  ${bldylw}${binary} status  [ -c <component> ... ]${clr}
+  ${bldylw}${binary} stop    [ <component> ... ]${clr}
+  ${bldylw}${binary} restart [ <component> ... ]${clr}
+  ${bldylw}${binary} status  [ <component> ... ]${clr}
 
   ${c}# Show cluster processes sorted by CPU usage.${clr}
   ${bldylw}${binary} ps${clr}
 
   ${c}# Launch a monitoring tool filtered to Gomoku processes.${clr}
   ${bldylw}${binary} observe [ htop | btop | ctop | btm ]${clr}
-
-  ${c}# First-time setup: create log files, install utilities.${clr}
-  ${bldylw}${binary} setup${clr}
 
   ${c}# Show more details about this script.${clr}
   ${bldylw}${binary} details${clr}
@@ -711,18 +866,13 @@ ${bldblu}COMPONENTS:${clr}
   ${bldylw}gomoku${clr}     Gomoku-httpd worker cluster (ports 9500+)
   ${bldylw}frontend${clr}   Vite React dev server (http://localhost:5173)
 
-${bldblu}START OPTIONS:${clr}
-  ${bldylw}-p, --proxy <haproxy|envoy>${clr}    Reverse proxy (default: envoy)
-  ${bldylw}-w, --workers <N>${clr}              Number of workers (default: ${DEFAULT_WORKERS})
-  ${bldylw}-c, --component <name>${clr}         Start a specific component (repeatable)
-
 ${bldblu}EXAMPLES:${clr}
   ${bldylw}${binary} start${clr}                          # Envoy, ${DEFAULT_WORKERS} workers
   ${bldylw}${binary} start -w 16${clr}                    # Envoy, 16 workers
-  ${bldylw}${binary} start -p haproxy -w 8${clr}          # HAProxy, 8 workers
-  ${bldylw}${binary} start -c nginx -c gomoku${clr}       # Start only nginx and gomoku
-  ${bldylw}${binary} stop${clr}                           # Stop entire cluster
-  ${bldylw}${binary} stop -c envoy${clr}                  # Stop only envoy
+  ${bldylw}${binary} start haproxy -w 8${clr}             # HAProxy, 8 workers
+  ${bldylw}${binary} start gomoku nginx${clr}             # Start only nginx and gomoku
+  ${bldylw}${binary} stop${clr}                           # Stop the entire cluster
+  ${bldylw}${binary} stop envoy${clr}                     # Stop only envoy
   ${bldylw}${binary} status${clr}                         # Show all component status
   ${bldylw}${binary} ps${clr}                             # Process table
   ${bldylw}${binary} observe btop${clr}                   # Launch btop
@@ -736,16 +886,52 @@ ${bldblu}EXAMPLES:${clr}
 
 parse-args() {
   case "${1:-}" in
-    start)   shift; cmd_start "$@" ;;
-    stop)    shift; cmd_stop "$@" ;;
-    restart) shift; cmd_restart "$@" ;;
-    status)  shift; cmd_status "$@" ;;
-    setup)   shift; cmd_setup "$@" ;;
-    observe) shift; cmd_observe "$@" ;;
-    ps)      shift; cmd_ps "$@" ;;
-    details) shift; cmd_details "$@" ;;
-    "" | -h | --help | help) cmd_help ;;
-    *) error "Unknown command: $1"; cmd_help; return 1 ;;
+  start)
+    shift
+    cmd_start "$@"
+    ;;
+  stop)
+    shift
+    cmd_stop "$@"
+    ;;
+  restart)
+    shift
+    cmd_restart "$@"
+    ;;
+  status)
+    shift
+    cmd_status "$@"
+    ;;
+  setup)
+    shift
+    cmd_setup "$@"
+    ;;
+  observe)
+    shift
+    cmd_observe "$@"
+    ;;
+  ps)
+    shift
+    cmd_ps "$@"
+    ;;
+  details)
+    shift
+    cmd_details "$@"
+    ;;
+  configs)
+    shift
+    cmd_configs "$@"
+    ;;
+  certificates)
+    shift
+    cmd_certificates "$@"
+    ;;
+  "" | -h | --help | help) cmd_help ;;
+  *)
+    error "Unknown command: $1"
+    cmd_help
+    return 1
+    ;;
   esac
 }
 
@@ -760,11 +946,11 @@ hint() { panel-info-blue-black "$@"; }
 
 setup.direnv
 
-[[ "${ARGV[*]}" =~ setup ]] || setup.log-files-are-ok || exit 1
-
-if [[ ${#ARGV[@]} -eq 0 ]]; then
+if [[ ${#ARGV[@]} -eq 0 || "${ARGV[*]}" =~ help || "${ARGV[*]}" =~ -h || "${ARGV[*]}" =~ --help ]]; then
   cmd_help
   exit 0
 fi
+
+[[ "${ARGV[*]}" =~ setup ]] || setup.log-files-are-ok || exit 1
 
 parse-args "${ARGV[@]}"
