@@ -4,6 +4,7 @@
 //
 
 #include "json_api.h"
+#include "ai.h"
 #include "game.h"
 #include "gomoku.h"
 #include "json.h"
@@ -220,6 +221,7 @@ game_state_t *json_api_parse_game(const char *json_str, char *error_msg,
       int positions_evaluated = 0;
       int own_score = 0;
       int opponent_score = 0;
+      double queue_wait_ms = 0;
 
       // Parse move object
       json_object_object_foreach(move_obj, key, val) {
@@ -245,6 +247,8 @@ game_state_t *json_api_parse_game(const char *json_str, char *error_msg,
           own_score = json_object_get_int(val);
         } else if (strcmp(key, "opponent") == 0) {
           opponent_score = json_object_get_int(val);
+        } else if (strcmp(key, "queue_wait_ms") == 0) {
+          queue_wait_ms = json_object_get_double(val);
         }
       }
 
@@ -257,6 +261,10 @@ game_state_t *json_api_parse_game(const char *json_str, char *error_msg,
           cleanup_game(game);
           json_object_put(root);
           return NULL;
+        }
+        // Preserve queue_wait_ms from client
+        if (queue_wait_ms > 0 && game->move_history_count > 0) {
+          game->move_history[game->move_history_count - 1].queue_wait_ms = queue_wait_ms;
         }
       }
     }
@@ -281,6 +289,11 @@ game_state_t *json_api_parse_game(const char *json_str, char *error_msg,
 //===============================================================================
 
 char *json_api_serialize_game(game_state_t *game) {
+  return json_api_serialize_game_ex(game, NULL, 0);
+}
+
+char *json_api_serialize_game_ex(game_state_t *game, const scoring_report_t *report,
+                                  double total_time_sec) {
   if (!game) {
     return NULL;
   }
@@ -416,9 +429,80 @@ char *json_api_serialize_game(game_state_t *game) {
     json_object_object_add(move_obj, "time_ms",
                            json_ms_from_seconds(move->time_taken));
 
+    // Queue wait time (preserved from client)
+    if (move->queue_wait_ms > 0) {
+      char qbuf[32];
+      snprintf(qbuf, sizeof(qbuf), "%.3f", move->queue_wait_ms);
+      json_object_object_add(move_obj, "queue_wait_ms",
+                             json_object_new_double_s(atof(qbuf), qbuf));
+    }
+
     // Winner flag
     if (move->is_winner) {
       json_object_object_add(move_obj, "winner", json_object_new_boolean(1));
+    }
+
+    // Add scoring report to the LAST move (the one just computed)
+    if (report && i == game->move_history_count - 1 && is_ai) {
+      json_object_object_add(move_obj, "offensive_max_score",
+                             json_object_new_int(report->offensive_max_score));
+      json_object_object_add(move_obj, "defensive_max_score",
+                             json_object_new_int(report->defensive_max_score));
+
+      // Add total thinking time
+      if (total_time_sec > 0) {
+        json_object_object_add(move_obj, "think_time_ms",
+                               json_ms_from_seconds(total_time_sec));
+      }
+
+      // Add scoring entries array
+      json_object *scoring_arr = json_object_new_array();
+      for (int s = 0; s < report->entry_count; s++) {
+        const scoring_entry_t *se = &report->entries[s];
+        json_object *se_obj = json_object_new_object();
+
+        json_object_object_add(se_obj, "player",
+            json_object_new_string(se->is_current_player ? "current" : "opponent"));
+        json_object_object_add(se_obj, "evaluator",
+            json_object_new_string(se->evaluator));
+        json_object_object_add(se_obj, "evaluated_moves",
+            json_object_new_int(se->evaluated_moves));
+        json_object_object_add(se_obj, "score",
+            json_object_new_int(se->score));
+
+        // Time for this evaluator
+        {
+          char tbuf[32];
+          snprintf(tbuf, sizeof(tbuf), "%.3f", se->time_ms);
+          json_object_object_add(se_obj, "time_ms",
+              json_object_new_double_s(atof(tbuf), tbuf));
+        }
+
+        // Boolean flags
+        if (se->have_win) {
+          json_object_object_add(se_obj, "have_win", json_object_new_boolean(1));
+        }
+        if (se->have_vct) {
+          json_object_object_add(se_obj, "have_vct", json_object_new_boolean(1));
+          // VCT sequence
+          if (se->vct_length > 0) {
+            json_object *vct_arr = json_object_new_array();
+            for (int v = 0; v < se->vct_length; v++) {
+              json_object *coord = json_object_new_array();
+              json_object_array_add(coord, json_object_new_int(se->vct_sequence[v][0]));
+              json_object_array_add(coord, json_object_new_int(se->vct_sequence[v][1]));
+              json_object_array_add(vct_arr, coord);
+            }
+            json_object_object_add(se_obj, "vct_sequence", vct_arr);
+          }
+        }
+        if (se->decisive) {
+          json_object_object_add(se_obj, "decisive", json_object_new_boolean(1));
+        }
+
+        json_object_array_add(scoring_arr, se_obj);
+      }
+      json_object_object_add(move_obj, "scoring", scoring_arr);
     }
 
     json_object_array_add(moves_array, move_obj);

@@ -19,6 +19,12 @@ struct http_request_s;
  */
 void handlers_init(void);
 
+/**
+ * Set whether scoring reports are included in JSON responses.
+ * Should be called once at startup based on -r/--report-scoring flag.
+ */
+void handlers_set_report_scoring(int enabled);
+
 //===============================================================================
 // BUSY STATUS (for HAProxy agent-check)
 //===============================================================================

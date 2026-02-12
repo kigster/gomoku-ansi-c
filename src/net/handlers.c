@@ -5,7 +5,7 @@
 
 #define HTTPSERVER_IMPL
 #include "handlers.h"
-#include "ai.h"
+#include "ai.h"  // includes scoring_report_t
 #include "board.h"
 #include "game.h"
 #include "gomoku.h"
@@ -29,6 +29,7 @@ static time_t daemon_start_time = 0;
 // Atomic flag for busy status (used by HAProxy agent-check)
 // Using sig_atomic_t for signal-safe access from agent thread
 static volatile sig_atomic_t server_busy = 0;
+static int report_scoring_enabled = 0;
 
 //===============================================================================
 // REQUEST CONTEXT FOR LOGGING
@@ -150,6 +151,8 @@ int handlers_is_busy(void) { return server_busy != 0; }
 void handlers_set_busy(void) { server_busy = 1; }
 
 void handlers_set_ready(void) { server_busy = 0; }
+
+void handlers_set_report_scoring(int enabled) { report_scoring_enabled = enabled; }
 
 //===============================================================================
 // PUBLIC FUNCTIONS - REQUEST DISPATCHER
@@ -329,6 +332,8 @@ void handle_play(struct http_request_s *request) {
   // Find best move
   int best_x = -1, best_y = -1;
   const char *move_type = "minimax";
+  scoring_report_t scoring_report;
+  scoring_report_init(&scoring_report);
 
   if (game->move_history_count == 0) {
     // First move of game - play center
@@ -341,7 +346,7 @@ void handle_play(struct http_request_s *request) {
     move_type = "adjacent";
   } else {
     // Use minimax
-    find_best_ai_move(game, &best_x, &best_y);
+    find_best_ai_move(game, &best_x, &best_y, &scoring_report);
   }
 
   // Mark server as ready after AI computation
@@ -407,8 +412,9 @@ void handle_play(struct http_request_s *request) {
            best_x, best_y, player_depth, game->search_radius, moves_evaluated,
            elapsed_time);
 
-  // Serialize and return
-  char *response_json = json_api_serialize_game(game);
+  // Serialize and return (pass scoring report if enabled)
+  char *response_json = json_api_serialize_game_ex(
+      game, report_scoring_enabled ? &scoring_report : NULL, elapsed_time);
   cleanup_game(game);
 
   if (response_json) {

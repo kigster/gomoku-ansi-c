@@ -253,7 +253,7 @@ int main(int argc, char *argv[]) {
       int saved_depth = game->max_depth;
       game->max_depth = get_player_depth(game, game->current_player);
 
-      find_best_ai_move(game, &ai_x, &ai_y);
+      find_best_ai_move(game, &ai_x, &ai_y, NULL);
 
       game->max_depth = saved_depth; // Restore
 
