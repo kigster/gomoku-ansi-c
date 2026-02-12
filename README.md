@@ -2,7 +2,7 @@
 
 # Gomoku (Five-in-a-Row) Game
 
-Gomoku is an old Japanese game that is also popular in the Eastern Europe, where it's called "крестики и нолики". The game is simlar to "tic-tac-toe", but played on a board that's 15x15 or 19x19 squares. To win you must place five stones in a row horizontally, vertically it diaganally.
+Gomoku is an old Japanese game that is also popular in the Eastern Europe, where it's called "крестики и нолики". The game is simlar to "tic-tac-toe", but played on a board that's 15x15 or 19x19 squares. To win you must place five stones in a row horizontally, vertically, or diaganally.
 
 This mono-repo contains sources for:
 
