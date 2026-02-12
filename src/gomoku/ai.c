@@ -429,7 +429,8 @@ int find_block_cell(int **board, int x, int y, int player, int board_size,
       for (int dist = 1; dist <= 5; dist++) {
         int nx = x + sign * dx * dist;
         int ny = y + sign * dy * dist;
-        if (nx < 0 || nx >= board_size || ny < 0 || ny >= board_size) break;
+        if (nx < 0 || nx >= board_size || ny < 0 || ny >= board_size)
+          break;
         if (board[nx][ny] == AI_CELL_EMPTY) {
           // Check if placing player's stone here would win
           if (is_winning_move(board, nx, ny, player, board_size)) {
@@ -455,22 +456,22 @@ int find_block_cell(int **board, int x, int y, int player, int board_size,
 }
 
 static int find_forced_win_recursive(game_state_t *game, int **board,
-                                     int player, int max_depth,
-                                     int *result_x, int *result_y,
-                                     int sequence[][2], int *seq_len) {
+                                     int player, int max_depth, int *result_x,
+                                     int *result_y, int sequence[][2],
+                                     int *seq_len) {
   int board_size = game->board_size;
   int opponent = other_player(player);
 
   // Check if we already have an unstoppable compound threat
   // Generate candidate moves near existing stones
   move_t moves[361];
-  int move_count = generate_moves_optimized(game, board, moves, player,
-                                            game->max_depth);
+  int move_count =
+      generate_moves_optimized(game, board, moves, player, game->max_depth);
 
   // Check for immediate compound win (>= 40000)
   for (int i = 0; i < move_count; i++) {
-    int threat = evaluate_threat_fast(board, moves[i].x, moves[i].y,
-                                      player, board_size);
+    int threat =
+        evaluate_threat_fast(board, moves[i].x, moves[i].y, player, board_size);
     if (threat >= 40000) {
       // This move creates an unstoppable compound threat
       *result_x = moves[i].x;
@@ -484,13 +485,15 @@ static int find_forced_win_recursive(game_state_t *game, int **board,
     }
   }
 
-  if (max_depth <= 0) return 0;
+  if (max_depth <= 0)
+    return 0;
 
   // Try each move that creates a four (threat >= 8000)
   for (int i = 0; i < move_count; i++) {
-    int threat = evaluate_threat_fast(board, moves[i].x, moves[i].y,
-                                      player, board_size);
-    if (threat < 8000) continue; // Only consider four-creating moves
+    int threat =
+        evaluate_threat_fast(board, moves[i].x, moves[i].y, player, board_size);
+    if (threat < 8000)
+      continue; // Only consider four-creating moves
 
     int mx = moves[i].x, my = moves[i].y;
 
@@ -516,7 +519,8 @@ static int find_forced_win_recursive(game_state_t *game, int **board,
     // Check all empty positions for new compound threats by us
     int creates_compound = 0;
     for (int j = 0; j < move_count; j++) {
-      if (board[moves[j].x][moves[j].y] != AI_CELL_EMPTY) continue;
+      if (board[moves[j].x][moves[j].y] != AI_CELL_EMPTY)
+        continue;
       int new_threat = evaluate_threat_fast(board, moves[j].x, moves[j].y,
                                             player, board_size);
       if (new_threat >= 40000) {
@@ -538,8 +542,8 @@ static int find_forced_win_recursive(game_state_t *game, int **board,
 
     // Find the one cell opponent must block
     int bx, by;
-    int found_block = find_block_cell(board, mx, my, player, board_size,
-                                      &bx, &by);
+    int found_block =
+        find_block_cell(board, mx, my, player, board_size, &bx, &by);
     if (!found_block) {
       // Either open four (already winning) or no block found
       board[mx][my] = AI_CELL_EMPTY;
@@ -558,8 +562,8 @@ static int find_forced_win_recursive(game_state_t *game, int **board,
     }
 
     // Check: does opponent's block give THEM a four or better?
-    int opp_threat_at_block = evaluate_threat_fast(board, bx, by, opponent,
-                                                    board_size);
+    int opp_threat_at_block =
+        evaluate_threat_fast(board, bx, by, opponent, board_size);
     if (opp_threat_at_block >= 8000) {
       // Opponent's forced block also creates a counter-threat, skip
       board[mx][my] = AI_CELL_EMPTY;
@@ -603,15 +607,16 @@ static int find_forced_win_recursive(game_state_t *game, int **board,
 }
 
 int find_forced_win(game_state_t *game, int **board, int player, int max_depth,
-                    int *result_x, int *result_y,
-                    int sequence[][2], int *seq_len) {
+                    int *result_x, int *result_y, int sequence[][2],
+                    int *seq_len) {
   int local_seq_len = 0;
-  if (!seq_len) seq_len = &local_seq_len;
+  if (!seq_len)
+    seq_len = &local_seq_len;
   *seq_len = 0;
   *result_x = -1;
   *result_y = -1;
-  return find_forced_win_recursive(game, board, player, max_depth,
-                                   result_x, result_y, sequence, seq_len);
+  return find_forced_win_recursive(game, board, player, max_depth, result_x,
+                                   result_y, sequence, seq_len);
 }
 
 int find_forced_win_block(game_state_t *game, int **board, int ai_player,
@@ -621,8 +626,8 @@ int find_forced_win_block(game_state_t *game, int **board, int ai_player,
 
   // Check if opponent has a forced win
   int opp_x, opp_y;
-  if (!find_forced_win(game, board, opponent, max_depth,
-                       &opp_x, &opp_y, NULL, NULL)) {
+  if (!find_forced_win(game, board, opponent, max_depth, &opp_x, &opp_y, NULL,
+                       NULL)) {
     // Opponent has no forced win
     *result_x = -1;
     *result_y = -1;
@@ -631,8 +636,8 @@ int find_forced_win_block(game_state_t *game, int **board, int ai_player,
 
   // Opponent has a forced win. Find our move that disrupts it.
   move_t moves[361];
-  int move_count = generate_moves_optimized(game, board, moves, ai_player,
-                                            game->max_depth);
+  int move_count =
+      generate_moves_optimized(game, board, moves, ai_player, game->max_depth);
 
   int best_x = -1, best_y = -1;
   int best_own_threat = -1;
@@ -652,8 +657,8 @@ int find_forced_win_block(game_state_t *game, int **board, int ai_player,
 
     if (!opp_still_wins) {
       // This move disrupts the opponent's VCT
-      int own_threat = evaluate_threat_fast(board, mx, my, ai_player,
-                                            board_size);
+      int own_threat =
+          evaluate_threat_fast(board, mx, my, ai_player, board_size);
       if (own_threat > best_own_threat) {
         best_own_threat = own_threat;
         best_x = mx;
@@ -961,7 +966,8 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
 
   // Initialize scoring report
   scoring_report_t local_report;
-  if (!report) report = &local_report;
+  if (!report)
+    report = &local_report;
   scoring_report_init(report);
 
   // Determine which player the AI is playing as
@@ -1026,7 +1032,8 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
   for (int i = 0; i < move_count; i++) {
     int threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
                                       ai_player, game->board_size);
-    if (threat > our_max_score) our_max_score = threat;
+    if (threat > our_max_score)
+      our_max_score = threat;
     if (threat >= 100000) {
       winning_moves_x[winning_move_count] = moves[i].x;
       winning_moves_y[winning_move_count] = moves[i].y;
@@ -1041,7 +1048,8 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
       e->score = our_max_score;
       e->have_win = (winning_move_count > 0);
       e->time_ms = (get_current_time() - step_start) * 1000.0;
-      if (winning_move_count > 0) e->decisive = 1;
+      if (winning_move_count > 0)
+        e->decisive = 1;
     }
     report->offensive_max_score = our_max_score;
   }
@@ -1069,7 +1077,8 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
   for (int i = 0; i < move_count; i++) {
     int opp_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
                                           opponent, game->board_size);
-    if (opp_threat > max_opp_threat) max_opp_threat = opp_threat;
+    if (opp_threat > max_opp_threat)
+      max_opp_threat = opp_threat;
     if (opp_threat >= 40000) {
       blocking_moves_x[blocking_move_count] = moves[i].x;
       blocking_moves_y[blocking_move_count] = moves[i].y;
@@ -1084,7 +1093,8 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
       e->evaluated_moves = move_count;
       e->score = -max_opp_threat;
       e->time_ms = (get_current_time() - step_start) * 1000.0;
-      if (blocking_move_count > 0 && max_opp_threat >= 40000) e->decisive = 1;
+      if (blocking_move_count > 0 && max_opp_threat >= 40000)
+        e->decisive = 1;
     }
     report->defensive_max_score = -max_opp_threat;
   }
@@ -1119,8 +1129,8 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
   int vct_x = -1, vct_y = -1;
   int vct_sequence[MAX_VCT_SEQUENCE][2];
   int vct_len = 0;
-  int have_vct = find_forced_win(game, game->board, ai_player, 10,
-                                 &vct_x, &vct_y, vct_sequence, &vct_len);
+  int have_vct = find_forced_win(game, game->board, ai_player, 10, &vct_x,
+                                 &vct_y, vct_sequence, &vct_len);
 
   {
     scoring_entry_t *e = scoring_report_add(report, "have_vct", 1);
@@ -1136,7 +1146,8 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
           e->vct_sequence[i][1] = vct_sequence[i][1];
         }
       }
-      if (have_vct) report->offensive_max_score = WIN_SCORE;
+      if (have_vct)
+        report->offensive_max_score = WIN_SCORE;
     }
   }
 
@@ -1155,8 +1166,8 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
   // =========================================================================
   step_start = get_current_time();
   int dvct_x = -1, dvct_y = -1;
-  int opp_has_vct = find_forced_win_block(game, game->board, ai_player, 10,
-                                          &dvct_x, &dvct_y);
+  int opp_has_vct =
+      find_forced_win_block(game, game->board, ai_player, 10, &dvct_x, &dvct_y);
 
   {
     scoring_entry_t *e = scoring_report_add(report, "block_vct", 0);
@@ -1164,8 +1175,10 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
       e->have_vct = opp_has_vct;
       e->score = opp_has_vct ? -WIN_SCORE : 0;
       e->time_ms = (get_current_time() - step_start) * 1000.0;
-      if (opp_has_vct && dvct_x >= 0) e->decisive = 1;
-      if (opp_has_vct) report->defensive_max_score = -WIN_SCORE;
+      if (opp_has_vct && dvct_x >= 0)
+        e->decisive = 1;
+      if (opp_has_vct)
+        report->defensive_max_score = -WIN_SCORE;
     }
   }
 
@@ -1194,8 +1207,8 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
   for (int i = 0; i < move_count; i++) {
     int opp_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
                                           opponent, game->board_size);
-    int needs_blocking = (opp_threat == 1500) ||
-                         (opp_threat >= 30000 && opp_threat < 40000);
+    int needs_blocking =
+        (opp_threat == 1500) || (opp_threat >= 30000 && opp_threat < 40000);
     if (needs_blocking) {
       open_three_blocks_x[open_three_block_count] = moves[i].x;
       open_three_blocks_y[open_three_block_count] = moves[i].y;
@@ -1217,16 +1230,19 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
     for (int i = 0; i < move_count; i++) {
       int my_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
                                            ai_player, game->board_size);
-      if (my_threat > our_max_threat_val) our_max_threat_val = my_threat;
-      if (my_threat >= 10000) our_four_count++;
-      else if (my_threat >= 1500) our_open_three_count++;
+      if (my_threat > our_max_threat_val)
+        our_max_threat_val = my_threat;
+      if (my_threat >= 10000)
+        our_four_count++;
+      else if (my_threat >= 1500)
+        our_open_three_count++;
     }
 
     int we_have_initiative =
-        (our_max_threat_val >= 40000) ||
-        (our_four_count >= 2) ||
+        (our_max_threat_val >= 40000) || (our_four_count >= 2) ||
         (our_four_count >= 1 && our_open_three_count >= 1) ||
-        (our_max_threat_val >= 1500 && our_max_threat_val > max_open_three_threat);
+        (our_max_threat_val >= 1500 &&
+         our_max_threat_val > max_open_three_threat);
 
     if (!we_have_initiative) {
       int best_blocks_x[361];
@@ -1269,7 +1285,8 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
       e->evaluated_moves = open_three_block_count;
       e->score = -max_open_three_threat;
       e->time_ms = (get_current_time() - step_start) * 1000.0;
-      if (blocked_open_three) e->decisive = 1;
+      if (blocked_open_three)
+        e->decisive = 1;
     }
   }
 
@@ -1323,7 +1340,8 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
       e->evaluated_moves = forcing_move_count;
       e->score = max_forcing_threat;
       e->time_ms = (get_current_time() - step_start) * 1000.0;
-      if (played_forcing) e->decisive = 1;
+      if (played_forcing)
+        e->decisive = 1;
     }
   }
 
@@ -1415,7 +1433,8 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
               e->have_win = 1;
               e->time_ms = (get_current_time() - step_start) * 1000.0;
             }
-            report->offensive_max_score = max(report->offensive_max_score, score);
+            report->offensive_max_score =
+                max(report->offensive_max_score, score);
           }
           return;
         }
@@ -1451,7 +1470,8 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
       e->score = final_best_score;
       e->time_ms = (get_current_time() - step_start) * 1000.0;
     }
-    report->offensive_max_score = max(report->offensive_max_score, final_best_score);
+    report->offensive_max_score =
+        max(report->offensive_max_score, final_best_score);
   }
 
   // Store the completion message if not already set by early termination

@@ -5,7 +5,7 @@
 
 #define HTTPSERVER_IMPL
 #include "handlers.h"
-#include "ai.h"  // includes scoring_report_t
+#include "ai.h" // includes scoring_report_t
 #include "board.h"
 #include "game.h"
 #include "gomoku.h"
@@ -152,7 +152,9 @@ void handlers_set_busy(void) { server_busy = 1; }
 
 void handlers_set_ready(void) { server_busy = 0; }
 
-void handlers_set_report_scoring(int enabled) { report_scoring_enabled = enabled; }
+void handlers_set_report_scoring(int enabled) {
+  report_scoring_enabled = enabled;
+}
 
 //===============================================================================
 // PUBLIC FUNCTIONS - REQUEST DISPATCHER

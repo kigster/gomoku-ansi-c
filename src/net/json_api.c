@@ -264,7 +264,8 @@ game_state_t *json_api_parse_game(const char *json_str, char *error_msg,
         }
         // Preserve queue_wait_ms from client
         if (queue_wait_ms > 0 && game->move_history_count > 0) {
-          game->move_history[game->move_history_count - 1].queue_wait_ms = queue_wait_ms;
+          game->move_history[game->move_history_count - 1].queue_wait_ms =
+              queue_wait_ms;
         }
       }
     }
@@ -292,8 +293,9 @@ char *json_api_serialize_game(game_state_t *game) {
   return json_api_serialize_game_ex(game, NULL, 0);
 }
 
-char *json_api_serialize_game_ex(game_state_t *game, const scoring_report_t *report,
-                                  double total_time_sec) {
+char *json_api_serialize_game_ex(game_state_t *game,
+                                 const scoring_report_t *report,
+                                 double total_time_sec) {
   if (!game) {
     return NULL;
   }
@@ -462,42 +464,48 @@ char *json_api_serialize_game_ex(game_state_t *game, const scoring_report_t *rep
         json_object *se_obj = json_object_new_object();
 
         json_object_object_add(se_obj, "player",
-            json_object_new_string(se->is_current_player ? "current" : "opponent"));
+                               json_object_new_string(se->is_current_player
+                                                          ? "current"
+                                                          : "opponent"));
         json_object_object_add(se_obj, "evaluator",
-            json_object_new_string(se->evaluator));
+                               json_object_new_string(se->evaluator));
         json_object_object_add(se_obj, "evaluated_moves",
-            json_object_new_int(se->evaluated_moves));
-        json_object_object_add(se_obj, "score",
-            json_object_new_int(se->score));
+                               json_object_new_int(se->evaluated_moves));
+        json_object_object_add(se_obj, "score", json_object_new_int(se->score));
 
         // Time for this evaluator
         {
           char tbuf[32];
           snprintf(tbuf, sizeof(tbuf), "%.3f", se->time_ms);
           json_object_object_add(se_obj, "time_ms",
-              json_object_new_double_s(atof(tbuf), tbuf));
+                                 json_object_new_double_s(atof(tbuf), tbuf));
         }
 
         // Boolean flags
         if (se->have_win) {
-          json_object_object_add(se_obj, "have_win", json_object_new_boolean(1));
+          json_object_object_add(se_obj, "have_win",
+                                 json_object_new_boolean(1));
         }
         if (se->have_vct) {
-          json_object_object_add(se_obj, "have_vct", json_object_new_boolean(1));
+          json_object_object_add(se_obj, "have_vct",
+                                 json_object_new_boolean(1));
           // VCT sequence
           if (se->vct_length > 0) {
             json_object *vct_arr = json_object_new_array();
             for (int v = 0; v < se->vct_length; v++) {
               json_object *coord = json_object_new_array();
-              json_object_array_add(coord, json_object_new_int(se->vct_sequence[v][0]));
-              json_object_array_add(coord, json_object_new_int(se->vct_sequence[v][1]));
+              json_object_array_add(
+                  coord, json_object_new_int(se->vct_sequence[v][0]));
+              json_object_array_add(
+                  coord, json_object_new_int(se->vct_sequence[v][1]));
               json_object_array_add(vct_arr, coord);
             }
             json_object_object_add(se_obj, "vct_sequence", vct_arr);
           }
         }
         if (se->decisive) {
-          json_object_object_add(se_obj, "decisive", json_object_new_boolean(1));
+          json_object_object_add(se_obj, "decisive",
+                                 json_object_new_boolean(1));
         }
 
         json_object_array_add(scoring_arr, se_obj);

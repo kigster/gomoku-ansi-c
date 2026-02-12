@@ -7,6 +7,21 @@ on:
     branches: [ main ]
 
 jobs:
+  validate-schema:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Validate sample game against JSON schema
+      run: |
+        npx ajv-cli --spec=draft2020 validate -s doc/gomoku-json-schema.json -d doc/sample-game.json
+
   build-and-test:
     runs-on: ${{ matrix.os }}
     strategy:
