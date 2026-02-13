@@ -177,7 +177,7 @@ release:  	tag ## Update current VERSION tag to this SHA, and publish a new Gith
 		gh release create $(TAG) --generate-notes
 
 validate-json: 	## Validates config/sample-game.json agains the JSON scheme in config/
-		@bundle check >/dev/null || bundle install -j
+		@bundle check >/dev/null || bundle install -j 8
 		@TERM=xterm-256color bundle exec bin/schema-validator validate-json
 
 # CMake targets

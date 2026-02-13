@@ -13,14 +13,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
+    - uses: actions/setup-ruby@v1
       with:
-        node-version: '20'
+        ruby-version: '4.0.1'
+        bundle-cache: true
+
+    - name: Bundle Install
+      run: bundle install -j 4
 
     - name: Validate sample game against JSON schema
       run: |
-        npx ajv-cli --spec=draft2020 validate -s doc/gomoku-json-schema.json -d doc/sample-game.json
+        make validate-json
 
   build-and-test:
     runs-on: ${{ matrix.os }}
