@@ -233,3 +233,11 @@ k8s-deploy: 	## Deploy all K8s resources with kustomize
 
 k8s-delete: 	## Delete all K8s resources
 		kubectl delete -k iac/k8s/
+
+cr-init: 	docker-build-all-amd64 ## Deploy to Cloud Run for the first time
+
+cr-update: 	docker-build-all-amd64 ## Update Cloud Run with the latest code
+		@echo "First we must authenticate you against Google Cloud..."
+	  	@gcloud auth application-default login
+		@cd ./iac/cloud_run && bash update.sh
+
