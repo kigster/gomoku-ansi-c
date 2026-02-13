@@ -170,8 +170,7 @@ clean:  	cmake-clean ## Clean up all the intermediate objects
 		find . -name '*.a' -type f -delete || true
 
 tag:    	## Tag the current git version with the tag equal to the VERSION constant
-		git tag $(TAG) -f
-		git push --tags -f
+		@(git tag $(TAG) && git push --tags) || true
 
 release:  	tag ## Update current VERSION tag to this SHA, and publish a new Github Release
 		gh release create $(TAG) --generate-notes
