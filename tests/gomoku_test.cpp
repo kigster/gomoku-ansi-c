@@ -703,7 +703,7 @@ TEST_F(GomokuTest, AIvsAI_CompletesSuccessfully) {
     int current_index = (ai_game->current_player == AI_CELL_CROSSES) ? 0 : 1;
     ai_game->max_depth = ai_game->depth_for_player[current_index];
 
-    find_best_ai_move(ai_game, &x, &y);
+    find_best_ai_move(ai_game, &x, &y, NULL);
 
     ASSERT_GE(x, 0) << "AI should find a valid move";
     ASSERT_GE(y, 0) << "AI should find a valid move";
@@ -774,7 +774,7 @@ TEST_F(GomokuTest, AIvsAI_AsymmetricDepths) {
     int expected_depth = ai_game->depth_for_player[current_index];
 
     ai_game->max_depth = expected_depth;
-    find_best_ai_move(ai_game, &x, &y);
+    find_best_ai_move(ai_game, &x, &y, NULL);
 
     ASSERT_GE(x, 0) << "AI should find valid move at move " << (i + 1);
     ASSERT_GE(y, 0) << "AI should find valid move at move " << (i + 1);

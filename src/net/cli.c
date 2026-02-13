@@ -98,6 +98,7 @@ daemon_config_t daemon_parse_arguments(int argc, char *argv[]) {
       .daemonize = 0,
       .log_file = "",
       .log_level = DAEMON_LOG_INFO,
+      .report_scoring = 0,
       .show_help = 0,
       .invalid_args = 0,
   };
@@ -108,6 +109,7 @@ daemon_config_t daemon_parse_arguments(int argc, char *argv[]) {
       {"daemonize", no_argument, 0, 'd'},
       {"log-file", required_argument, 0, 'l'},
       {"log-level", required_argument, 0, 'L'},
+      {"report-scoring", no_argument, 0, 'r'},
       {"help", no_argument, 0, 'h'},
       {0, 0, 0, 0}};
 
@@ -117,7 +119,7 @@ daemon_config_t daemon_parse_arguments(int argc, char *argv[]) {
   // Reset getopt
   optind = 1;
 
-  while ((c = getopt_long(argc, argv, "b:a:dl:L:h", long_options,
+  while ((c = getopt_long(argc, argv, "b:a:dl:L:rh", long_options,
                           &option_index)) != -1) {
     switch (c) {
     case 'b':
@@ -162,6 +164,10 @@ daemon_config_t daemon_parse_arguments(int argc, char *argv[]) {
       }
       break;
     }
+
+    case 'r':
+      config.report_scoring = 1;
+      break;
 
     case 'h':
       config.show_help = 1;
@@ -221,6 +227,8 @@ void daemon_print_help(const char *program_name) {
   printf("  -L, --log-level <level>  Set log level (default: INFO)\n");
   printf("                           Levels: TRACE, DEBUG, INFO, WARN, ERROR, "
          "FATAL\n");
+  printf("  -r, --report-scoring     Include AI scoring report in JSON "
+         "responses\n");
   printf("  -h, --help               Show this help message\n\n");
 
   printf("ENDPOINTS:\n");

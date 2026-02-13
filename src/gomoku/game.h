@@ -37,6 +37,7 @@ typedef struct {
     int own_score;         // For AI moves, score of this position for the player
     int opponent_score;    // For AI moves, score of this position for opponent
     int is_winner;         // Whether this move won the game
+    double queue_wait_ms;  // Client-reported queue wait time in milliseconds
 } move_history_t;
 
 /**

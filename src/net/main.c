@@ -429,6 +429,12 @@ int main(int argc, char *argv[]) {
   // Initialize handlers (threat matrix, etc.)
   handlers_init();
 
+  // Set scoring report flag
+  if (config.report_scoring) {
+    handlers_set_report_scoring(1);
+    LOG_INFO("Scoring reports enabled in JSON responses");
+  }
+
   // Start HAProxy agent-check thread if configured
   if (config.agent_port > 0) {
     if (start_agent_thread(config.bind_host, config.agent_port) < 0) {

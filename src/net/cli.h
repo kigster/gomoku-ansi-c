@@ -39,6 +39,7 @@ typedef struct {
     int daemonize;                // Run as daemon (-d/--daemonize)
     char log_file[512];           // Log file path (-l/--log-file), empty = stdout
     daemon_log_level_t log_level; // Log level (-L/--log-level)
+    int report_scoring;           // Include scoring report in JSON (-r/--report-scoring)
     int show_help;                // Show help and exit
     int invalid_args;             // Invalid arguments detected
 } daemon_config_t;

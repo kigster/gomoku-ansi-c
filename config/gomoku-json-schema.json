@@ -27,8 +27,11 @@
       "description": "Search radius around existing stones for AI move generation"
     },
     "timeout": {
-      "type": "string",
-      "description": "Timeout setting for moves (e.g., 'none' or time in milliseconds)"
+      "oneOf": [
+        { "type": "string", "const": "none" },
+        { "type": "integer", "minimum": 0 }
+      ],
+      "description": "Move timeout: 'none' for unlimited, or seconds as integer"
     },
     "undo": {
       "type": "string",
@@ -37,8 +40,8 @@
     },
     "winner": {
       "type": "string",
-      "enum": ["none", "X", "O"],
-      "description": "Winner of the game, or 'none' if the game is still in progress"
+      "enum": ["none", "X", "O", "draw"],
+      "description": "Winner of the game: 'X', 'O', 'draw', or 'none' if still in progress"
     },
     "board_state": {
       "type": "array",
@@ -124,6 +127,57 @@
       "minItems": 2,
       "maxItems": 2
     },
+    "scoring_entry": {
+      "type": "object",
+      "description": "Result from a single evaluator step during AI move selection",
+      "required": ["player", "evaluator", "evaluated_moves", "score", "time_ms"],
+      "properties": {
+        "player": {
+          "type": "string",
+          "enum": ["current", "opponent"],
+          "description": "Whose perspective this evaluator checked: 'current' (AI to move) or 'opponent'"
+        },
+        "evaluator": {
+          "type": "string",
+          "enum": ["have_win", "block_threat", "have_vct", "block_vct", "block_open_three", "forcing_four", "minimax"],
+          "description": "Name of the evaluator step"
+        },
+        "evaluated_moves": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of candidate moves this evaluator examined"
+        },
+        "score": {
+          "type": "integer",
+          "description": "Best score found by this evaluator. Positive for current player advantage, negative for opponent threats"
+        },
+        "time_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Wall-clock time spent in this evaluator step (milliseconds)"
+        },
+        "decisive": {
+          "type": "boolean",
+          "description": "True if this evaluator determined the final move choice"
+        },
+        "have_win": {
+          "type": "boolean",
+          "description": "True if an immediate winning move was found"
+        },
+        "have_vct": {
+          "type": "boolean",
+          "description": "True if a Victory by Continuous Threats sequence was found"
+        },
+        "vct_sequence": {
+          "type": "array",
+          "description": "Sequence of forcing moves in the VCT (only present when have_vct is true)",
+          "items": {
+            "$ref": "#/$defs/coordinate"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "move": {
       "type": "object",
       "description": "A single move in the game. Contains exactly one move key identifying the player and move coordinates",
@@ -150,22 +204,52 @@
           "minimum": 0,
           "description": "Time taken for this move in milliseconds"
         },
+        "moves_evaluated": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of positions evaluated by AI for this move"
+        },
         "moves_searched": {
           "type": "integer",
           "minimum": 0,
-          "description": "Number of moves evaluated by AI for this move"
+          "description": "Deprecated: use moves_evaluated. Kept for backwards compatibility"
         },
         "score": {
           "type": "integer",
-          "description": "AI's evaluation score for the chosen move"
+          "description": "Threat score created by this move for the moving player"
         },
         "opponent": {
           "type": "integer",
-          "description": "Best score available to opponent after this move"
+          "description": "Threat score the opponent would have gained by playing here"
         },
         "winner": {
           "type": "boolean",
           "description": "True if this move wins the game"
+        },
+        "queue_wait_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Time spent waiting in the server queue before processing (milliseconds). Passed through from client request."
+        },
+        "offensive_max_score": {
+          "type": "integer",
+          "description": "Best offensive score found across all evaluators (only on last AI move, when --report-scoring is enabled)"
+        },
+        "defensive_max_score": {
+          "type": "integer",
+          "description": "Best opponent threat score found (negative value; only on last AI move, when --report-scoring is enabled)"
+        },
+        "think_time_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total AI thinking time for this move in milliseconds (only on last AI move, when --report-scoring is enabled)"
+        },
+        "scoring": {
+          "type": "array",
+          "description": "Detailed scoring report showing each evaluator step the AI ran to decide this move (only on last AI move, when --report-scoring is enabled)",
+          "items": {
+            "$ref": "#/$defs/scoring_entry"
+          }
         }
       },
       "additionalProperties": false

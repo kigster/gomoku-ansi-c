@@ -94,8 +94,8 @@ typedef struct {
 // Forward declarations
 static void print_board_with_padding(const char *json, int padding, int red_bg);
 static void print_timing_lines(int padding, double x_waited, double x_server,
-                                double x_queued, double o_waited,
-                                double o_server, double o_queued);
+                               double x_queued, double o_waited,
+                               double o_server, double o_queued);
 static void timer_tick_fn(void *ctx);
 
 //===============================================================================
@@ -268,9 +268,8 @@ static char *http_post_with_retry(const char *host, int port, const char *path,
 
   while (1) {
     int http_status = 0;
-    char *response =
-        http_post(host, port, path, body, &http_status,
-                  tick_ctx ? timer_tick_fn : NULL, tick_ctx);
+    char *response = http_post(host, port, path, body, &http_status,
+                               tick_ctx ? timer_tick_fn : NULL, tick_ctx);
 
     if (response) {
       return response; // Success
@@ -299,9 +298,8 @@ static char *http_post_with_retry(const char *host, int port, const char *path,
       if (tick_ctx) {
         struct timespec now;
         clock_gettime(CLOCK_MONOTONIC, &now);
-        double elapsed =
-            (double)(now.tv_sec - tick_ctx->start.tv_sec) +
-            (double)(now.tv_nsec - tick_ctx->start.tv_nsec) / 1e9;
+        double elapsed = (double)(now.tv_sec - tick_ctx->start.tv_sec) +
+                         (double)(now.tv_nsec - tick_ctx->start.tv_nsec) / 1e9;
 
         double x_waited = tick_ctx->timing_x->waited_total;
         double o_waited = tick_ctx->timing_o->waited_total;
@@ -311,15 +309,14 @@ static char *http_post_with_retry(const char *host, int port, const char *path,
           x_waited += elapsed;
 
         // Queued uses pre-request values (doesn't update until response)
-        double x_queued = tick_ctx->timing_x->waited_total -
-                          tick_ctx->timing_x->server_total;
-        double o_queued = tick_ctx->timing_o->waited_total -
-                          tick_ctx->timing_o->server_total;
+        double x_queued =
+            tick_ctx->timing_x->waited_total - tick_ctx->timing_x->server_total;
+        double o_queued =
+            tick_ctx->timing_o->waited_total - tick_ctx->timing_o->server_total;
 
         printf("\n");
-        print_timing_lines(padding, x_waited,
-                           tick_ctx->timing_x->server_total, x_queued,
-                           o_waited, tick_ctx->timing_o->server_total,
+        print_timing_lines(padding, x_waited, tick_ctx->timing_x->server_total,
+                           x_queued, o_waited, tick_ctx->timing_o->server_total,
                            o_queued);
       }
     }
@@ -444,7 +441,7 @@ static void print_board_with_padding(const char *json, int padding,
  * for "O". Values are in milliseconds.
  */
 static void parse_server_times(const char *json, double *x_time_ms,
-                                double *o_time_ms) {
+                               double *o_time_ms) {
   *x_time_ms = 0.0;
   *o_time_ms = 0.0;
 
@@ -486,8 +483,8 @@ static void parse_server_times(const char *json, double *x_time_ms,
  * Header/separator: bold green.  X row: red.  O row: yellow.
  */
 static void print_timing_lines(int padding, double x_waited, double x_server,
-                                double x_queued, double o_waited,
-                                double o_server, double o_queued) {
+                               double x_queued, double o_waited,
+                               double o_server, double o_queued) {
   if (x_queued < 0)
     x_queued = 0;
   if (o_queued < 0)
@@ -533,16 +530,13 @@ static void timer_tick_fn(void *ctx) {
     x_waited += elapsed;
 
   // Queued uses pre-request values (doesn't update until response arrives)
-  double x_queued =
-      tc->timing_x->waited_total - tc->timing_x->server_total;
-  double o_queued =
-      tc->timing_o->waited_total - tc->timing_o->server_total;
+  double x_queued = tc->timing_x->waited_total - tc->timing_x->server_total;
+  double o_queued = tc->timing_o->waited_total - tc->timing_o->server_total;
 
   // Move cursor up 4 lines to overwrite the timing table in-place
   printf("\033[4F");
   print_timing_lines(tc->padding, x_waited, tc->timing_x->server_total,
-                     x_queued, o_waited, tc->timing_o->server_total,
-                     o_queued);
+                     x_queued, o_waited, tc->timing_o->server_total, o_queued);
   fflush(stdout);
 }
 
@@ -718,9 +712,9 @@ int main(int argc, char *argv[]) {
     clock_gettime(CLOCK_MONOTONIC, &tick_ctx.start);
 
     // Send to server (with retry on 503 errors; board turns red during retries)
-    char *response = http_post_with_retry(host, port, "/gomoku/play",
-                                          game_state, 0, &errors, game_state,
-                                          3, &tick_ctx);
+    char *response =
+        http_post_with_retry(host, port, "/gomoku/play", game_state, 0, &errors,
+                             game_state, 3, &tick_ctx);
     if (!response) {
       fprintf(stderr, "Error: Failed to communicate with server\n");
       free(game_state);
@@ -757,8 +751,7 @@ int main(int argc, char *argv[]) {
       const char *label = NULL;
       int x = 0, y = 0;
       if (test_client_get_last_move(game_state, &label, &x, &y)) {
-        printf("%*sMove %d: %s plays [%d, %d]\n", 3, "", move_num, label, x,
-               y);
+        printf("%*sMove %d: %s plays [%d, %d]\n", 3, "", move_num, label, x, y);
       }
     }
 
