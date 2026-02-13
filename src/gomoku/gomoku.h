@@ -17,7 +17,7 @@
 
 #define GAME_NAME "Gomoku"
 #define GAME_BINARY "gomoku"
-#define GAME_VERSION "1.1.0"
+#define GAME_VERSION "1.1.1"
 #define GAME_AUTHOR "Konstantin Gredeskoul"
 #define GAME_LICENSE "MIT License"
 #define GAME_URL "https://github.com/kigster/gomoku-ansi-c"
