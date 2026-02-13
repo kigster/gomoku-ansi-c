@@ -1,0 +1,78 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+require "dry/cli"
+require "json"
+require "json_schemer"
+require "pathname"
+require "tty-box"
+require "stringio"
+
+module CLI
+  module Commands
+    extend Dry::CLI::Registry
+
+    module Output
+      class << self
+      attr_accessor :quiet
+        def included(base)
+          base.class_eval do 
+            def info(msg);    output TTY::Box.info(msg); end
+            def error(msg);   output TTY::Box.error(msg); end
+            def warn(msg);    output TTY::Box.warn(msg); end
+            def success(msg); output TTY::Box.success(msg); end
+            def output(msg);  ::CLI::Commands::Output.quiet ? puts('') : puts(msg); end
+          end
+        end
+      end
+    end
+
+    class ValidateJson < Dry::CLI::Command
+      include Output
+
+      desc "Validate a JSON file against a JSON Schema"
+
+      option :schema, aliases: ["-s"], required: true, default: 'config/gomoku-json-schema.json', desc: "Path to JSON Schema file"
+      option :file, aliases: ["-f"], required: true, default: 'config/sample-game.json', desc: "Path to JSON file to validate"
+
+      def call(schema:, file:, **)
+        schema_path = Pathname.new(schema)
+        file_path = Pathname.new(file)
+
+        unless schema_path.exist?
+          error "Schema file not found: #{schema_path}"
+          exit 1
+        end
+
+        unless file_path.exist?
+          error "JSON file not found: #{file_path}"
+          exit 1
+        end
+
+        schemer = JSONSchemer.schema(schema_path)
+        data = JSON.parse(file_path.read)
+
+        if schemer.valid?(data)
+          success "File #{file} is valid. Schema file used: #{schema_path}"
+          exit 0
+        end
+
+        msg = StringIO.new
+        schemer.validate(data).each do |error|
+          msg.puts " • #{error["data_pointer"]}: #{error["type"]} - #{error["details"]}"
+        end
+        error msg.string
+        exit 1
+      rescue JSON::ParserError => e
+        error "Invalid JSON in #{file_path}: #{e.message}"
+        exit 1
+      end
+    end
+  end
+end
+
+CLI::Commands.register "validate-json", CLI::Commands::ValidateJson
+CLI::Commands::Output.quiet = false
+
+Dry::CLI.new(CLI::Commands).call
