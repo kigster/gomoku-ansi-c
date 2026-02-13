@@ -176,6 +176,10 @@ tag:    	## Tag the current git version with the tag equal to the VERSION consta
 release:  	tag ## Update current VERSION tag to this SHA, and publish a new Github Release
 		gh release create $(TAG) --generate-notes
 
+validate-json: 	## Validates config/sample-game.json agains the JSON scheme in config/
+		@bundle check >/dev/null || bundle install -j
+		@TERM=xterm-256color bundle exec bin/schema-validator validate-json
+
 # CMake targets
 cmake-build: 	## Build using CMake (creates build directory and runs cmake ..)
 		mkdir -p $(BUILD_DIR)
