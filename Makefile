@@ -175,6 +175,16 @@ tag:    	## Tag the current git version with the tag equal to the VERSION consta
 release:  	tag ## Update current VERSION tag to this SHA, and publish a new Github Release
 		gh release create $(TAG) --generate-notes
 
+bundle:		## Install Ruby Dependencies
+		@/usr/bin/env bash -c " \
+			if [ -d ~/.rbenv/plugins/ruby-build ];  then \
+				cd ~/.rbenv/plugins/ruby-build; \
+				git pull --rebase || true; \
+		        fi \
+		"
+		command -v rbenv >/dev/null && rbenv install -s `cat .ruby-version | tr -d '\n'`
+		bundle install -j 4
+
 validate-json: 	## Validates config/sample-game.json agains the JSON scheme in config/
 		@bundle check >/dev/null || bundle install -j 8
 		@TERM=xterm-256color bundle exec bin/schema-validator validate-json
@@ -233,3 +243,15 @@ k8s-deploy: 	## Deploy all K8s resources with kustomize
 
 k8s-delete: 	## Delete all K8s resources
 		kubectl delete -k iac/k8s/
+
+cr-init: 	docker-build-all-amd64 ## Deploy to Cloud Run for the first time
+		@echo "Initial deploy..."
+		@echo "First we must authenticate you against Google Cloud..."
+	  	@gcloud auth application-default login
+		@cd ./iac/cloud_run && bash deploy.sh
+
+cr-update: 	docker-build-all-amd64 ## Update Cloud Run with the latest code
+		@echo "First we must authenticate you against Google Cloud..."
+	  	@gcloud auth application-default login
+		@cd ./iac/cloud_run && bash update.sh
+
