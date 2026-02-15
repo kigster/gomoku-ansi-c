@@ -7,6 +7,9 @@ REPO_NAME="gomoku-repo"
 BACKEND_IMAGE_NAME="gomoku-httpd"
 FRONTEND_IMAGE_NAME="gomoku-frontend"
 
+export PROJECT_ID="fine-booking-486503-k7"
+
+
 if [ -z "$PROJECT_ID" ]; then
     echo "Error: PROJECT_ID environment variable is not set."
     echo "Usage: export PROJECT_ID=your-project-id && ./deploy.sh"

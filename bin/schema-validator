@@ -15,7 +15,7 @@ module CLI
 
     module Output
       class << self
-      attr_accessor :quiet
+        attr_accessor :quiet
         def included(base)
           base.class_eval do 
             def info(msg);    output TTY::Box.info(msg); end
@@ -65,7 +65,7 @@ module CLI
         error msg.string
         exit 1
       rescue JSON::ParserError => e
-        error "Invalid JSON in #{file_path}: #{e.message}"
+        error "Invalid JSON in #{file_path}: #{e.message}" "#{e.inspect}"
         exit 1
       end
     end
