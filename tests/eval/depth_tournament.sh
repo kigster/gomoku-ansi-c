@@ -1,240 +1,294 @@
 #!/usr/bin/env bash
 #
-# Depth Tournament - Measures AI strength across different search depths
+# Depth & Radius Tournament - Measures AI strength across different search depths and radii
 #
-# Usage: ./depth_tournament.sh [--games N] [--depths "2,3,4,5"]
+# Usage: ./depth_tournament.sh [--games N] [--depths "2,3,4,5"] [--radiuses "2,3,4"]
 #
 
-set -e
+set +e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-GOMOKU="$ROOT_DIR/gomoku"
-OUTPUT_DIR="$ROOT_DIR/tests/eval/results"
+[[ -d ~/.bashmatic ]] || bash -c "$(curl -fsSL https://bashmatic.re1.re); bashmatic-install -q" >/dev/null 2>&1
+# shellcheck disable=SC1090
+source ~/.bashmatic/init >/dev/null 2>&1
+
+
+
+export SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+export GOMOKU="$ROOT_DIR/gomoku"
+export OUTPUT_DIR="$ROOT_DIR/tests/eval/results"
+export GAME_TIMEOUT=300
+
+# Store results there.
+export TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+export RESULTS_FILE="$OUTPUT_DIR/tournament-results-${TIMESTAMP}.txt"
 
 # Default parameters
-GAMES_PER_MATCHUP=20
-DEPTHS="2,3,4"
-RADIUS=2
-BOARD_SIZE=15
+export GAMES_PER_MATCHUP=20
+export DEPTHS="2,3,4"
+export RADIUSES="3,4,5"
+export BOARD_SIZE=15
+export WINS_DUE_HIGHER_DEPTH=0
+export WINS_DUE_LOWER_DEPTH=0
 
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-  case $1 in
-    --games)
-      GAMES_PER_MATCHUP="$2"
-      shift 2
-      ;;
-    --depths)
-      DEPTHS="$2"
-      shift 2
-      ;;
-    --radius)
-      RADIUS="$2"
-      shift 2
-      ;;
-    --board)
-      BOARD_SIZE="$2"
-      shift 2
-      ;;
-    *)
-      echo "Unknown option: $1"
-      exit 1
-      ;;
-  esac
-done
 
-# Check if gomoku binary exists
-if [[ ! -x "$GOMOKU" ]]; then
-  echo "Error: gomoku binary not found at $GOMOKU"
-  echo "Run 'make gomoku' first"
-  exit 1
-fi
+function key() {
+  echo -n "d${1}_r${2}" | tr -d '\n'
+}
 
-# Create output directory
-mkdir -p "$OUTPUT_DIR"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-RESULTS_FILE="$OUTPUT_DIR/tournament_$TIMESTAMP.txt"
+hdr() {
+  arrow.blk-on-cyn "$@"
+  cursor.up 4
+}
 
-# Parse depths into array
-IFS=',' read -ra DEPTH_ARRAY <<< "$DEPTHS"
+hdr2() {
+  echo
+  arrow.blk-on-ylw "$@"
+  cursor.up 2
+}
 
-echo "==========================================="
-echo "Gomoku AI Depth Tournament"
-echo "==========================================="
-echo "Games per matchup: $GAMES_PER_MATCHUP"
-echo "Depths: ${DEPTH_ARRAY[*]}"
-echo "Radius: $RADIUS"
-echo "Board: ${BOARD_SIZE}x${BOARD_SIZE}"
-echo "Results: $RESULTS_FILE"
-echo "==========================================="
-echo ""
+cursor.back() {
+  cursor.down "${1:-1}"
+}
 
-# Initialize results array
-declare -A WINS
-declare -A LOSSES
-declare -A DRAWS
+usage() {
+  # shellcheck disable=SC2059
+  printf "
+  ${bldgrn}USAGE:${clr}
 
-for d in "${DEPTH_ARRAY[@]}"; do
-  WINS[$d]=0
-  LOSSES[$d]=0
-  DRAWS[$d]=0
-done
+  ${bldylw}  ./depth_tournament.sh [OPTIONS]${clr}
 
-# Run tournament
-for ((i=0; i<${#DEPTH_ARRAY[@]}; i++)); do
-  for ((j=i+1; j<${#DEPTH_ARRAY[@]}; j++)); do
-    DEPTH_X="${DEPTH_ARRAY[$i]}"
-    DEPTH_O="${DEPTH_ARRAY[$j]}"
+  ${bldgrn}OPTIONS:${clr}
 
-    echo "--- Matchup: Depth $DEPTH_X (X) vs Depth $DEPTH_O (O) ---"
+  ${txtpur}  -g | --games N${clr}            Number of games per matchup (default: 20)
 
-    x_wins=0
-    o_wins=0
-    draws=0
+  ${txtpur}  -d | --depths "D1,D2,.."${clr}    Depth levels to test (default: 2,3,4)
+  ${txtpur}  -r | --radiuses "R1,R2,.."${clr}  Radius levels to test (default: 3,4,5)
+  ${txtpur}  -b | --board N${clr}            Board size (default: 15)
+  ${txtpur}  -t | --timeout N${clr}          Move timeout (default: 300)
+  
+  ${txtpur}  -h | --help${clr}               Show this help message and exit
+  ${clr}
+"
+}
 
-    for ((g=1; g<=GAMES_PER_MATCHUP; g++)); do
-      GAME_FILE="$OUTPUT_DIR/game_${DEPTH_X}v${DEPTH_O}_${g}.json"
+function parse.args() {
 
-      # Run game silently
-      # Use -d X:O format for asymmetric depths
-      "$GOMOKU" -x ai -o ai \
-        -d "${DEPTH_X}:${DEPTH_O}" \
-        -r "$RADIUS" -b "$BOARD_SIZE" \
-        -q -j "$GAME_FILE" 2>/dev/null
-
-      # Parse winner from JSON
-      if [[ -f "$GAME_FILE" ]]; then
-        winner=$(grep -o '"winner":"[^"]*"' "$GAME_FILE" | cut -d'"' -f4)
-        case "$winner" in
-          X)
-            ((++x_wins))
-            ;;
-          O)
-            ((++o_wins))
-            ;;
-          draw)
-            ((++draws))
-            ;;
-        esac
-        rm -f "$GAME_FILE"  # Clean up
-      fi
-
-      # Progress indicator
-      printf "\r  Game %d/%d: X(d%d)=%d, O(d%d)=%d, Draw=%d" \
-        "$g" "$GAMES_PER_MATCHUP" "$DEPTH_X" "$x_wins" "$DEPTH_O" "$o_wins" "$draws"
-    done
-    echo ""
-
-    # Record results (X plays first, so adjust for first-move advantage)
-    WINS[$DEPTH_X]=$((${WINS[$DEPTH_X]} + x_wins))
-    LOSSES[$DEPTH_X]=$((${LOSSES[$DEPTH_X]} + o_wins))
-    DRAWS[$DEPTH_X]=$((${DRAWS[$DEPTH_X]} + draws))
-
-    WINS[$DEPTH_O]=$((${WINS[$DEPTH_O]} + o_wins))
-    LOSSES[$DEPTH_O]=$((${LOSSES[$DEPTH_O]} + x_wins))
-    DRAWS[$DEPTH_O]=$((${DRAWS[$DEPTH_O]} + draws))
-
-    # Also run reverse matchup (swap who plays X)
-    echo "--- Matchup: Depth $DEPTH_O (X) vs Depth $DEPTH_X (O) ---"
-
-    x_wins_rev=0
-    o_wins_rev=0
-    draws_rev=0
-
-    for ((g=1; g<=GAMES_PER_MATCHUP; g++)); do
-      GAME_FILE="$OUTPUT_DIR/game_${DEPTH_O}v${DEPTH_X}_${g}.json"
-
-      "$GOMOKU" -x ai -o ai \
-        -d "${DEPTH_O}:${DEPTH_X}" \
-        -r "$RADIUS" -b "$BOARD_SIZE" \
-        -q -j "$GAME_FILE" 2>/dev/null
-
-      if [[ -f "$GAME_FILE" ]]; then
-        winner=$(grep -o '"winner":"[^"]*"' "$GAME_FILE" | cut -d'"' -f4)
-        case "$winner" in
-          X)
-            ((++x_wins_rev))
-            ;;
-          O)
-            ((++o_wins_rev))
-            ;;
-          draw)
-            ((++draws_rev))
-            ;;
-        esac
-        rm -f "$GAME_FILE"
-      fi
-
-      printf "\r  Game %d/%d: X(d%d)=%d, O(d%d)=%d, Draw=%d" \
-        "$g" "$GAMES_PER_MATCHUP" "$DEPTH_O" "$x_wins_rev" "$DEPTH_X" "$o_wins_rev" "$draws_rev"
-    done
-    echo ""
-
-    WINS[$DEPTH_O]=$((${WINS[$DEPTH_O]} + x_wins_rev))
-    LOSSES[$DEPTH_O]=$((${LOSSES[$DEPTH_O]} + o_wins_rev))
-    DRAWS[$DEPTH_O]=$((${DRAWS[$DEPTH_O]} + draws_rev))
-
-    WINS[$DEPTH_X]=$((${WINS[$DEPTH_X]} + o_wins_rev))
-    LOSSES[$DEPTH_X]=$((${LOSSES[$DEPTH_X]} + x_wins_rev))
-    DRAWS[$DEPTH_X]=$((${DRAWS[$DEPTH_X]} + draws_rev))
-
-    echo ""
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -g | --games)
+        export GAMES_PER_MATCHUP="$2"
+        shift 2
+        ;;
+      -d | --depths)
+        export DEPTHS="$2"
+        shift 2
+        ;;
+      -r | --radiuses)
+        export RADIUSES="$2"
+        shift 2
+        ;;
+      -b | --board)
+        export BOARD_SIZE="$2"
+        shift 2
+        ;;
+      -t | --timeout)
+        export GAME_TIMEOUT="$2"
+        shift 2
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *)
+        echo "Unknown option: $1"
+        exit 1
+        ;;
+    esac
   done
-done
+}
 
-# Print summary
-echo "==========================================="
-echo "TOURNAMENT RESULTS"
-echo "==========================================="
-echo ""
-printf "%-8s %8s %8s %8s %8s\n" "Depth" "Wins" "Losses" "Draws" "Win%"
-echo "-------------------------------------------"
-
-for d in "${DEPTH_ARRAY[@]}"; do
-  total=$((${WINS[$d]} + ${LOSSES[$d]} + ${DRAWS[$d]}))
-  if [[ $total -gt 0 ]]; then
-    win_pct=$(echo "scale=1; ${WINS[$d]} * 100 / $total" | bc)
-  else
-    win_pct="0.0"
+function init() {
+  # Check if gomoku binary exists
+  if [[ ! -x "$GOMOKU" ]]; then
+    error "Gomoku binary not found at $GOMOKU" "Run 'make gomoku' first"
+    exit 1
   fi
-  printf "%-8s %8d %8d %8d %7s%%\n" "D$d" "${WINS[$d]}" "${LOSSES[$d]}" "${DRAWS[$d]}" "$win_pct"
-done
 
-echo ""
-echo "Results saved to: $RESULTS_FILE"
+  # Create output directory
+  mkdir -p "$OUTPUT_DIR"
 
-# Save detailed results
-{
-  echo "Tournament: $TIMESTAMP"
-  echo "Games per matchup: $GAMES_PER_MATCHUP"
-  echo "Depths: ${DEPTH_ARRAY[*]}"
-  echo ""
-  printf "%-8s %8s %8s %8s %8s\n" "Depth" "Wins" "Losses" "Draws" "Win%"
+  # Parse depths and radiuses into arrays
+  IFS=',' read -ra DEPTH_ARRAY <<< "$DEPTHS"
+  IFS=',' read -ra RADIUS_ARRAY <<< "$RADIUSES"
+
+  h2bg "START: Gomoku AI Depth & Radius Tournament"
+
+  h2 "Parameters" \
+    "Games per match  : $GAMES_PER_MATCHUP" \
+    "Depths           : ${DEPTH_ARRAY[*]}" \
+    "Radiuses         : ${RADIUS_ARRAY[*]}" \
+    "Board size       : ${BOARD_SIZE}x${BOARD_SIZE}" \
+    "Move timeout     : ${GAME_TIMEOUT}s" \
+    "Results file     : $RESULTS_FILE"
+
+  h1 "Results:" "$RESULTS_FILE"
+
+  # Results keyed by "dDEPTH_rRADIUS" for each (depth, radius) combination
+  declare -A WINS
+  declare -A LOSSES
+  declare -A DRAWS
+
+  export WINS LOSSES DRAWS
+
+  cursor.back 3
+  export matches_played=0
+}
+
+
+function reset_stats() {
   for d in "${DEPTH_ARRAY[@]}"; do
-    total=$((${WINS[$d]} + ${LOSSES[$d]} + ${DRAWS[$d]}))
-    if [[ $total -gt 0 ]]; then
-      win_pct=$(echo "scale=1; ${WINS[$d]} * 100 / $total" | bc)
-    else
-      win_pct="0.0"
-    fi
-    printf "%-8s %8d %8d %8d %7s%%\n" "D$d" "${WINS[$d]}" "${LOSSES[$d]}" "${DRAWS[$d]}" "$win_pct"
+    for r in "${RADIUS_ARRAY[@]}"; do
+      key=$(key "${d}" "${r}")
+      WINS["$key"]=0
+      LOSSES["$key"]=0
+      DRAWS["$key"]=0
+    done
   done
-} > "$RESULTS_FILE"
+}
 
-# Validation: Higher depth should win more
-echo ""
-echo "VALIDATION:"
-prev_wins=0
-all_passed=true
-for d in "${DEPTH_ARRAY[@]}"; do
-  if [[ ${WINS[$d]} -lt $prev_wins ]]; then
-    echo "  WARNING: Depth $d has fewer wins than lower depth"
-    all_passed=false
+
+function print_results() { 
+  local RADIUS="$1"
+  # Print summary (all depth x radius combinations)
+
+  declare -a RESULTS
+  RESULTS=()
+
+  r="$RADIUS"
+  for d in "${DEPTH_ARRAY[@]}"; do
+    key=$(key "${d}" "${r}")
+    total=$((${WINS["$key"]} + ${LOSSES["$key"]} + ${DRAWS["$key"]}))
+    if [[ $total -gt 0 ]]; then
+      win_pct=$(echo "scale=1; ${WINS["$key"]} * 100 / $total" | bc)
+    else
+      win_pct="0"
+    fi
+    result_string="$(printf "%8d | %8d | %8d | %8d | %8d | %6.2f" "${d}" "${r}" "${WINS["$key"]}" "${LOSSES["$key"]}" "${DRAWS["$key"]}" "$win_pct")"
+    RESULTS+=( "$result_string" )
+  done
+  echo;echo; echo 
+
+  h3bg "TOURNAMENT RESULTS for Radius ${RADIUS}" \
+    "$(printf "%8s | %8s | %8s | %8s | %8s | %7s" "Depth" "Radius" "Wins" "Losses" "Draws" "Win %%")" \
+    "${RESULTS[@]}"
+}
+
+
+function print_summary() {
+  local RADIUS="$1"
+  if [[ ${WINS_DUE_HIGHER_DEPTH} -gt ${WINS_DUE_LOWER_DEPTH} ]]; then
+    percentage=$(echo "scale=1; ${WINS_DUE_HIGHER_DEPTH} * 100 / (${WINS_DUE_HIGHER_DEPTH} + ${WINS_DUE_LOWER_DEPTH})" | bc)
+    h2bg "WIN BIAS @ Radius $RADIUS: Higher depths have more wins than lower depths: " "${WINS_DUE_HIGHER_DEPTH} wins vs ${WINS_DUE_LOWER_DEPTH} losses, a win ratio of $(printf "%5.2f%% Wins" "${percentage}")"
+    return 0
+  else
+    percentage=$(echo "scale=1; (100.0 - ${WINS_DUE_LOWER_DEPTH} * 100 / (${WINS_DUE_HIGHER_DEPTH} + ${WINS_DUE_LOWER_DEPTH})" | bc)
+    error   "WIN BIAS @ Radius $RADIUS: Higher depths have FEWER wins than lower depths:" "${WINS_DUE_HIGHER_DEPTH} wins vs ${WINS_DUE_LOWER_DEPTH} losses, a loss ratio of $(printf "%5.2f%% Wins" "${percentage}")"
+    return 1
   fi
-  prev_wins=${WINS[$d]}
-done
+}
 
-if $all_passed; then
-  echo "  PASS: Higher depths consistently beat lower depths"
-fi
+
+function compute.radius() {
+  local RADIUS="$1"\
+  
+  reset_stats
+
+  for ((i=0; i<${#DEPTH_ARRAY[@]}; i++)); do
+    for ((j=0; j<${#DEPTH_ARRAY[@]}; j++)); do
+      [[ $i -eq $j ]] && continue
+      DEPTH_X="${DEPTH_ARRAY[$i]}"
+      DEPTH_O="${DEPTH_ARRAY[$j]}"
+      echo; echo
+      hdr2 "R: ${RADIUS}       |  X(d${DEPTH_X})      |  O(d${DEPTH_O})      | Matches Played → $(printf "%2d" "${matches_played}")         "
+
+      export x_wins=0
+      export o_wins=0
+      export draws=0
+
+      for ((g=1; g<=GAMES_PER_MATCHUP; g++)); do
+        GAME_FILE="$OUTPUT_DIR/game-r${RADIUS}-d${DEPTH_X}-d${DEPTH_O}-b${BOARD_SIZE}-${g}.json"
+
+        # Run game silently with move timeout (seconds)
+        timeout $((GAME_TIMEOUT + 5)) "$GOMOKU" -x ai -o ai -s \
+          -d "${DEPTH_X}:${DEPTH_O}" \
+          -r "$RADIUS" -b "$BOARD_SIZE" \
+          -t "$GAME_TIMEOUT" \
+          -q -j "${GAME_FILE}" 2>/dev/null || true
+
+        export matches_played=$((matches_played + 1))
+
+        # Parse winner from JSON
+        if [[ -f "$GAME_FILE" ]]; then
+          winner=$(grep -o '"winner":"[^"]*"' "$GAME_FILE" | cut -d'"' -f4)
+          case "$winner" in
+            X)
+              ((++x_wins))
+              ;;
+            O)
+              ((++o_wins))
+              ;;
+            draw)
+              ((++draws))
+              ;;
+          esac
+          rm -f "$GAME_FILE"  # Clean up
+        fi
+
+        # Progress indicator
+        hdr "$(printf "Game %2d/%2d |  X(d%d) → %2d |  O(d%d) → %2d | Draw → %2d         " "$g" "$GAMES_PER_MATCHUP" "$DEPTH_X" "$x_wins" "$DEPTH_O" "$o_wins" "$draws")"        
+        if [[ $DEPTH_X -gt $DEPTH_O && $winner = "X" || $DEPTH_O -gt $DEPTH_X && $winner = "O" ]]; then
+          WINS_DUE_HIGHER_DEPTH=$((WINS_DUE_HIGHER_DEPTH + 1))
+        elif [[ $DEPTH_X -lt $DEPTH_O && $winner = "X" || $DEPTH_O -lt $DEPTH_X && $winner = "O" ]]; then
+          WINS_DUE_LOWER_DEPTH=$((WINS_DUE_LOWER_DEPTH + 1))
+        fi
+      done
+
+      key_x="d${DEPTH_X}_r${RADIUS}"
+      key_o="d${DEPTH_O}_r${RADIUS}"
+      # Record results (X plays first)
+      WINS["$key_x"]=$((${WINS["$key_x"]} + x_wins))
+      LOSSES["$key_x"]=$((${LOSSES["$key_x"]} + o_wins))
+      DRAWS["$key_x"]=$((${DRAWS["$key_x"]} + draws))
+
+      WINS["$key_o"]=$((${WINS["$key_o"]} + o_wins))
+      LOSSES["$key_o"]=$((${LOSSES["$key_o"]} + x_wins))
+      DRAWS["$key_o"]=$((${DRAWS["$key_o"]} + draws))
+    done
+  done
+
+  print_results "${RADIUS}"
+  print_summary "${RADIUS}"
+}
+
+
+function compute.all-radiuses() {
+  # Run tournament: outer loop over radius, inner over all ordered depth pairs (i,j), i != j
+  local r
+  for r in "${RADIUS_ARRAY[@]}"; do
+    compute.radius "${r}"
+  done
+}
+
+function main() {
+  parse.args "$@"
+  init
+  compute.all-radiuses
+}
+
+rm -f "$RESULTS_FILE" && touch "$RESULTS_FILE"
+
+( main "$@" 2>&1 ) | /usr/bin/tee -a "$RESULTS_FILE"
+
+exit $?
