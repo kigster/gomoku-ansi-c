@@ -137,30 +137,30 @@ test-daemon: 	$(DAEMON_TEST_TARGET) ## Run daemon unit tests
 		GREP_COLOR=32 ./$(DAEMON_TEST_TARGET) | grep --color=always -E 'Daemon[A-Za-z]*Test\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
 
 # AI Evaluation targets
-EVAL_DIR = tests/eval
+EVAL_DIR 	= tests/evals
 
 evals: 		$(TARGET) $(DAEMON_TARGET) ## Run all AI evaluation scripts
 		@echo "=== Running Tactical Tests ==="
-		@chmod +x $(EVAL_DIR)/run_tactical_tests.sh
-		-@$(EVAL_DIR)/run_tactical_tests.sh
+		@chmod +x $(EVAL_DIR)/bash/run-tactical-tests
+		-@$(EVAL_DIR)/bash/run-tactical-tests
 		@echo ""
 		@echo "=== Running Depth Tournament ==="
-		@chmod +x $(EVAL_DIR)/depth_tournament.sh
-		@$(EVAL_DIR)/depth_tournament.sh --games 10 --depths "2,3,4"
+		@chmod +x $(EVAL_DIR)/bash/depth-tournament
+		@$(EVAL_DIR)/bash/depth-tournament --games 10 --depths "2,3,4"
 
 eval-tactical: 	$(TARGET) $(DAEMON_TARGET) ## Run tactical position tests
 		@echo "=== Running Tactical Tests ==="
-		@chmod +x $(EVAL_DIR)/run_tactical_tests.sh
-		-@$(EVAL_DIR)/run_tactical_tests.sh
+		@chmod +x $(EVAL_DIR)/bash/run-tactical-tests
+		-@$(EVAL_DIR)/bash/run-tactical-tests
 
 eval-tournament: $(TARGET) ## Run depth tournament (AI vs AI at different depths)
 		@echo "=== Running Depth Tournament ==="
-		@chmod +x $(EVAL_DIR)/depth_tournament.sh
-		@$(EVAL_DIR)/depth_tournament.sh --games 10 --depths "2,3,4"
+		@chmod +x $(EVAL_DIR)/bash/depth-tournament
+		@$(EVAL_DIR)/bash/depth-tournament --games 10 --depths "2,3,4"
 
 eval-llm: 	$(TARGET) ## Run LLM-based game evaluation (requires ANTHROPIC_API_KEY)
 		@echo "=== Running LLM Evaluation ==="
-		@uv run $(EVAL_DIR)/llm_eval.py
+		@uv run $(EVAL_DIR)/python/llm_eval.py
 
 clean:  	cmake-clean ## Clean up all the intermediate objects
 		rm -f $(TARGET) $(TEST_TARGET) $(OBJECTS) tests/gomoku_test.o
