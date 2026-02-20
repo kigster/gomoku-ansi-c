@@ -2,7 +2,7 @@
 /iac/config/haproxy.cfg
 /iac/config/nginx.conf
 /.idea
-/tests/eval/results/*
+/tests/evals/results/*
 gomoku
 gomoku-httpd
 gomoku-http-client

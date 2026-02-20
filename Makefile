@@ -255,3 +255,14 @@ cr-update: 	docker-build-all-amd64 ## Update Cloud Run with the latest code
 	  	@gcloud auth application-default login
 		@cd ./iac/cloud_run && bash update.sh
 
+evals-bash: 	## Runs tournamets comparing win ratios of various depth and radii using BASH
+		tests/evals/bash/depth-tournament -d 1,2,3 -r 3,4 --games 10
+
+evals-ruby: 	## Runs tournamets against a gomoku-httpd cluster behind envoy (gctl start)
+		echo "Starting gomoku-httpd cluster behind envoy..."
+		( gctl ps | grep -q -E 'gomoku-httpd' && gctl ps | grep -q -E 'envoy') && \
+			echo "Cluster is already up :)" || gctl start -p envoy
+		@cd tests/evals/ruby && (bundle check || bundle install -j 12) && \
+			bundle exec depth-tournament tournament -d 1,2,3,4 -r 2,3 --games 5 --verbose;  
+		@cd $(CURRENT_DiR)
+

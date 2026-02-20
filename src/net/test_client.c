@@ -593,38 +593,59 @@ static void print_usage(const char *program) {
   printf("OPTIONS:\n");
   printf("  -h, --host <host>     Server host (default: %s)\n", DEFAULT_HOST);
   printf("  -p, --port <port>     Server port (default: %d)\n", DEFAULT_PORT);
-  printf("  -d, --depth <n>       AI search depth 1-6 (default: 2)\n");
+  printf(
+      "  -d, --depth <n[:n]>   AI depth 1-6, or X:Y for X vs O (default: 2)\n");
   printf("  -r, --radius <n>      Search radius 1-4 (default: 2)\n");
   printf("  -b, --board <n>       Board size 15 or 19 (default: 15)\n");
+  printf("  -t, --timeout <n>     Move timeout in seconds (default: none)\n");
   printf("  -j, --json <file>     Save game to JSON file when finished\n");
+  printf("  -q, --quiet           No terminal output (for batch/tournament)\n");
   printf("  -v, --verbose         Show game state after each move\n");
   printf("  --help                Show this help message\n\n");
   printf("EXAMPLE:\n");
-  printf("  %s -h localhost -p 3000 -d 3 -r 2 -b 15 -j game.json\n", program);
+  printf("  %s -p 10000 -d 2:3 -r 3 -b 15 -t 300 -q -j game.json\n", program);
+}
+
+static int parse_depth_arg(const char *optarg, int *depth_x, int *depth_o) {
+  const char *colon = strchr(optarg, ':');
+  if (colon) {
+    *depth_x = atoi(optarg);
+    *depth_o = atoi(colon + 1);
+  } else {
+    *depth_x = atoi(optarg);
+    *depth_o = *depth_x;
+  }
+  if (*depth_x < 1 || *depth_x > 6 || *depth_o < 1 || *depth_o > 6)
+    return -1;
+  return 0;
 }
 
 int main(int argc, char *argv[]) {
   const char *host = DEFAULT_HOST;
   int port = DEFAULT_PORT;
-  int depth = 2;
+  int depth_x = 2, depth_o = 2;
   int radius = 2;
   int board_size = 15;
+  int move_timeout = 0;
   const char *json_file = NULL;
   int verbose = 0;
+  int quiet = 0;
 
   static struct option long_options[] = {{"host", required_argument, 0, 'h'},
                                          {"port", required_argument, 0, 'p'},
                                          {"depth", required_argument, 0, 'd'},
                                          {"radius", required_argument, 0, 'r'},
                                          {"board", required_argument, 0, 'b'},
+                                         {"timeout", required_argument, 0, 't'},
                                          {"json", required_argument, 0, 'j'},
+                                         {"quiet", no_argument, 0, 'q'},
                                          {"verbose", no_argument, 0, 'v'},
                                          {"help", no_argument, 0, '?'},
                                          {0, 0, 0, 0}};
 
   int c;
-  while ((c = getopt_long(argc, argv, "h:p:d:r:b:j:v", long_options, NULL)) !=
-         -1) {
+  while ((c = getopt_long(argc, argv, "h:p:d:r:b:t:j:qv", long_options,
+                          NULL)) != -1) {
     switch (c) {
     case 'h':
       host = optarg;
@@ -637,9 +658,8 @@ int main(int argc, char *argv[]) {
       }
       break;
     case 'd':
-      depth = atoi(optarg);
-      if (depth < 1 || depth > 6) {
-        fprintf(stderr, "Error: Depth must be 1-6\n");
+      if (parse_depth_arg(optarg, &depth_x, &depth_o) != 0) {
+        fprintf(stderr, "Error: Depth must be 1-6 or X:Y (e.g. 2:3)\n");
         return 1;
       }
       break;
@@ -657,8 +677,18 @@ int main(int argc, char *argv[]) {
         return 1;
       }
       break;
+    case 't':
+      move_timeout = atoi(optarg);
+      if (move_timeout < 0) {
+        fprintf(stderr, "Error: Timeout must be non-negative\n");
+        return 1;
+      }
+      break;
     case 'j':
       json_file = optarg;
+      break;
+    case 'q':
+      quiet = 1;
       break;
     case 'v':
       verbose = 1;
@@ -673,17 +703,22 @@ int main(int argc, char *argv[]) {
   // Disable output buffering for real-time display
   setvbuf(stdout, NULL, _IONBF, 0);
 
-  printf("Connecting to gomoku-http-daemon at %s:%d\n", host, port);
-  printf("Server plays both sides (depth=%d, radius=%d, board=%d)\n\n", depth,
-         radius, board_size);
+  if (!quiet) {
+    printf("Connecting to gomoku-http-daemon at %s:%d\n", host, port);
+    printf("Server plays both sides (X depth=%d, O depth=%d, radius=%d, "
+           "board=%d)\n\n",
+           depth_x, depth_o, radius, board_size);
+  }
 
-  // Start with initial game state - human makes first move
-  char *game_state =
-      test_client_create_initial_game_state(board_size, depth, radius);
+  // Start with initial game state (AI vs AI with optional timeout)
+  char *game_state = test_client_create_initial_game_state_ex(
+      board_size, depth_x, depth_o, radius, move_timeout);
   if (!game_state) {
     fprintf(stderr, "Error: Memory allocation failed\n");
     return 1;
   }
+
+  sleep(2);
 
   int move_num = 0;
   const char *winner = "none";
@@ -693,18 +728,19 @@ int main(int argc, char *argv[]) {
   player_timing_t timing_x = {0.0, 0.0};
   player_timing_t timing_o = {0.0, 0.0};
 
-  // Print initial timing display before the first request
-  printf("\033[2J\033[H"); // Clear screen
-  for (int i = 0; i < 3; i++)
-    printf("\n"); // Padding
-  printf("\n");   // Blank line before timing
-  print_timing_lines(3, 0, 0, 0, 0, 0, 0);
+  if (!quiet) {
+    printf("\033[2J\033[H"); // Clear screen
+    for (int i = 0; i < 3; i++)
+      printf("\n"); // Padding
+    printf("\n");   // Blank line before timing
+    print_timing_lines(3, 0, 0, 0, 0, 0, 0);
+  }
 
   while (strcmp(winner, "none") == 0) {
     // X plays on even moves (0, 2, 4...), O on odd (1, 3, 5...)
     int is_o_turn = (move_num % 2 == 1);
 
-    // Set up timer context for live display updates
+    // Set up timer context for live display updates (NULL when quiet)
     tick_context_t tick_ctx = {.timing_x = &timing_x,
                                .timing_o = &timing_o,
                                .is_o_turn = is_o_turn,
@@ -712,9 +748,10 @@ int main(int argc, char *argv[]) {
     clock_gettime(CLOCK_MONOTONIC, &tick_ctx.start);
 
     // Send to server (with retry on 503 errors; board turns red during retries)
+    tick_context_t *tick_ptr = quiet ? NULL : &tick_ctx;
     char *response =
         http_post_with_retry(host, port, "/gomoku/play", game_state, 0, &errors,
-                             game_state, 3, &tick_ctx);
+                             game_state, 3, tick_ptr);
     if (!response) {
       fprintf(stderr, "Error: Failed to communicate with server\n");
       free(game_state);
@@ -742,69 +779,58 @@ int main(int argc, char *argv[]) {
     timing_x.server_total = x_ms / 1000.0;
     timing_o.server_total = o_ms / 1000.0;
 
-    // Always print the board with padding (normal background)
-    print_board_with_padding(game_state, 3, 0);
-
-    move_num++;
-
-    if (verbose) {
-      const char *label = NULL;
-      int x = 0, y = 0;
-      if (test_client_get_last_move(game_state, &label, &x, &y)) {
-        printf("%*sMove %d: %s plays [%d, %d]\n", 3, "", move_num, label, x, y);
+    if (!quiet) {
+      print_board_with_padding(game_state, 3, 0);
+      if (verbose) {
+        const char *label = NULL;
+        int x = 0, y = 0;
+        if (test_client_get_last_move(game_state, &label, &x, &y)) {
+          printf("%*sMove %d: %s plays [%d, %d]\n", 3, "", move_num, label, x,
+                 y);
+        }
       }
+      double x_queued = timing_x.waited_total - timing_x.server_total;
+      double o_queued = timing_o.waited_total - timing_o.server_total;
+      printf("\n");
+      print_timing_lines(3, timing_x.waited_total, timing_x.server_total,
+                         x_queued, timing_o.waited_total, timing_o.server_total,
+                         o_queued);
     }
 
-    // Print timing status lines below the board
+    move_num++;
+    winner = get_winner(game_state);
+  }
+
+  if (!quiet) {
+    print_board_with_padding(game_state, 3, 0);
     double x_queued = timing_x.waited_total - timing_x.server_total;
     double o_queued = timing_o.waited_total - timing_o.server_total;
-
     printf("\n");
     print_timing_lines(3, timing_x.waited_total, timing_x.server_total,
                        x_queued, timing_o.waited_total, timing_o.server_total,
                        o_queued);
-
-    // Check for winner after move
-    winner = get_winner(game_state);
-  }
-
-  // Print the final board (already printed in loop, but print again for
-  // clarity)
-  print_board_with_padding(game_state, 3, 0);
-
-  // Final timing
-  double x_queued = timing_x.waited_total - timing_x.server_total;
-  double o_queued = timing_o.waited_total - timing_o.server_total;
-  printf("\n");
-  print_timing_lines(3, timing_x.waited_total, timing_x.server_total, x_queued,
-                     timing_o.waited_total, timing_o.server_total, o_queued);
-
-  printf("\n");
-  if (strcmp(winner, "X") == 0) {
-    printf("%*sGame over: X wins!\n", 3, "");
-  } else if (strcmp(winner, "O") == 0) {
-    printf("%*sGame over: O wins!\n", 3, "");
-  } else if (strcmp(winner, "draw") == 0) {
-    printf("%*sGame over: Draw!\n", 3, "");
-  }
-
-  printf("%*sTotal moves: %d\n", 3, "", move_num);
-
-  // Print server error summary if any occurred
-  if (error_tracker_total(&errors) > 0) {
-    printf("%*sServer errors: %d total", 3, "", error_tracker_total(&errors));
-    for (int i = 0; i < errors.num_entries; i++) {
-      printf("%s %d=%d", (i > 0) ? "," : " (", errors.entries[i].status_code,
-             errors.entries[i].count);
+    printf("\n");
+    if (strcmp(winner, "X") == 0) {
+      printf("%*sGame over: X wins!\n", 3, "");
+    } else if (strcmp(winner, "O") == 0) {
+      printf("%*sGame over: O wins!\n", 3, "");
+    } else if (strcmp(winner, "draw") == 0) {
+      printf("%*sGame over: Draw!\n", 3, "");
     }
-    printf(")\n");
-  }
-
-  // Save game to JSON file if specified
-  if (json_file) {
-    if (save_game_json(json_file, game_state, &errors)) {
+    printf("%*sTotal moves: %d\n", 3, "", move_num);
+    if (error_tracker_total(&errors) > 0) {
+      printf("%*sServer errors: %d total", 3, "", error_tracker_total(&errors));
+      for (int i = 0; i < errors.num_entries; i++) {
+        printf("%s %d=%d", (i > 0) ? "," : " (", errors.entries[i].status_code,
+               errors.entries[i].count);
+      }
+      printf(")\n");
+    }
+    if (json_file && save_game_json(json_file, game_state, &errors)) {
       printf("%*sGame saved to: %s\n", 3, "", json_file);
     }
+  } else if (json_file) {
+    save_game_json(json_file, game_state, &errors);
   }
 
   free(game_state);

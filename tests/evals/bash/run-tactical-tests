@@ -1,0 +1,284 @@
+#!/usr/bin/env bash
+#
+# Tactical Test Runner - Verifies AI finds correct moves in known positions
+# Usage: ./run-tactical-tests [--verbose] [--test NAME] [--port N]
+#
+# Written by Claude, refactored to match depth-tournament style
+
+set +e
+
+[[ -d ~/.bashmatic ]] || bash -c "$(curl -fsSL https://bashmatic.re1.re); bashmatic-install -q" >/dev/null 2>&1
+# shellcheck disable=SC1090
+source ~/.bashmatic/init >/dev/null 2>&1
+
+export SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export ROOT_DIR="$(cd "$SCRIPT_DIR/../../../" && pwd -P)"
+
+export HTTPD="$ROOT_DIR/gomoku-httpd"
+export TESTS_DIR="$SCRIPT_DIR/expectations"
+
+
+# Store results there.
+export TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+export OUTPUT_DIR="$SCRIPT_DIR/../results"
+export RESULTS_FILE="$OUTPUT_DIR/tactical-tests-results-${TIMESTAMP}.txt"
+
+export VERBOSE=false
+export SINGLE_TEST=""
+export PORT=18080
+
+# Counters (used across functions)
+export passed=0
+export failed=0
+export total=0
+
+usage() {
+  # shellcheck disable=SC2059
+  printf "
+  ${bldgrn}USAGE:${clr}
+
+  ${bldylw}  ./run-tactical-tests [OPTIONS]${clr}
+
+  ${bldgrn}OPTIONS:${clr}
+
+  ${txtpur}  -v | --verbose${clr}         Show full API response for each test
+  ${txtpur}  -t | --test NAME${clr}       Run only the test with this name (filename without .json)
+  ${txtpur}  -p | --port N${clr}          HTTP port for gomoku-httpd (default: 18080)
+  ${txtpur}  -h | --help${clr}            Show this help message and exit
+  ${clr}
+"
+}
+
+function parse.args() {
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -v | --verbose)
+        export VERBOSE=true
+        shift
+        ;;
+      -t | --test)
+        export SINGLE_TEST="$2"
+        shift 2
+        ;;
+      -p | --port)
+        export PORT="$2"
+        shift 2
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *)
+        echo "Unknown option: $1"
+        exit 1
+        ;;
+    esac
+  done
+}
+
+cursor.back() {
+  cursor.down "${1:-1}"
+}
+
+function test_success() {
+  h2bg "$@"
+} 
+
+function test_failure() {
+  box.black-on-red "$@"
+}
+
+function test_partial_failure() {
+  h3bg "$@"
+}
+
+function test_announce() {
+  h1bg "$@"
+  cursor.up 2
+}
+
+function check_deps() {
+  if [[ ! -x "$HTTPD" ]]; then
+    error "gomoku-httpd not found" "Run 'make gomoku-httpd' first"
+    exit 1
+  fi
+
+  if ! command -v curl &> /dev/null; then
+    error "curl is required"
+    exit 1
+  fi
+
+  if ! command -v jq &> /dev/null; then
+    error "jq is required" "Install with: brew install jq"
+    exit 1
+  fi
+}
+
+function start_httpd() {
+  pkill -f "gomoku-httpd.*$PORT" 2>/dev/null || true
+  sleep 0.5
+  "$HTTPD" -b "127.0.0.1:$PORT" -d
+  sleep 1
+}
+
+function cleanup() {
+  pkill -f "gomoku-httpd.*$PORT" 2>/dev/null || true
+}
+
+function run_one_test() {
+  local test_file="$1"
+  local test_name
+  test_name=$(basename "$test_file" .json)
+
+  local name description category difficulty
+  name=$(jq -r '.name' "$test_file")
+  description=$(jq -r '.description' "$test_file")
+  category=$(jq -r '.category' "$test_file")
+  difficulty=$(jq -r '.difficulty' "$test_file")
+
+  test_announce "Test: $name" \
+     "  Category: $category | Difficulty: $difficulty" \
+     "  $description"
+
+  local response
+  response=$(curl -s -X POST "http://127.0.0.1:$PORT/gomoku/play" \
+    -H "Content-Type: application/json" \
+    -d "@$test_file")
+
+  if [[ $VERBOSE == true ]]; then
+    info "  Response: $response" | head -c 200
+    echo
+  fi
+
+  local ai_move
+  ai_move=$(echo "$response" | jq -r '.moves[-1] | to_entries[] | select(.value | type == "array") | .value | @json')
+
+  if [[ -z "$ai_move" || "$ai_move" == "null" ]]; then
+    test_failure "  ERROR: Could not extract AI move from response"
+    ((failed++))
+    echo ""
+    return 1
+  fi
+
+  local move_x move_y
+  move_x=$(echo "$ai_move" | jq '.[0]')
+  move_y=$(echo "$ai_move" | jq '.[1]')
+
+  # Check expected moves
+  local expected_moves
+  expected_moves=$(jq -r '.expected_moves // empty' "$test_file" | tr -d '\n' | sed -E 's/  */ /g')
+
+  if [[ -n "$expected_moves" ]]; then
+    local match
+    match=$(echo "$expected_moves" | jq --argjson x "$move_x" --argjson y "$move_y" \
+      'any(.[]; .[0] == $x and .[1] == $y)')
+
+    if [[ "$match" == "true" ]]; then
+      test_success "  PASS: AI played [$move_x, $move_y] (expected)"
+      ((passed++))
+    else
+      test_failure "  FAIL: AI played [$move_x, $move_y]" \
+            "        Expected one of: $expected_moves"
+      ((failed++))
+    fi
+  fi
+
+  # Check forbidden moves
+  local forbidden_moves
+  forbidden_moves=$(jq -r '.forbidden_moves // empty' "$test_file")
+
+  if [[ -n "$forbidden_moves" ]]; then
+    local is_forbidden
+    is_forbidden=$(echo "$forbidden_moves" | jq --argjson x "$move_x" --argjson y "$move_y" \
+      'any(.[]; .[0] == $x and .[1] == $y)')
+
+    if [[ "$is_forbidden" == "true" ]]; then
+      test_failure "  FAIL: AI played forbidden move [$move_x, $move_y]"
+      ((failed++))
+    else
+      local expected_behavior
+      expected_behavior=$(jq -r '.expected_behavior // empty' "$test_file")
+      if [[ "$expected_behavior" == "offensive" ]]; then
+        test_success "  PASS: AI avoided defensive trap, played [$move_x, $move_y]"
+        ((passed++))
+      fi
+    fi
+  fi
+
+  echo ""
+  return 0
+}
+
+function run_all_tests() {
+  h3bg "TACTICAL TEST SUITE" \
+       "Expectations are in: $TESTS_DIR"
+
+  local test_file
+  for test_file in $(find $TESTS_DIR -type f -name '*.json'); do
+    [[ -f "$test_file" ]] || continue
+
+    local test_name
+    test_name=$(basename "$test_file" .json)
+
+    if [[ -n "$SINGLE_TEST" && "$test_name" != "$SINGLE_TEST" ]]; then
+      continue
+    fi
+
+    ((total++))
+    run_one_test "$test_file"
+  done
+}
+
+function print_summary() {
+  h3bg "TACTICAL TESTING RESULTS" \
+   "Total :  $total" \
+   "Passed:  $passed" \
+   "Failed:  $failed"
+
+  if [[ $total -gt 0 ]]; then
+    local pct
+    pct=$((passed * 100 / total))
+    echo "Score:  $pct%"
+  fi
+
+  echo ""
+
+  if [[ $failed -gt 0 ]]; then
+    echo "STATUS: SOME TESTS FAILED"
+    return 1
+  else
+    echo "STATUS: ALL TESTS PASSED"
+    return 0
+  fi
+}
+
+function init() {
+  check_deps
+
+  h2bg "TACTICAL TEST RUNNER"
+  h2 "Parameters" \
+    "Port      : $PORT" \
+    "Verbose   : $VERBOSE" \
+    "Filter    : ${SINGLE_TEST:-(all tests)}" \
+    "Tests dir : $TESTS_DIR" \
+    "Results   : $(cd "$(dirname "${RESULTS_FILE}")" && pwd -P)/$(basename "${RESULTS_FILE}")"
+
+  arrow.blk-on-ylw "Starting gomoku-httpd on port $PORT...   "
+  start_httpd
+  trap cleanup EXIT
+}
+
+function main() {
+  parse.args "$@"
+  init
+  run_all_tests
+  print_summary
+}
+
+[[ "$*" =~ "-h" || "$*" =~ "--help" ]] && usage && exit 0
+
+mkdir -p "$OUTPUT_DIR"
+touch "$RESULTS_FILE"
+
+main "$@" | tee -a "$RESULTS_FILE"
+exit $?
