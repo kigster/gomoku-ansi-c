@@ -717,26 +717,27 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha,
 
   // Probe transposition table
   int tt_value;
-  if (probe_transposition(game, hash, depth, alpha, beta, &tt_value)) {
+  if (probe_transposition(game, hash, ai_player, depth, alpha, beta,
+                          &tt_value)) {
     return tt_value;
   }
 
   // Check for immediate wins/losses first (terminal conditions)
   if (get_cached_winner(game, ai_player)) {
     int value = WIN_SCORE + depth; // Prefer faster wins
-    store_transposition(game, hash, value, depth, TT_EXACT, -1, -1);
+    store_transposition(game, hash, ai_player, value, depth, TT_EXACT, -1, -1);
     return value;
   }
   if (get_cached_winner(game, other_player(ai_player))) {
     int value = -WIN_SCORE - depth; // Prefer slower losses
-    store_transposition(game, hash, value, depth, TT_EXACT, -1, -1);
+    store_transposition(game, hash, ai_player, value, depth, TT_EXACT, -1, -1);
     return value;
   }
 
   // Check search depth limit
   if (depth == 0) {
     int value = evaluate_position(board, game->board_size, ai_player);
-    store_transposition(game, hash, value, depth, TT_EXACT, -1, -1);
+    store_transposition(game, hash, ai_player, value, depth, TT_EXACT, -1, -1);
     return value;
   }
 
@@ -819,7 +820,8 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha,
     int flag = (max_eval <= original_alpha)  ? TT_UPPER_BOUND
                : (max_eval >= original_beta) ? TT_LOWER_BOUND
                                              : TT_EXACT;
-    store_transposition(game, hash, max_eval, depth, flag, best_x, best_y);
+    store_transposition(game, hash, ai_player, max_eval, depth, flag, best_x,
+                        best_y);
 
     // Store killer move if beta cutoff occurred
     if (max_eval >= original_beta && best_x != -1) {
@@ -883,7 +885,8 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha,
     int flag = (min_eval <= original_alpha)  ? TT_UPPER_BOUND
                : (min_eval >= original_beta) ? TT_LOWER_BOUND
                                              : TT_EXACT;
-    store_transposition(game, hash, min_eval, depth, flag, best_x, best_y);
+    store_transposition(game, hash, ai_player, min_eval, depth, flag, best_x,
+                        best_y);
 
     // Store killer move if alpha cutoff occurred
     if (min_eval <= original_alpha && best_x != -1) {
@@ -1399,6 +1402,7 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
       int player_index = (ai_player == AI_CELL_CROSSES) ? 0 : 1;
       int pos = i * game->board_size + j;
       game->current_hash ^= game->zobrist_keys[player_index][pos];
+      invalidate_winner_cache(game);
 
       int score = minimax_with_timeout(game, game->board, current_depth - 1,
                                        -WIN_SCORE - 1, WIN_SCORE + 1, 0,
@@ -1406,6 +1410,7 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
 
       // Restore hash
       game->current_hash ^= game->zobrist_keys[player_index][pos];
+      invalidate_winner_cache(game);
 
       game->board[i][j] = AI_CELL_EMPTY;
 

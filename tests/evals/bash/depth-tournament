@@ -135,12 +135,13 @@ function init() {
 
   h1 "Results:" "$RESULTS_FILE"
 
-  # Results keyed by "dDEPTH_rRADIUS" for each (depth, radius) combination
-  declare -A WINS
-  declare -A LOSSES
-  declare -A DRAWS
-
-  export WINS LOSSES DRAWS
+  # Results keyed by "dDEPTH_rRADIUS" for each (depth, radius) combination.
+  # Must use -gA so arrays are global and associative; otherwise in a pipeline
+  # subshell they become indexed (all keys collapse to index 0) and every depth
+  # shows the same totals.
+  declare -gA WINS
+  declare -gA LOSSES
+  declare -gA DRAWS
 
   cursor.back 3
   export matches_played=0

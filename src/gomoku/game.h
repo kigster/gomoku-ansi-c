@@ -53,6 +53,7 @@ typedef struct {
  */
 typedef struct {
     uint64_t hash;         // Position hash
+    int ai_player;         // Perspective this score was computed for (X or O)
     int value;             // Evaluated value
     int depth;             // Search depth
     int flag;              // Exact, lower bound, or upper bound
@@ -283,7 +284,9 @@ uint64_t compute_zobrist_hash(game_state_t *game);
  * @param best_x Best move x coordinate
  * @param best_y Best move y coordinate
  */
-void store_transposition(game_state_t *game, uint64_t hash, int value, int depth, int flag, int best_x, int best_y);
+void store_transposition(game_state_t *game, uint64_t hash, int ai_player,
+                         int value, int depth, int flag, int best_x,
+                         int best_y);
 
 /**
  * Probes the transposition table for a cached evaluation.
@@ -296,7 +299,8 @@ void store_transposition(game_state_t *game, uint64_t hash, int value, int depth
  * @param value Pointer to store the cached value
  * @return 1 if found and usable, 0 otherwise
  */
-int probe_transposition(game_state_t *game, uint64_t hash, int depth, int alpha, int beta, int *value);
+int probe_transposition(game_state_t *game, uint64_t hash, int ai_player,
+                        int depth, int alpha, int beta, int *value);
 
 /**
  * Initializes the killer moves table.

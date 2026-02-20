@@ -549,14 +549,16 @@ uint64_t compute_zobrist_hash(game_state_t *game) {
   return hash;
 }
 
-void store_transposition(game_state_t *game, uint64_t hash, int value,
-                         int depth, int flag, int best_x, int best_y) {
+void store_transposition(game_state_t *game, uint64_t hash, int ai_player,
+                         int value, int depth, int flag, int best_x,
+                         int best_y) {
   int index = hash % TRANSPOSITION_TABLE_SIZE;
   transposition_entry_t *entry = &game->transposition_table[index];
 
   // Replace if this entry is deeper or empty
   if (entry->hash == 0 || entry->depth <= depth) {
     entry->hash = hash;
+    entry->ai_player = ai_player;
     entry->value = value;
     entry->depth = depth;
     entry->flag = flag;
@@ -565,12 +567,13 @@ void store_transposition(game_state_t *game, uint64_t hash, int value,
   }
 }
 
-int probe_transposition(game_state_t *game, uint64_t hash, int depth, int alpha,
-                        int beta, int *value) {
+int probe_transposition(game_state_t *game, uint64_t hash, int ai_player,
+                        int depth, int alpha, int beta, int *value) {
   int index = hash % TRANSPOSITION_TABLE_SIZE;
   transposition_entry_t *entry = &game->transposition_table[index];
 
-  if (entry->hash == hash && entry->depth >= depth) {
+  if (entry->hash == hash && entry->ai_player == ai_player &&
+      entry->depth >= depth) {
     *value = entry->value;
 
     if (entry->flag == TT_EXACT) {
