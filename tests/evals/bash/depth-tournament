@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #
 # Depth & Radius Tournament - Measures AI strength across different search depths and radii
-#
 # Usage: ./depth_tournament.sh [--games N] [--depths "2,3,4,5"] [--radiuses "2,3,4"]
 #
+# Written by Claude, modified heavily by @kigster
+# then replaced with the Ruby version in ../eval-ruby
 
 set +e
 
@@ -11,12 +12,11 @@ set +e
 # shellcheck disable=SC1090
 source ~/.bashmatic/init >/dev/null 2>&1
 
-
-
 export SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+export ROOT_DIR="$(cd "$SCRIPT_DIR/../../../" && pwd -P)"
+
 export GOMOKU="$ROOT_DIR/gomoku"
-export OUTPUT_DIR="$ROOT_DIR/tests/eval/results"
+export OUTPUT_DIR="$ROOT_DIR/tests/evals/results/bash"
 export GAME_TIMEOUT=300
 
 # Store results there.

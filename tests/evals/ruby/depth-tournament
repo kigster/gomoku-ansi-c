@@ -1,0 +1,14 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(File.expand_path("lib", __dir__))
+
+require "bundler/setup"
+require "dry/cli"
+require "eval_output"
+require "tournament_runner"
+require "cli_parser"
+
+if __FILE__ == $PROGRAM_NAME
+  Dry::CLI.new(Eval::CLI::Commands).call(arguments: ARGV)
+end

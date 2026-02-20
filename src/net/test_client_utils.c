@@ -66,23 +66,46 @@ int test_client_get_last_move(const char *json, const char **out_label,
 
 char *test_client_create_initial_game_state(int board_size, int depth,
                                             int radius) {
-  char *json = malloc(512);
+  return test_client_create_initial_game_state_ex(board_size, depth, depth,
+                                                  radius, 0);
+}
+
+char *test_client_create_initial_game_state_ex(int board_size, int depth_x,
+                                               int depth_o, int radius,
+                                               int timeout_sec) {
+  char *json = malloc(640);
   if (!json)
     return NULL;
 
-  snprintf(
-      json, 512,
-      "{\n"
-      "  \"X\": { \"player\": \"AI\", \"depth\": %d, \"time_ms\": 0.000 },\n"
-      "  \"O\": { \"player\": \"AI\", \"depth\": %d, \"time_ms\": 0.000 },\n"
-      "  \"board_size\": %d,\n"
-      "  \"radius\": %d,\n"
-      "  \"timeout\": \"none\",\n"
-      "  \"winner\": \"none\",\n"
-      "  \"board_state\": [],\n"
-      "  \"moves\": []\n"
-      "}\n",
-      depth, depth, board_size, radius);
+  if (timeout_sec > 0) {
+    snprintf(
+        json, 640,
+        "{\n"
+        "  \"X\": { \"player\": \"AI\", \"depth\": %d, \"time_ms\": 0.000 },\n"
+        "  \"O\": { \"player\": \"AI\", \"depth\": %d, \"time_ms\": 0.000 },\n"
+        "  \"board_size\": %d,\n"
+        "  \"radius\": %d,\n"
+        "  \"timeout\": %d,\n"
+        "  \"winner\": \"none\",\n"
+        "  \"board_state\": [],\n"
+        "  \"moves\": []\n"
+        "}\n",
+        depth_x, depth_o, board_size, radius, timeout_sec);
+  } else {
+    snprintf(
+        json, 640,
+        "{\n"
+        "  \"X\": { \"player\": \"AI\", \"depth\": %d, \"time_ms\": 0.000 },\n"
+        "  \"O\": { \"player\": \"AI\", \"depth\": %d, \"time_ms\": 0.000 },\n"
+        "  \"board_size\": %d,\n"
+        "  \"radius\": %d,\n"
+        "  \"timeout\": \"none\",\n"
+        "  \"winner\": \"none\",\n"
+        "  \"board_state\": [],\n"
+        "  \"moves\": []\n"
+        "}\n",
+        depth_x, depth_o, board_size, radius);
+  }
 
   return json;
 }
