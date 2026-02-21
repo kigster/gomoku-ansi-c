@@ -4,11 +4,13 @@ export interface PlayerConfig {
   time_ms: number
 }
 
+export type MoveCoord = string | [number, number]
+
 export interface MoveEntry {
-  'X (human)'?: [number, number]
-  'X (AI)'?: [number, number]
-  'O (human)'?: [number, number]
-  'O (AI)'?: [number, number]
+  'X (human)'?: MoveCoord
+  'X (AI)'?: MoveCoord
+  'O (human)'?: MoveCoord
+  'O (AI)'?: MoveCoord
   time_ms?: number
   moves_searched?: number
   moves_evaluated?: number

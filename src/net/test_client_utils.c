@@ -4,6 +4,7 @@
 //
 
 #include "test_client_utils.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +17,35 @@ static const char *last_strstr(const char *haystack, const char *needle) {
     p++;
   }
   return last;
+}
+
+static int column_index_from_char(char c) {
+  static const char *columns = "ABCDEFGHJKLMNOPQRST";
+  char upper = (char)toupper((unsigned char)c);
+  for (int i = 0; columns[i] != '\0'; i++) {
+    if (columns[i] == upper) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static int parse_coord_notation(const char *s, int *x, int *y) {
+  if (!s || !x || !y || strlen(s) < 2) {
+    return 0;
+  }
+  int col = column_index_from_char(s[0]);
+  if (col < 0) {
+    return 0;
+  }
+  for (size_t i = 1; s[i] != '\0'; i++) {
+    if (!isdigit((unsigned char)s[i])) {
+      return 0;
+    }
+  }
+  *x = atoi(s + 1);
+  *y = col;
+  return 1;
 }
 
 int test_client_get_last_move(const char *json, const char **out_label,
@@ -37,14 +67,37 @@ int test_client_get_last_move(const char *json, const char **out_label,
     return 0;
   }
 
-  const char *pos = strchr(last, '[');
-  if (!pos) {
+  const char *colon = strchr(last, ':');
+  if (!colon) {
     return 0;
   }
 
-  int x, y;
-  if (sscanf(pos, "[%d, %d]", &x, &y) != 2) {
-    return 0;
+  while (*colon && (*colon == ':' || isspace((unsigned char)*colon))) {
+    colon++;
+  }
+
+  int x = -1, y = -1;
+  if (*colon == '"') {
+    char coord[16];
+    const char *start = colon + 1;
+    const char *end = strchr(start, '"');
+    if (!end) {
+      return 0;
+    }
+    size_t len = (size_t)(end - start);
+    if (len == 0 || len >= sizeof(coord)) {
+      return 0;
+    }
+    memcpy(coord, start, len);
+    coord[len] = '\0';
+    if (!parse_coord_notation(coord, &x, &y)) {
+      return 0;
+    }
+  } else {
+    const char *pos = strchr(colon, '[');
+    if (!pos || sscanf(pos, "[%d, %d]", &x, &y) != 2) {
+      return 0;
+    }
   }
 
   if (strcmp(last_label, "\"X (AI)\"") == 0) {

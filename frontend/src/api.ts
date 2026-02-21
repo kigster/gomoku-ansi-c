@@ -2,6 +2,19 @@ import type { GameState } from './types'
 
 const API_BASE = import.meta.env.VITE_API_BASE || ''
 
+export interface ApiExchange {
+  request: GameState
+  response: GameState | null
+  error: string | null
+  timestamp: number
+}
+
+let lastExchange: ApiExchange | null = null
+
+export function getLastExchange(): ApiExchange | null {
+  return lastExchange
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
@@ -38,13 +51,17 @@ export async function postGameState(
     }
 
     if (response.ok) {
-      return response.json()
+      const result: GameState = await response.json()
+      lastExchange = { request: state, response: result, error: null, timestamp: Date.now() }
+      return result
     }
 
     if (response.status === 503) {
       attempt++
       if (attempt >= maxRetries) {
-        throw new Error('Server busy: max retries exceeded')
+        const errMsg = 'Server busy: max retries exceeded'
+        lastExchange = { request: state, response: null, error: errMsg, timestamp: Date.now() }
+        throw new Error(errMsg)
       }
       await delay(delayMs)
       delayMs = Math.min(delayMs * 2, 10000)
@@ -52,7 +69,9 @@ export async function postGameState(
     }
 
     const text = await response.text().catch(() => '')
-    throw new Error(`Server error ${response.status}: ${text}`)
+    const errMsg = `Server error ${response.status}: ${text}`
+    lastExchange = { request: state, response: null, error: errMsg, timestamp: Date.now() }
+    throw new Error(errMsg)
   }
 }
 

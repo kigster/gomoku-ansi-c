@@ -27,6 +27,7 @@ typedef struct {
     int max_undo_allowed; // Total undo moves allowed per game (0 = unlimited)
     int skip_welcome;     // Whether to skip the welcome screen
     int headless;         // Whether to suppress all stdout output (for daemon mode)
+    int stateless_mode;   // Disable persistent/derived caches for stateless API use
     int search_radius;    // Search radius for move generation (1-5, default 2)
     char json_file[256];  // Path to JSON output file (empty = no output)
 

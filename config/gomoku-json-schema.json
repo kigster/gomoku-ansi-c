@@ -122,14 +122,23 @@
       }
     },
     "coordinate": {
-      "type": "array",
-      "description": "Board coordinate as [row, column], 0-indexed from top-left. Row is first (index 0), column second (index 1).",
-      "items": {
-        "type": "integer",
-        "minimum": 0
-      },
-      "minItems": 2,
-      "maxItems": 2
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-HJ-T][0-9]{1,2}$",
+          "description": "Board coordinate in compact notation (column letter, row digits), e.g. H7"
+        },
+        {
+          "type": "array",
+          "description": "Legacy coordinate as [row, column], 0-indexed from top-left",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      ]
     },
     "notation": {
       "type": "string",
@@ -155,7 +164,7 @@
         },
         "evaluator": {
           "type": "string",
-          "enum": ["have_win", "block_threat", "have_vct", "block_vct", "block_open_three", "forcing_four", "minimax"],
+          "enum": ["have_win", "block_threat", "compound_three", "have_vct", "block_vct", "block_open_three", "forcing_four", "minimax"],
           "description": "Name of the evaluator step"
         },
         "evaluated_moves": {
