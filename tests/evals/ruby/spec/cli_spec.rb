@@ -50,8 +50,8 @@ RSpec.describe "depth_tournament_http CLI" do
     results_file = File.join(dir, "results.txt")
     result_struct = TournamentRunner::Result
     fake_results = [
-      result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "X", time_sec: 1.0, game_index: 1),
-      result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "O", time_sec: 1.0, game_index: 2)
+      result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "X", time_sec: 1.0, game_index: 1, client_exitstatus: 0),
+      result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "O", time_sec: 1.0, game_index: 2, client_exitstatus: 0)
     ]
     runner = instance_double(TournamentRunner,
       run: nil,
@@ -73,7 +73,7 @@ RSpec.describe "depth_tournament_http CLI" do
     it "dump_partial_results writes to file when runner has results" do
       result_struct = TournamentRunner::Result
       results = [
-        result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "X", time_sec: 1, game_index: 1)
+        result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "X", time_sec: 1, game_index: 1, client_exitstatus: 0)
       ]
       runner = instance_double(TournamentRunner, results: results)
       results_file = File.join(Dir.mktmpdir("eval_dump"), "out.txt")
@@ -97,9 +97,9 @@ RSpec.describe "depth_tournament_http CLI" do
     it "print_final_summary handles lose rate and multiple radii" do
       result_struct = TournamentRunner::Result
       results = [
-        result_struct.new(radius: 3, depth_x: 1, depth_o: 2, winner: "O", time_sec: 1, game_index: 1),
-        result_struct.new(radius: 3, depth_x: 1, depth_o: 2, winner: "O", time_sec: 1, game_index: 2),
-        result_struct.new(radius: 4, depth_x: 2, depth_o: 3, winner: "X", time_sec: 1, game_index: 1)
+        result_struct.new(radius: 3, depth_x: 1, depth_o: 2, winner: "O", time_sec: 1, game_index: 1, client_exitstatus: 0),
+        result_struct.new(radius: 3, depth_x: 1, depth_o: 2, winner: "O", time_sec: 1, game_index: 2, client_exitstatus: 0),
+        result_struct.new(radius: 4, depth_x: 2, depth_o: 3, winner: "X", time_sec: 1, game_index: 1, client_exitstatus: 0)
       ]
       runner = instance_double(TournamentRunner, results: results)
       cmd = Eval::CLI::Commands::Tournament.new

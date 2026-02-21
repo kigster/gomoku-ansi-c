@@ -16,7 +16,7 @@ class TournamentRunner
   DEFAULT_TIMEOUT = 300
   HTTP_PORT = 10_000
 
-  Result = Struct.new(:radius, :depth_x, :depth_o, :winner, :time_sec, :game_index, keyword_init: true) do
+  Result = Struct.new(:radius, :depth_x, :depth_o, :winner, :time_sec, :game_index, :client_exitstatus, keyword_init: true) do
     def header
       format("%8s | %8s | %8s | %6s | %10s | %10s", "Radius", "Depth_X", "Depth_O", "Winner", "Time_sec", "Game_index")
     end
@@ -126,6 +126,7 @@ class TournamentRunner
     Process.wait(pid)
     @pids_mutex.synchronize { @pids.delete(pid) }
     elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
+    client_exitstatus = $?&.exitstatus
 
     winner = nil
     if File.file?(game_file)
@@ -140,7 +141,8 @@ class TournamentRunner
       depth_o: depth_o,
       winner: winner,
       time_sec: elapsed.round(2),
-      game_index: game_index
+      game_index: game_index,
+      client_exitstatus: client_exitstatus
     ).tap do |result|
       method = case winner
       when "X"
@@ -161,7 +163,8 @@ class TournamentRunner
       depth_o: depth_o,
       winner: nil,
       time_sec: 0,
-      game_index: game_index
+      game_index: game_index,
+      client_exitstatus: nil
     ).tap do |result|
       EvalOutput.error("Game #{game_index} failed in #{(elapsed || 0).round(2)} seconds", 
         "Error: #{e.message}",
@@ -206,6 +209,13 @@ class TournamentRunner
       pct = tot.positive? ? (100.0 * by_key[key][:wins] / tot) : 0
       lines << format("%8d | %8d | %8d | %8d | %8d | %6.2f",
         d, radius, by_key[key][:wins], by_key[key][:losses], by_key[key][:draws], pct)
+    end
+    total_with_winner = radius_results.count(&:winner)
+    if total_with_winner.zero? && radius_results.any?
+      failed = radius_results.count { |r| r.client_exitstatus && r.client_exitstatus != 0 }
+      lines << ""
+      lines << "WARNING: No games had a recorded winner for Radius #{radius}. #{failed}/#{radius_results.size} client processes exited non-zero."
+      lines << "To see client errors, run one game without -q: #{@client_path} -p #{HTTP_PORT} -d 1:2 -r #{radius} -b #{@board_size} -t #{@timeout} -j /tmp/game.json"
     end
     lines << ""
 

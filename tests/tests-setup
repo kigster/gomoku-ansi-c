@@ -10,7 +10,7 @@ os="$(uname -s | tr 'A-Z' 'a-z')"
 
 if [[ $os == darwin ]]; then
   command -v clang >/dev/null || sudo xcode-select --install
-  command -v gcc >/dev/null || brew install gcc
+  command -v gcc >/dev/null   || brew install gcc
   command -v cmake >/dev/null || brew install cmake
 elif [[ $os == linux ]]; then
   command -v gcc || {
@@ -40,8 +40,20 @@ set +e
 
 # Unset LDFLAGS to prevent Makefile's LDFLAGS from leaking into CMake
 unset LDFLAGS
+CC=${CXX}
 
-cmake .. && make -j 4 >/dev/null 2>&1
+# On macOS after Xcode/CLT upgrades, Apple Clang may look at an incomplete
+# C++ include dir under CLT and miss standard headers (e.g. cstddef). Force
+# the SDK's C++ include path so the build finds the full standard library.
+cmake_extra=
+if [[ $os == darwin ]]; then
+  sdk_path=$(xcrun --show-sdk-path 2>/dev/null)
+  if [[ -n "$sdk_path" && -d "$sdk_path/usr/include/c++/v1" ]]; then
+    cmake_extra="-DCMAKE_OSX_SYSROOT=$sdk_path -DCMAKE_CXX_FLAGS=-I$sdk_path/usr/include/c++/v1"
+  fi
+fi
+
+cmake .. $cmake_extra && make -j 4 >/dev/null 2>&1
 code=$?
 
 if [[ ${code} -ne 0 ]]; then

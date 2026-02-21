@@ -16,9 +16,9 @@ RSpec.describe TournamentRunner do
   describe "::aggregate_summary" do
     it "returns total count and wins by higher/lower depth" do
       results = [
-        result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "O", time_sec: 1.0, game_index: 1),
-        result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "X", time_sec: 1.0, game_index: 2),
-        result_struct.new(radius: 3, depth_x: 3, depth_o: 2, winner: "X", time_sec: 1.0, game_index: 1)
+        result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "O", time_sec: 1.0, game_index: 1, client_exitstatus: 0),
+        result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "X", time_sec: 1.0, game_index: 2, client_exitstatus: 0),
+        result_struct.new(radius: 3, depth_x: 3, depth_o: 2, winner: "X", time_sec: 1.0, game_index: 1, client_exitstatus: 0)
       ]
       summary = described_class.aggregate_summary(results)
       expect(summary[:total]).to eq 3
@@ -28,8 +28,8 @@ RSpec.describe TournamentRunner do
 
     it "ignores draw and nil winner for higher/lower counts" do
       results = [
-        result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "draw", time_sec: 0, game_index: 1),
-        result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: nil, time_sec: 0, game_index: 2)
+        result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "draw", time_sec: 0, game_index: 1, client_exitstatus: nil),
+        result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: nil, time_sec: 0, game_index: 2, client_exitstatus: nil)
       ]
       summary = described_class.aggregate_summary(results)
       expect(summary[:wins_higher]).to eq 0
@@ -38,8 +38,8 @@ RSpec.describe TournamentRunner do
 
     it "builds per_radius matchups from first player (X) perspective" do
       results = [
-        result_struct.new(radius: 3, depth_x: 1, depth_o: 2, winner: "X", time_sec: 0, game_index: 1),
-        result_struct.new(radius: 3, depth_x: 1, depth_o: 2, winner: "O", time_sec: 0, game_index: 2)
+        result_struct.new(radius: 3, depth_x: 1, depth_o: 2, winner: "X", time_sec: 0, game_index: 1, client_exitstatus: nil),
+        result_struct.new(radius: 3, depth_x: 1, depth_o: 2, winner: "O", time_sec: 0, game_index: 2, client_exitstatus: nil)
       ]
       summary = described_class.aggregate_summary(results)
       expect(summary[:per_radius][3][[1, 2]][:total]).to eq 2
@@ -145,8 +145,8 @@ RSpec.describe TournamentRunner do
 
     it "appends TOURNAMENT RESULTS and Win BIAS to results_file" do
       results = [
-        result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "X", time_sec: 1, game_index: 1),
-        result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "O", time_sec: 1, game_index: 2)
+        result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "X", time_sec: 1, game_index: 1, client_exitstatus: 0),
+        result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "O", time_sec: 1, game_index: 2, client_exitstatus: 0)
       ]
       runner.write_radius_results(3, results)
       content = File.read(results_file)
@@ -158,7 +158,7 @@ RSpec.describe TournamentRunner do
 
     it "includes draw results in by_key aggregation" do
       results = [
-        result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "draw", time_sec: 1, game_index: 1)
+        result_struct.new(radius: 3, depth_x: 2, depth_o: 3, winner: "draw", time_sec: 1, game_index: 1, client_exitstatus: 0)
       ]
       runner.write_radius_results(3, results)
       content = File.read(results_file)

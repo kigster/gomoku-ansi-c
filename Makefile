@@ -27,7 +27,10 @@ JSONC_DIR        	= src/vendor/json-c
 JSONC_BUILD      	= $(JSONC_DIR)/build
 JSONC_LIB        	= $(JSONC_BUILD)/libjson-c.a
 CFLAGS           	= -Wall -Wunused-parameter -Wextra -Wno-gnu-folding-constant -Wimplicit-function-declaration -Wno-sign-compare -Isrc/gomoku -Isrc -I$(JSONC_BUILD) -I$(JSONC_DIR) -O3
-CXXFLAGS         	= -Wall -Wunused-parameter -Wextra -std=c++17 -Isrc/gomoku -Isrc -Itests/googletest/googletest/include -I$(JSONC_BUILD) -I$(JSONC_DIR) -Wimplicit-function-declaration -O2
+# On macOS, Apple Clang may use an incomplete C++ include dir and miss standard headers
+# (e.g. cstddef, cstdlib). Add the SDK's C++ include path when available.
+MACOS_CXX_INCLUDE	= $(shell [ "$(OS)" = darwin ] && sdk=$$(xcrun --show-sdk-path 2>/dev/null) && [ -d "$$sdk/usr/include/c++/v1" ] && echo "-I$$sdk/usr/include/c++/v1")
+CXXFLAGS         	= -Wall -Wunused-parameter -Wextra -std=c++17 -Isrc/gomoku -Isrc -Itests/googletest/googletest/include -I$(JSONC_BUILD) -I$(JSONC_DIR) -Wimplicit-function-declaration -O2 $(MACOS_CXX_INCLUDE)
 LDFLAGS          	= -lm $(JSONC_LIB)
 
 TARGET           	= $(PACKAGE)
@@ -119,10 +122,10 @@ tests/gomoku_test.o: googletest tests/gomoku_test.cpp src/gomoku/gomoku.h src/go
 
 test: 		$(TEST_TARGET) $(DAEMON_TEST_TARGET) $(TARGET) ## Run all unit tests (game + daemon)
 		@echo "=== Running Game Tests ==="
-		@GREP_COLOR=32 ./$(TEST_TARGET) | grep --color=always -E 'GomokuTest\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
+		@./$(TEST_TARGET) | GREP_COLOR=32 grep --color=always -E 'GomokuTest\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
 		@echo ""
 		@echo "=== Running Daemon Tests ==="
-		@GREP_COLOR=32 ./$(DAEMON_TEST_TARGET) | grep --color=always -E 'Daemon[A-Za-z]*Test\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
+		@./$(DAEMON_TEST_TARGET) | GREP_COLOR=32 grep --color=always -E 'Daemon[A-Za-z]*Test\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
 
 tests: 		test
 
@@ -134,7 +137,7 @@ tests/daemon_test.o: googletest tests/daemon_test.cpp src/net/cli.h src/net/json
 		$(CXX) $(DAEMON_TEST_CXXFLAGS) -c tests/daemon_test.cpp -o tests/daemon_test.o
 
 test-daemon: 	$(DAEMON_TEST_TARGET) ## Run daemon unit tests
-		GREP_COLOR=32 ./$(DAEMON_TEST_TARGET) | grep --color=always -E 'Daemon[A-Za-z]*Test\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
+		./$(DAEMON_TEST_TARGET) | GREP_COLOR=32 grep --color=always -E 'Daemon[A-Za-z]*Test\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
 
 # AI Evaluation targets
 EVAL_DIR 	= tests/evals
@@ -256,13 +259,14 @@ cr-update: 	docker-build-all-amd64 ## Update Cloud Run with the latest code
 		@cd ./iac/cloud_run && bash update.sh
 
 evals-bash: 	## Runs tournamets comparing win ratios of various depth and radii using BASH
-		tests/evals/bash/depth-tournament -d 1,2,3 -r 3,4 --games 10
+		tests/evals/bash/depth-tournament -d 1,2,3,4,5 -r 3,4 --games 10
 
 evals-ruby: 	## Runs tournamets against a gomoku-httpd cluster behind envoy (gctl start)
 		echo "Starting gomoku-httpd cluster behind envoy..."
 		( gctl ps | grep -q -E 'gomoku-httpd' && gctl ps | grep -q -E 'envoy') && \
 			echo "Cluster is already up :)" || gctl start -p envoy
 		@cd tests/evals/ruby && (bundle check || bundle install -j 12) && \
+			ln -nfs ../../../gomoku-http-client . && \
 			bundle exec depth-tournament tournament -d 1,2,3,4 -r 2,3 --games 5 --verbose;  
 		@cd $(CURRENT_DiR)
 
