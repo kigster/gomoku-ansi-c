@@ -34,9 +34,13 @@
       "description": "Move timeout: 'none' for unlimited, or seconds as integer"
     },
     "undo": {
-      "type": "string",
-      "enum": ["on", "off"],
-      "description": "Whether undo functionality is enabled"
+      "type": "boolean",
+      "description": "Whether undo is enabled. Default true when omitted."
+    },
+    "undo_limit": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total undo moves allowed per game when undo is enabled; 0 means unlimited. Default 5 when omitted."
     },
     "winner": {
       "type": "string",
@@ -119,13 +123,25 @@
     },
     "coordinate": {
       "type": "array",
-      "description": "Board coordinate as [row, column], 0-indexed from top-left",
+      "description": "Board coordinate as [row, column], 0-indexed from top-left. Row is first (index 0), column second (index 1).",
       "items": {
         "type": "integer",
         "minimum": 0
       },
       "minItems": 2,
       "maxItems": 2
+    },
+    "notation": {
+      "type": "string",
+      "pattern": "^[A-HJ-T]([1-9]|1[0-9])$",
+      "description": "Human-readable move coordinate: column letter (A–T excluding I) plus 1-based row (1–19). Examples: A1, J10, T19. Converts to/from coordinate [row, col] via board_coord_to_notation / notation_to_board_coord."
+    },
+    "position": {
+      "oneOf": [
+        { "$ref": "#/$defs/coordinate" },
+        { "$ref": "#/$defs/notation" }
+      ],
+      "description": "Move position: either [row, col] 0-indexed array or notation string (e.g. \"A2\", \"J10\")."
     },
     "scoring_entry": {
       "type": "object",
@@ -180,24 +196,28 @@
     },
     "move": {
       "type": "object",
-      "description": "A single move in the game. Contains exactly one move key identifying the player and move coordinates",
+      "description": "A single move in the game. Contains exactly one move key (X (human), X (AI), O (human), O (AI)) whose value is the move position: either [row, col] 0-indexed or notation string (e.g. \"A2\").",
       "minProperties": 1,
       "properties": {
         "X (human)": {
-          "$ref": "#/$defs/coordinate",
-          "description": "Move coordinates for human X player"
+          "$ref": "#/$defs/position",
+          "description": "Move position for human X: [row, col] or notation (e.g. \"J10\")"
         },
         "X (AI)": {
-          "$ref": "#/$defs/coordinate",
-          "description": "Move coordinates for AI X player"
+          "$ref": "#/$defs/position",
+          "description": "Move position for AI X: [row, col] or notation"
         },
         "O (human)": {
-          "$ref": "#/$defs/coordinate",
-          "description": "Move coordinates for human O player"
+          "$ref": "#/$defs/position",
+          "description": "Move position for human O: [row, col] or notation"
         },
         "O (AI)": {
-          "$ref": "#/$defs/coordinate",
-          "description": "Move coordinates for AI O player"
+          "$ref": "#/$defs/position",
+          "description": "Move position for AI O: [row, col] or notation"
+        },
+        "notation": {
+          "type": "string",
+          "description": "Human-readable position (e.g. \"A2\", \"J10\"). Serialized by server when returning game state; column A–T excluding I, row 1-based."
         },
         "time_ms": {
           "type": "number",

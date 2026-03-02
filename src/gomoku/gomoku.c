@@ -12,7 +12,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define NUM_DIRECTIONS 4
 #define OUT_OF_BOUNDS 32
 #define SEARCH_RADIUS 4
 #define NEED_TO_WIN 5

@@ -126,12 +126,15 @@ void draw_game_header(void) {
   printf(" %s%s %s(v%s%s)\n\n", COLOR_YELLOW, GAME_DESCRIPTION, COLOR_RED,
          GAME_VERSION, COLOR_RESET);
   printf(" %s%s%s\n\n", COLOR_BRIGHT_GREEN, GAME_COPYRIGHT, COLOR_RESET);
-  printf(" %s%s%s\n", ESCAPE_CODE_BOLD, COLOR_MAGENTA, "HINT:");
+  printf("  %s%s%s\n", ESCAPE_CODE_BOLD, COLOR_BRIGHT_WHITE, "HOW TO PLAY:");
+  printf(" %s%s%s\n\n", ESCAPE_CODE_BOLD, COLOR_BRIGHT_WHITE,
+         "───────────────────────────────────────────────────────────────");
   printf(" %s%s%s\n\n\n", ESCAPE_CODE_BOLD, COLOR_MAGENTA, GAME_RULES_BRIEF);
-  printf(" %s%s%s%s\n\n\n", COLOR_RESET, COLOR_BRIGHT_CYAN, GAME_RULES_LONG,
+  printf(" %s%s%s%s\n", COLOR_RESET, COLOR_BRIGHT_YELLOW, GAME_RULES_LONG,
          COLOR_RESET);
-  printf("\n\n\n %s%s%s%s\n\n\n\n\n\n\n", COLOR_YELLOW, ESCAPE_CODE_BOLD,
-         "Press ENTER to start the game, or CTRL-C to quit...", COLOR_RESET);
+  printf("\n%s%s%s%s\n\n", COLOR_BRIGHT_WHITE, ESCAPE_CODE_BOLD,
+         "       ❯ Press ENTER to start the game, or CTRL-C to quit...",
+         COLOR_RESET);
 
   fflush(stdout);
   get_key();
@@ -152,11 +155,10 @@ void draw_game_history_sidebar(game_state_t *game, int start_row) {
   printf("%s%sGame History:%s", COLOR_BOLD_BLACK, COLOR_GREEN, COLOR_RESET);
 
   printf(ESCAPE_MOVE_CURSOR_TO, start_row + 1, sidebar_col);
-  printf("%sMove Player [Time] (AI positions evaluated)%s", COLOR_BOLD_BLACK,
-         COLOR_RESET);
+  printf("%sMove  Time%s", COLOR_BOLD_BLACK, COLOR_RESET);
 
   printf(ESCAPE_MOVE_CURSOR_TO, start_row + 2, sidebar_col);
-  printf("%s", "────────────────────────────────────────────────────────");
+  printf("%s", "────────────────────────────────────");
 
   // Draw move history entries
   int display_start =
@@ -165,28 +167,28 @@ void draw_game_history_sidebar(game_state_t *game, int start_row) {
     move_history_t move = game->move_history[i];
     char player_symbol = (move.player == AI_CELL_CROSSES) ? 'X' : 'O';
     const char *player_color =
-        (move.player == AI_CELL_CROSSES) ? COLOR_RED : COLOR_BLUE;
+        (move.player == AI_CELL_CROSSES) ? COLOR_RED : COLOR_GREEN;
+
+    char coord_buf[8];
+    board_coord_to_notation(move.x, move.y, coord_buf, sizeof(coord_buf));
 
     // Determine if this was an AI or human move
     int player_index = (move.player == AI_CELL_CROSSES) ? 0 : 1;
     player_type_t move_player_type = game->player_type[player_index];
 
-    char move_line[100];
+    char move_line[80];
     if (move_player_type == PLAYER_TYPE_HUMAN) {
-      // Human move (convert to 1-based coordinates for display)
-      snprintf(move_line, sizeof(move_line),
-               "%s%3d | player %c moved to [%2d, %2d] (in %6.2fs)%s",
-               player_color, i + 1, player_symbol,
-               board_to_display_coord(move.x), board_to_display_coord(move.y),
-               move.time_taken, COLOR_RESET);
+      snprintf(move_line, sizeof(move_line), "%s%3d | %c: %3s, %6.3fs%s",
+               player_color, i + 1, player_symbol, coord_buf, move.time_taken,
+               COLOR_RESET);
     } else {
-      // AI move (convert to 1-based coordinates for display)
+      double rate = (move.time_taken > 0.0 && move.positions_evaluated > 0)
+                        ? (double)move.positions_evaluated / move.time_taken
+                        : 0.0;
       snprintf(move_line, sizeof(move_line),
-               "%s%3d | player %c moved to [%2d, %2d] (in %6.2fs, %3d moves "
-               "evaluated)%s",
-               player_color, i + 1, player_symbol,
-               board_to_display_coord(move.x), board_to_display_coord(move.y),
-               move.time_taken, move.positions_evaluated, COLOR_RESET);
+               "%s%3d | %c: %3s, %6.3fs @ %6.0f moves/second%s", player_color,
+               i + 1, player_symbol, coord_buf, move.time_taken, rate,
+               COLOR_RESET);
     }
 
     printf("\033[%d;%dH%s", start_row + 3 + (i - display_start), sidebar_col,

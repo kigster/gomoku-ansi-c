@@ -247,12 +247,12 @@ int evaluate_threat_fast(int **board, int x, int y, int player,
 
     // Only contiguous >= 5 is a true win. total >= 5 with holes is NOT a win.
     if (contiguous >= 5) {
-      threat = 100000; // Win
+      threat = 1000000; // Win
     } else if (contiguous == 4) {
       if (open_ends >= 2) {
-        threat = 50000; // Open four - guaranteed win
+        threat = 500000; // Open four - guaranteed win
       } else if (open_ends == 1) {
-        threat = 10000; // Closed four - must block
+        threat = 100000; // Closed four - must block
       }
       dir_is_four[d] = 1;
     } else if (total >= 4 && holes <= 1) {

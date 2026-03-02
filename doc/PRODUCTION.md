@@ -37,8 +37,8 @@ cd iac/cloud_run
 
 | Service  | URL |
 |----------|-----|
-| Frontend | https://gomoku-frontend-hdnatxbb3a-wl.a.run.app |
-| Backend  | https://gomoku-httpd-hdnatxbb3a-wl.a.run.app |
+| Frontend | <https://gomoku-frontend-hdnatxbb3a-wl.a.run.app> |
+| Backend  | <https://gomoku-httpd-hdnatxbb3a-wl.a.run.app> |
 
 ### Update Individual Components
 
@@ -95,6 +95,7 @@ curl https://gomoku-frontend-hdnatxbb3a-wl.a.run.app/health
 ```
 
 Cloud Console dashboards:
+
 - [Cloud Run overview](https://console.cloud.google.com/run?project=fine-booking-486503-k7)
 - [Frontend metrics](https://console.cloud.google.com/run/detail/us-central1/gomoku-frontend/metrics?project=fine-booking-486503-k7)
 - [Backend metrics](https://console.cloud.google.com/run/detail/us-central1/gomoku-httpd/metrics?project=fine-booking-486503-k7)
@@ -115,7 +116,7 @@ Any collaborator with GCP project access can run `terraform init` to connect.
 
 Full Kubernetes deployment with Envoy gateway for advanced load balancing. More complex to set up and operate, but gives fine-grained control over networking, circuit breaking, and pod-level scaling.
 
-### Architecture
+### Architecture Graph
 
 ```mermaid
 flowchart LR
@@ -153,6 +154,7 @@ bin/gcp-create-cluster setup
 ```
 
 This will:
+
 1. Create a private GKE zonal cluster (2 x e2-standard-4 nodes)
 2. Set up Cloud NAT for outbound internet from private nodes
 3. Create Artifact Registry repository
@@ -168,6 +170,7 @@ bin/gcp-create-cluster deploy
 ```
 
 This will:
+
 1. Install nginx-ingress controller and wait for external IP
 2. Prompt you to update DNS for `gomoku.games` to the external IP
 3. Install cert-manager with Let's Encrypt ClusterIssuer

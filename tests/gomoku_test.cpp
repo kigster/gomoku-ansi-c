@@ -30,6 +30,7 @@ protected:
         .show_help = 0,                     // Don't show help
         .invalid_args = 0,                  // Valid arguments
         .enable_undo = 1,                   // Enable undo for testing
+        .max_undo_allowed = 10,             // Allow multiple undos in test
         .skip_welcome = 1,                  // Skip welcome screen
         .search_radius = 2,                 // Default search radius
         .json_file = "",                    // No JSON output
@@ -498,7 +499,7 @@ static GameResult run_self_play_game(int board_size, int max_depth) {
                          .move_timeout = 0,
                          .show_help = 0,
                          .invalid_args = 0,
-                         .enable_undo = 0,
+                         .max_undo_allowed = 0,
                          .skip_welcome = 1,
                          .search_radius = 2,
                          .json_file = "",
@@ -670,7 +671,7 @@ TEST_F(GomokuTest, AIvsAI_CompletesSuccessfully) {
                          .move_timeout = 0,
                          .show_help = 0,
                          .invalid_args = 0,
-                         .enable_undo = 0,
+                         .max_undo_allowed = 0,
                          .skip_welcome = 1,
                          .search_radius = 2,
                          .json_file = "",
@@ -744,7 +745,7 @@ TEST_F(GomokuTest, AIvsAI_AsymmetricDepths) {
                          .move_timeout = 0,
                          .show_help = 0,
                          .invalid_args = 0,
-                         .enable_undo = 0,
+                         .max_undo_allowed = 0,
                          .skip_welcome = 1,
                          .search_radius = 2,
                          .json_file = "",

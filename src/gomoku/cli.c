@@ -25,7 +25,9 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
       .move_timeout = 0, // No timeout by default
       .show_help = 0,
       .invalid_args = 0,
-      .enable_undo = 0,
+      .enable_undo = 1, // by default enable undo
+      .max_undo_allowed =
+          5, // total undo moves allowed per game (0 = unlimited)
       .skip_welcome = 0,
       .headless = 0,                      // Not headless by default
       .search_radius = 3,                 // Default search radius
@@ -52,6 +54,7 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
       {"wait", required_argument, 0, 'w'},
       {"help", no_argument, 0, 'h'},
       {"undo", no_argument, 0, 'u'},
+      {"undo-limit", required_argument, 0, 'U'},
       {"skip-welcome", no_argument, 0, 's'},
       {"quiet", no_argument, 0, 'q'},
       {"player-x", required_argument, 0, 'x'},
@@ -62,8 +65,8 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
   int option_index = 0;
 
   // Parse command-line arguments using getopt_long
-  while ((c = getopt_long(argc, argv, "d:l:t:b:r:j:p:w:husqx:o:", long_options,
-                          &option_index)) != -1) {
+  while ((c = getopt_long(argc, argv, "d:l:t:b:r:j:p:w:hU:usqx:o:",
+                          long_options, &option_index)) != -1) {
     switch (c) {
     case 'd':
       // Check for asymmetric depth format: "4:6"
@@ -180,6 +183,17 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
       config.enable_undo = 1;
       break;
 
+    case 'U': {
+      int n = atoi(optarg);
+      if (n < 0) {
+        printf("Error: Undo limit must be non-negative (0 = unlimited)\n");
+        config.invalid_args = 1;
+      } else {
+        config.max_undo_allowed = n;
+      }
+      break;
+    }
+
     case 's':
       config.skip_welcome = 1;
       break;
@@ -277,11 +291,15 @@ void print_help(const char *program_name) {
   printf("  %s-o, --player-o TYPE%s   Player O type: \"human\" or \"ai\" "
          "(default: ai)\n",
          COLOR_YELLOW, COLOR_RESET);
-  printf("  %s-u, --undo       %s     Enable the Undo feature (disabled by the "
+  printf("  %s-u, --undo       %s     Enable the Undo feature (enabled by "
          "default).\n",
          COLOR_YELLOW, COLOR_RESET);
-  printf("                        Applies only to when a human player is "
+  printf("                        Applies only when a human player is "
          "involved.\n");
+  printf("  %s-U, --undo-limit N%s  Total undo moves allowed per game "
+         "(default: 5; "
+         "0 = unlimited).\n",
+         COLOR_YELLOW, COLOR_RESET);
   printf("  %s-s, --skip-welcome%s    Skip the welcome screen.\n", COLOR_YELLOW,
          COLOR_RESET);
   printf(

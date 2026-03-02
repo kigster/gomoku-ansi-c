@@ -87,3 +87,4 @@ crash.log
 # such as:
 # *.override.tf
 # *.override.tf.json
+/.rubymate
