@@ -32,8 +32,11 @@
 #define COLOR_BG_CURSOR_OCCUPIED "\033[46m" // Cyan background for cursor on occupied cells
 #define COLOR_CURSOR "\033[1;33m"           // Yellow color for cursor symbol
 
-#define COLOR_X_NORMAL "\033[0;33m"      // Yellow for X
-#define COLOR_X_LAST_MOVE "\033[1;33m"   // Bold yellow for X last move
+#define COLOR_BOLD_RED "\033[1;31m"
+#define COLOR_BOLD_GREEN "\033[1;32m"
+
+#define COLOR_X_NORMAL "\033[0;31m"      // Red for X
+#define COLOR_X_LAST_MOVE "\033[1;31m"   // Bold red for X last move
 
 #define COLOR_O_NORMAL "\033[0;32m"      // Green for O
 #define COLOR_O_LAST_MOVE "\033[1;32m"   // Bold green for O last move

@@ -115,6 +115,7 @@ typedef struct {
     // Move history
     move_history_t move_history[MAX_MOVE_HISTORY];
     int move_history_count;
+    int undos_used;  // Number of times undo was invoked this game (for limit)
 
     // AI history
     char ai_history[MAX_AI_HISTORY][50];

@@ -9,6 +9,7 @@
 #define BOARD_H
 
 #include "gomoku.h"
+#include <stddef.h>
 
 //===============================================================================
 // BOARD MANAGEMENT FUNCTIONS
@@ -68,5 +69,26 @@ int board_to_display_coord(int board_coord);
  * @return 0-based board coordinate
  */
 int display_to_board_coord(int display_coord);
+
+/**
+ * Converts board coordinates (row x, column y) to short notation (e.g. "A2").
+ * Column uses letters A–T excluding I; row is 1-based.
+ *
+ * @param row_x Row (0-based)
+ * @param col_y Column (0-based)
+ * @param buf Output buffer
+ * @param size Buffer size
+ */
+void board_coord_to_notation(int row_x, int col_y, char *buf, size_t size);
+
+/**
+ * Converts short notation (e.g. "A2", "J10") to board coordinates.
+ *
+ * @param notation String like "A2" (column A–T excluding I, row 1-based)
+ * @param row_x Output: 0-based row (may be NULL)
+ * @param col_y Output: 0-based column (may be NULL)
+ * @return 1 on success, 0 on parse failure
+ */
+int notation_to_board_coord(const char *notation, int *row_x, int *col_y);
 
 #endif // BOARD_H 

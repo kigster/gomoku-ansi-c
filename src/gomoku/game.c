@@ -69,6 +69,7 @@ game_state_t *init_game(cli_config_t config) {
 
   // Initialize history
   game->move_history_count = 0;
+  game->undos_used = 0;
   game->ai_history_count = 0;
   memset(game->ai_status_message, 0, sizeof(game->ai_status_message));
 
@@ -187,6 +188,11 @@ int can_undo(game_state_t *game) {
   if (!game->config.enable_undo) {
     return 0;
   }
+  // Enforce undo limit (0 = unlimited)
+  if (game->config.max_undo_allowed > 0 &&
+      game->undos_used >= game->config.max_undo_allowed) {
+    return 0;
+  }
 
   // In Human vs Human mode, allow undo with at least 1 move
   if (game->player_type[0] == PLAYER_TYPE_HUMAN &&
@@ -202,6 +208,7 @@ void undo_last_moves(game_state_t *game) {
   if (!can_undo(game)) {
     return;
   }
+  game->undos_used++;
 
   // Determine how many moves to undo
   int moves_to_undo = 2; // Default: undo a pair (for AI modes)

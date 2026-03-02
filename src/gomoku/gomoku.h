@@ -17,7 +17,7 @@
 
 #define GAME_NAME "Gomoku"
 #define GAME_BINARY "gomoku"
-#define GAME_VERSION "1.2.1"
+#define GAME_VERSION "1.2.3"
 #define GAME_AUTHOR "Konstantin Gredeskoul"
 #define GAME_LICENSE "MIT License"
 #define GAME_URL "https://github.com/kigster/gomoku-ansi-c"
@@ -29,17 +29,47 @@
     "  U                ───→ to undo last move pair (if --undo is enabled), \n" \
     "  ?                ───→ to show game rules, \n" \
     "  ESC              ───→ to quit game." 
-#define GAME_RULES_LONG                                                          \
-    "Gomoku, also known as Five in a Row, is a two-player strategy board game. \n " \
-    "The objective is to get five crosses or naughts in a row, either horizontally,\n " \
-    "vertically, or diagonally. The game is played on a 15x15 grid, or 19x19 \n "   \
-    "grid, with each player taking turns placing their crosses or naughts. The \n " \
-    "first player to get five crosses or naughts in a row wins the game.\n\n " \
-    "In this version you get to always play X which gives you a slight advantage.\n " \
-    "The computer will play O (and will go second). Slightly brigher O denotes the\n " \
-    "computer's last move (you can Undo moves if you enable Undo).\n"
 
-// Board size is now configurable via command line, default is 19
+static const char GAME_RULES_LONG[] = "\n"
+"  Gomoku, also known as a Five in a Row, is a two-player strategy board game.\n"
+"  The shortest way to describe it is that it's a tic-tac-toe on a large board,\n"
+"  andinstead of three in a row you must concoct five in a row. Depending on\n"
+"  the type of game, putting six in a row does not count as a win. Thus the\n"
+"  objective is to get five crosses or naughts in a row, either\n"
+"  horizontally, vertically, or diagonally. The game is played on a grid of\n"
+"  either 15x15 or 19x19 (default). X always starts the game, after which, one\n"
+"  after another, players place theircrosses or naughts (or, in the original\n"
+"  Gomoku game black and white stones) into the onuccupied square on the board\n"
+"  until either the board is filled up (draw) or one of the players creates a\n"
+"  five in a row. NOTE: this game is considered PSPACE-complete in a\n"
+"  mathematical sense — see the following reference:\n  "
+ESCAPE_CODE_UNDERLINE
+COLOR_BRIGHT_BLUE
+"https://en.wikipedia.org/wiki/PSPACE-complete\n"
+ESCAPE_CODE_RESET
+ESCAPE_CODE_BOLD
+COLOR_YELLOW
+"  \n"
+"  It's important to be aware that the first player has a slight advantage \n"
+"  over the second player due the first mover advantage. For this reason, \n"
+"  alternative versions of this game exist that introduce addtional rules to \n"
+"  to equalize the advantage of the first player, such as Renju. Nevertheless,\n"
+"  in this version, such variations are not (presently) supported.\n"
+"  \n"
+"  If you compiled this game from sources (make all), then two additional \n"
+"  executables appear in the source folder: the second one will be called \n"
+"  'gomoku-httpd' — a single-threaded game engine that can be used to play the\n"
+"  game over the network or to have the game play itself. The third executable\n"
+"  is called 'gomoku-http-client' and its the client for testing 'gomoku-httpd': \n"
+"  it merely mirrors the responses from the daemon, and forwards it to another.\n"
+"  This works because all the daemons are stateless, and the all the game data\n"
+"  is stored in the JSON payload that is sent to the daemon and back.\n"
+"  \n"
+"  See doc/HTTP.md for more info, the 'bin/gctl' script for booting the \n"
+"  cluster of gomoku-workers and a reverse proxy, as well as the long and \n"
+"  detailed README.md, not to mention all the wisdom in the doc/ folder.\n\n"
+"  Enjoy!\n";
+
 #define DEFAULT_BOARD_SIZE 19
 
 //===============================================================================

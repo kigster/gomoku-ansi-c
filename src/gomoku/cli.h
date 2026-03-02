@@ -18,16 +18,17 @@
  * Structure to hold parsed command line arguments
  */
 typedef struct {
-    int board_size;      // Board size (15 or 19)
-    int max_depth;       // AI search depth
-    int move_timeout;    // Move timeout in seconds (0 = no timeout)
-    int show_help;       // Whether to show help and exit
-    int invalid_args;    // Whether invalid arguments were provided
-    int enable_undo;     // Whether to enable undo feature
-    int skip_welcome;    // Whether to skip the welcome screen
-    int headless;        // Whether to suppress all stdout output (for daemon mode)
-    int search_radius;   // Search radius for move generation (1-5, default 2)
-    char json_file[256]; // Path to JSON output file (empty = no output)
+    int board_size;       // Board size (15 or 19)
+    int max_depth;        // AI search depth
+    int move_timeout;     // Move timeout in seconds (0 = no timeout)
+    int show_help;        // Whether to show help and exit
+    int invalid_args;     // Whether invalid arguments were provided
+    int enable_undo;      // Whether to undo is allowed at all
+    int max_undo_allowed; // Total undo moves allowed per game (0 = unlimited)
+    int skip_welcome;     // Whether to skip the welcome screen
+    int headless;         // Whether to suppress all stdout output (for daemon mode)
+    int search_radius;    // Search radius for move generation (1-5, default 2)
+    char json_file[256];  // Path to JSON output file (empty = no output)
 
     // Replay mode
     char replay_file[256]; // Path to JSON file to replay (empty = no replay)

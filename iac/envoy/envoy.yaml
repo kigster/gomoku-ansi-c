@@ -149,3 +149,39 @@ static_resources:
                     socket_address:
                       address: 127.0.0.1
                       port_value: 9509
+              # gomoku-httpd instance 11
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: 127.0.0.1
+                      port_value: 9510
+              # gomoku-httpd instance 12
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: 127.0.0.1
+                      port_value: 9511
+              # gomoku-httpd instance 13
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: 127.0.0.1
+                      port_value: 9512
+              # gomoku-httpd instance 14
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: 127.0.0.1
+                      port_value: 9513
+              # gomoku-httpd instance 15
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: 127.0.0.1
+                      port_value: 9514
+              # gomoku-httpd instance 16
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: 127.0.0.1
+                      port_value: 9515

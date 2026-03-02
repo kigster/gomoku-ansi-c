@@ -5,6 +5,7 @@
 
 #include "json_api.h"
 #include "ai.h"
+#include "board.h"
 #include "game.h"
 #include "gomoku.h"
 #include "json.h"
@@ -175,6 +176,25 @@ game_state_t *json_api_parse_game(const char *json_str, char *error_msg,
     // "none" string results in timeout = 0
   }
 
+  // Parse undo (optional): enable/disable undo; total undo moves per game
+  // (default 5)
+  int enable_undo = 1;
+  int max_undo_allowed = 5;
+  json_object *undo_obj;
+  if (json_object_object_get_ex(root, "undo", &undo_obj)) {
+    if (json_object_is_type(undo_obj, json_type_boolean)) {
+      enable_undo = json_object_get_boolean(undo_obj) ? 1 : 0;
+    }
+  }
+  json_object *undo_limit_obj;
+  if (json_object_object_get_ex(root, "undo_limit", &undo_limit_obj) &&
+      json_object_is_type(undo_limit_obj, json_type_int)) {
+    int n = json_object_get_int(undo_limit_obj);
+    if (n >= 0) {
+      max_undo_allowed = n;
+    }
+  }
+
   // Create cli_config for game initialization
   cli_config_t config = {
       .board_size = board_size,
@@ -182,7 +202,8 @@ game_state_t *json_api_parse_game(const char *json_str, char *error_msg,
       .move_timeout = timeout,
       .show_help = 0,
       .invalid_args = 0,
-      .enable_undo = 0,
+      .enable_undo = enable_undo,
+      .max_undo_allowed = max_undo_allowed,
       .skip_welcome = 1,
       .headless = 1, // Daemon mode - no stdout output
       .search_radius = radius,
@@ -225,19 +246,25 @@ game_state_t *json_api_parse_game(const char *json_str, char *error_msg,
 
       // Parse move object
       json_object_object_foreach(move_obj, key, val) {
-        // Check for position array (the player key)
+        // Check for position: array [row, col] or notation string (e.g. "A2")
         if (json_object_is_type(val, json_type_array) &&
             json_object_array_length(val) == 2) {
           x = json_object_get_int(json_object_array_get_idx(val, 0));
           y = json_object_get_int(json_object_array_get_idx(val, 1));
-
-          // Determine player from key
-          if (key[0] == 'X') {
+          if (key[0] == 'X')
             player = AI_CELL_CROSSES;
-          } else if (key[0] == 'O') {
+          else if (key[0] == 'O')
             player = AI_CELL_NAUGHTS;
+        } else if (json_object_is_type(val, json_type_string)) {
+          const char *notation = json_object_get_string(val);
+          if (notation && notation_to_board_coord(notation, &x, &y)) {
+            if (key[0] == 'X')
+              player = AI_CELL_CROSSES;
+            else if (key[0] == 'O')
+              player = AI_CELL_NAUGHTS;
           }
-        } else if (strcmp(key, "time_ms") == 0) {
+        }
+        if (strcmp(key, "time_ms") == 0) {
           time_taken = json_object_get_double(val) / 1000.0;
         } else if (strcmp(key, "moves_evaluated") == 0 ||
                    strcmp(key, "moves_searched") == 0) {
@@ -346,6 +373,11 @@ char *json_api_serialize_game_ex(game_state_t *game,
     json_object_object_add(root, "timeout", json_object_new_string("none"));
   }
 
+  json_object_object_add(
+      root, "undo", json_object_new_boolean(game->config.enable_undo ? 1 : 0));
+  json_object_object_add(root, "undo_limit",
+                         json_object_new_int(game->config.max_undo_allowed));
+
   // Winner
   const char *winner_str = "none";
   if (game->game_state == GAME_HUMAN_WIN) {
@@ -407,11 +439,17 @@ char *json_api_serialize_game_ex(game_state_t *game,
       player_name = is_ai ? "O (AI)" : "O (human)";
     }
 
-    // Position array [x, y]
+    // Position: array [row, col] (0-indexed) for compatibility
     json_object *pos_array = json_object_new_array();
     json_object_array_add(pos_array, json_object_new_int(move->x));
     json_object_array_add(pos_array, json_object_new_int(move->y));
     json_object_object_add(move_obj, player_name, pos_array);
+    // Human-readable notation (e.g. "A2", "J10")
+    char notation_buf[8];
+    board_coord_to_notation(move->x, move->y, notation_buf,
+                            sizeof(notation_buf));
+    json_object_object_add(move_obj, "notation",
+                           json_object_new_string(notation_buf));
 
     // AI-specific fields
     if (is_ai && move->positions_evaluated > 0) {
