@@ -30,7 +30,8 @@ CFLAGS           	= -Wall -Wunused-parameter -Wextra -Wno-gnu-folding-constant -
 # On macOS, Apple Clang may use an incomplete C++ include dir and miss standard headers
 # (e.g. cstddef, cstdlib). Add the SDK's C++ include path when available.
 MACOS_CXX_INCLUDE	= $(shell [ "$(OS)" = darwin ] && sdk=$$(xcrun --show-sdk-path 2>/dev/null) && [ -d "$$sdk/usr/include/c++/v1" ] && echo "-I$$sdk/usr/include/c++/v1")
-CXXFLAGS         	= -Wall -Wunused-parameter -Wextra -std=c++17 -Isrc/gomoku -Isrc -Itests/googletest/googletest/include -I$(JSONC_BUILD) -I$(JSONC_DIR) -Wimplicit-function-declaration -O2 $(MACOS_CXX_INCLUDE)
+_CXXFLAGS        	= -Wall -Wunused-parameter -Wextra -std=c++17 -Isrc/gomoku -Isrc -Itests/googletest/googletest/include -I$(JSONC_BUILD) -I$(JSONC_DIR) -Wimplicit-function-declaration -O2 $(MACOS_CXX_INCLUDE)
+ALL_CXXFLAGS     	= $(_CXXFLAGS) $(CXXFLAGS)
 LDFLAGS          	= -lm $(JSONC_LIB)
 
 TARGET           	= $(PACKAGE)
@@ -63,7 +64,7 @@ GTEST_MAIN_LIB  	= tests/googletest/build/lib/libgtest_main.a
 
 # Daemon test configuration
 DAEMON_TEST_TARGET = test_daemon
-DAEMON_TEST_CXXFLAGS = $(CXXFLAGS)
+DAEMON_TEST_CXXFLAGS = $(ALL_CXXFLAGS)
 
 # CMake build directory
 BUILD_DIR = build
@@ -115,10 +116,10 @@ googletest: 	## Build GoogleTest framework (needed for running tests)
 		@bash -c "./tests/tests-setup"
 
 $(TEST_TARGET): googletest $(JSONC_LIB) tests/gomoku_test.o src/gomoku/gomoku.o src/gomoku/board.o src/gomoku/game.o src/gomoku/ai.o # Test targets
-		$(CXX) $(CXXFLAGS) tests/gomoku_test.o src/gomoku/gomoku.o src/gomoku/board.o src/gomoku/game.o src/gomoku/ai.o $(GTEST_LIB) $(GTEST_MAIN_LIB) $(JSONC_LIB) -pthread -o $(TEST_TARGET)
+		$(CXX) $(ALL_CXXFLAGS) tests/gomoku_test.o src/gomoku/gomoku.o src/gomoku/board.o src/gomoku/game.o src/gomoku/ai.o $(GTEST_LIB) $(GTEST_MAIN_LIB) $(JSONC_LIB) -pthread -o $(TEST_TARGET)
 
 tests/gomoku_test.o: googletest tests/gomoku_test.cpp src/gomoku/gomoku.h src/gomoku/board.h src/gomoku/game.h src/gomoku/ai.h
-		$(CXX) $(CXXFLAGS) -c tests/gomoku_test.cpp -o tests/gomoku_test.o
+		$(CXX) $(ALL_CXXFLAGS) -c tests/gomoku_test.cpp -o tests/gomoku_test.o
 
 test: 		$(TEST_TARGET) $(DAEMON_TEST_TARGET) $(TARGET) ## Run all unit tests (game + daemon)
 		@echo "=== Running Game Tests ==="
@@ -131,7 +132,7 @@ tests: 		test
 
 # Daemon tests
 $(DAEMON_TEST_TARGET): googletest $(JSONC_LIB) tests/daemon_test.o $(DAEMON_CORE) src/net/cli.o src/net/json_api.o src/net/test_client_utils.o src/net/logger.o
-		$(CXX) tests/daemon_test.o $(DAEMON_CORE) src/net/cli.o src/net/json_api.o src/net/test_client_utils.o src/net/logger.o $(GTEST_LIB) $(GTEST_MAIN_LIB) $(JSONC_LIB) -pthread -o $(DAEMON_TEST_TARGET)
+		$(CXX) $(ALL_CXXFLAGS) tests/daemon_test.o $(DAEMON_CORE) src/net/cli.o src/net/json_api.o src/net/test_client_utils.o src/net/logger.o $(GTEST_LIB) $(GTEST_MAIN_LIB) $(JSONC_LIB) -pthread -o $(DAEMON_TEST_TARGET)
 
 tests/daemon_test.o: googletest tests/daemon_test.cpp src/net/cli.h src/net/json_api.h
 		$(CXX) $(DAEMON_TEST_CXXFLAGS) -c tests/daemon_test.cpp -o tests/daemon_test.o

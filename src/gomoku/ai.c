@@ -19,6 +19,46 @@
 #define MAX_RADIUS 2
 #define WIN_SCORE 1000000
 
+static int is_five_from_last_move(int **board, int board_size, int x, int y,
+                                  int player) {
+  if (x < 0 || y < 0 || x >= board_size || y >= board_size) {
+    return 0;
+  }
+  if (board[x][y] != player) {
+    return 0;
+  }
+
+  int directions[4][2] = {{1, 0}, {0, 1}, {1, 1}, {1, -1}};
+  for (int d = 0; d < 4; d++) {
+    int dx = directions[d][0];
+    int dy = directions[d][1];
+    int count = 1;
+
+    int nx = x + dx, ny = y + dy;
+    while (nx >= 0 && nx < board_size && ny >= 0 && ny < board_size &&
+           board[nx][ny] == player) {
+      count++;
+      nx += dx;
+      ny += dy;
+    }
+
+    nx = x - dx;
+    ny = y - dy;
+    while (nx >= 0 && nx < board_size && ny >= 0 && ny < board_size &&
+           board[nx][ny] == player) {
+      count++;
+      nx -= dx;
+      ny -= dy;
+    }
+
+    // Exactly five wins, six+ (overline) does not.
+    if (count == 5) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
 //===============================================================================
 // OPTIMIZED MOVE GENERATION
 //===============================================================================
@@ -703,12 +743,13 @@ int minimax(int **board, int board_size, int depth, int alpha, int beta,
 int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha,
                          int beta, int maximizing_player, int ai_player,
                          int last_x, int last_y) {
-  (void)last_x;
-  (void)last_y;
-
   // Check for timeout first
   if (is_search_timed_out(game)) {
     game->search_timed_out = 1;
+    if (last_x >= 0 && last_y >= 0) {
+      return evaluate_position_incremental_fast(board, game->board_size,
+                                                ai_player, last_x, last_y);
+    }
     return evaluate_position(board, game->board_size, ai_player);
   }
 
@@ -722,21 +763,44 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha,
     return tt_value;
   }
 
-  // Check for immediate wins/losses first (terminal conditions)
-  if (get_cached_winner(game, ai_player)) {
-    int value = WIN_SCORE + depth; // Prefer faster wins
-    store_transposition(game, hash, ai_player, value, depth, TT_EXACT, -1, -1);
-    return value;
+  // Fast terminal check: only the last placed stone can create a new win.
+  int used_last_move_terminal_check = 0;
+  if (last_x >= 0 && last_y >= 0 && board[last_x][last_y] != AI_CELL_EMPTY) {
+    used_last_move_terminal_check = 1;
+    int last_player = board[last_x][last_y];
+    if (is_five_from_last_move(board, game->board_size, last_x, last_y,
+                               last_player)) {
+      int value = (last_player == ai_player) ? (WIN_SCORE + depth)
+                                             : (-WIN_SCORE - depth);
+      store_transposition(game, hash, ai_player, value, depth, TT_EXACT, -1,
+                          -1);
+      return value;
+    }
   }
-  if (get_cached_winner(game, other_player(ai_player))) {
-    int value = -WIN_SCORE - depth; // Prefer slower losses
-    store_transposition(game, hash, ai_player, value, depth, TT_EXACT, -1, -1);
-    return value;
+
+  // Safety fallback for callers that don't provide a valid last move context.
+  // In normal recursive search, the fast path above handles terminal detection.
+  if (!used_last_move_terminal_check) {
+    if (get_cached_winner(game, ai_player)) {
+      int value = WIN_SCORE + depth;
+      store_transposition(game, hash, ai_player, value, depth, TT_EXACT, -1,
+                          -1);
+      return value;
+    }
+    if (get_cached_winner(game, other_player(ai_player))) {
+      int value = -WIN_SCORE - depth;
+      store_transposition(game, hash, ai_player, value, depth, TT_EXACT, -1,
+                          -1);
+      return value;
+    }
   }
 
   // Check search depth limit
   if (depth == 0) {
-    int value = evaluate_position(board, game->board_size, ai_player);
+    int value = (last_x >= 0 && last_y >= 0)
+                    ? evaluate_position_incremental_fast(
+                          board, game->board_size, ai_player, last_x, last_y)
+                    : evaluate_position(board, game->board_size, ai_player);
     store_transposition(game, hash, ai_player, value, depth, TT_EXACT, -1, -1);
     return value;
   }
@@ -903,62 +967,48 @@ int minimax_with_timeout(game_state_t *game, int **board, int depth, int alpha,
 
 void find_first_ai_move(game_state_t *game, int *best_x, int *best_y) {
   // Find the human's first move
-  int human_x = -1, human_y = -1;
-  for (int i = 0; i < game->board_size && human_x == -1; i++) {
-    for (int j = 0; j < game->board_size && human_x == -1; j++) {
+  int black_x = -1, black_y = -1;
+  for (int i = 0; i < game->board_size && black_x == -1; i++) {
+    for (int j = 0; j < game->board_size && black_x == -1; j++) {
       if (game->board[i][j] == AI_CELL_CROSSES) {
-        human_x = i;
-        human_y = j;
+        black_x = i;
+        black_y = j;
       }
     }
   }
 
-  if (human_x == -1) {
+  if (black_x == -1) {
     // Fallback: place in center if no human move found
     *best_x = game->board_size / 2;
     *best_y = game->board_size / 2;
     return;
   }
 
-  // Collect valid positions 1-2 squares away from human move
-  int valid_moves[50][2]; // Enough for nearby positions
-  int move_count = 0;
+  // Common white responses to black's first move in free-style gomoku:
+  // diagonal-adjacent, orthogonal-adjacent, then 2-space diagonal/orthogonal.
+  static const int opening_offsets[][2] = {
+      {1, 1}, {1, -1}, {-1, 1}, {-1, -1}, {0, 1}, {1, 0}, {0, -1}, {-1, 0},
+      {2, 2}, {2, -2}, {-2, 2}, {-2, -2}, {0, 2}, {2, 0}, {0, -2}, {-2, 0},
+  };
 
-  for (int distance = 1; distance <= 2; distance++) {
-    for (int dx = -distance; dx <= distance; dx++) {
-      for (int dy = -distance; dy <= distance; dy++) {
-        if (dx == 0 && dy == 0)
-          continue; // Skip the human's position
-
-        int new_x = human_x + dx;
-        int new_y = human_y + dy;
-
-        // Check bounds and if position is empty
-        if (new_x >= 0 && new_x < game->board_size && new_y >= 0 &&
-            new_y < game->board_size &&
-            game->board[new_x][new_y] == AI_CELL_EMPTY) {
-          valid_moves[move_count][0] = new_x;
-          valid_moves[move_count][1] = new_y;
-          move_count++;
-        }
-      }
+  for (size_t i = 0; i < sizeof(opening_offsets) / sizeof(opening_offsets[0]);
+       i++) {
+    int x = black_x + opening_offsets[i][0];
+    int y = black_y + opening_offsets[i][1];
+    if (x < 0 || x >= game->board_size || y < 0 || y >= game->board_size) {
+      continue;
     }
+    if (game->board[x][y] != AI_CELL_EMPTY) {
+      continue;
+    }
+    *best_x = x;
+    *best_y = y;
+    return;
   }
 
-  if (move_count > 0) {
-    // Randomly select one of the valid moves
-    int selected = rand() % move_count;
-    *best_x = valid_moves[selected][0];
-    *best_y = valid_moves[selected][1];
-  } else {
-    // Fallback: place adjacent to human move
-    *best_x = human_x + (rand() % 3 - 1); // -1, 0, or 1
-    *best_y = human_y + (rand() % 3 - 1);
-
-    // Ensure bounds
-    *best_x = max(0, min(game->board_size - 1, *best_x));
-    *best_y = max(0, min(game->board_size - 1, *best_y));
-  }
+  // Rare fallback when all opening-book cells are unavailable.
+  *best_x = max(0, min(game->board_size - 1, black_x + 1));
+  *best_y = max(0, min(game->board_size - 1, black_y));
 }
 
 void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
@@ -1122,6 +1172,58 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
              "%s%c%s Blocking opponent's threat!", ai_color, ai_symbol,
              COLOR_RESET);
     add_ai_history_entry(game, blocking_move_count);
+    return;
+  }
+
+  // =========================================================================
+  // STEP 2b: Create strong double-three-with-holes style compound threat
+  // (scored as 30000-39999), unless immediate defense from STEP 2 was needed.
+  // =========================================================================
+  step_start = get_current_time();
+  int compound_three_x[361];
+  int compound_three_y[361];
+  int compound_three_threat[361];
+  int compound_three_count = 0;
+  int max_compound_three = 0;
+
+  for (int i = 0; i < move_count; i++) {
+    int my_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
+                                         ai_player, game->board_size);
+    if (my_threat >= 30000 && my_threat < 40000) {
+      compound_three_x[compound_three_count] = moves[i].x;
+      compound_three_y[compound_three_count] = moves[i].y;
+      compound_three_threat[compound_three_count] = my_threat;
+      compound_three_count++;
+      if (my_threat > max_compound_three) {
+        max_compound_three = my_threat;
+      }
+    }
+  }
+
+  {
+    scoring_entry_t *e = scoring_report_add(report, "compound_three", 1);
+    if (e) {
+      e->evaluated_moves = compound_three_count;
+      e->score = max_compound_three;
+      e->time_ms = (get_current_time() - step_start) * 1000.0;
+      if (compound_three_count > 0)
+        e->decisive = 1;
+    }
+  }
+
+  if (compound_three_count > 0) {
+    int best_idx = 0;
+    for (int i = 1; i < compound_three_count; i++) {
+      if (compound_three_threat[i] > compound_three_threat[best_idx]) {
+        best_idx = i;
+      }
+    }
+    *best_x = compound_three_x[best_idx];
+    *best_y = compound_three_y[best_idx];
+    snprintf(game->ai_status_message, sizeof(game->ai_status_message),
+             "%s%c%s Creating compound three threat!", ai_color, ai_symbol,
+             COLOR_RESET);
+    add_ai_history_entry(game, compound_three_count);
     return;
   }
 

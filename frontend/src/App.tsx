@@ -9,6 +9,7 @@ import Board from './components/Board'
 import GameStatus from './components/GameStatus'
 import ThinkingTimer from './components/ThinkingTimer'
 import PreviousGames from './components/PreviousGames'
+import JsonDebugModal from './components/JsonDebugModal'
 import logo from '../assets/images/logo.png'
 
 const STORAGE_KEY = 'gomoku_player_name'
@@ -142,6 +143,7 @@ export default function App() {
           <div className="flex items-center gap-3">
             <img src={logo} alt="Gomoku" className="h-9 w-auto" />
             <h1 className="font-heading text-2xl font-bold text-amber-400">Gomoku</h1>
+            <JsonDebugModal />
           </div>
           <button
             ref={historyBtnRef}

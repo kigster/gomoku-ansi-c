@@ -9,6 +9,7 @@
 #include "game.h"
 #include "gomoku.h"
 #include "json.h"
+#include <ctype.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,6 +28,50 @@ static json_object *json_ms_from_seconds(double seconds) {
   double ms = round(seconds * 1000000.0) / 1000.0; // Round to microseconds
   snprintf(buf, sizeof(buf), "%.3f", ms);
   return json_object_new_double_s(atof(buf), buf);
+}
+
+static int column_index_from_char(char c) {
+  static const char *columns = "ABCDEFGHJKLMNOPQRST";
+  char upper = (char)toupper((unsigned char)c);
+  for (int i = 0; columns[i] != '\0'; i++) {
+    if (columns[i] == upper) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static int coord_to_notation(int x, int y, int board_size, char *out,
+                             size_t out_len) {
+  static const char *columns = "ABCDEFGHJKLMNOPQRST";
+  if (!out || out_len == 0 || x < 0 || y < 0 || x >= board_size ||
+      y >= board_size || y >= (int)strlen(columns)) {
+    return 0;
+  }
+  snprintf(out, out_len, "%c%d", columns[y], x);
+  return 1;
+}
+
+static int notation_to_coord(const char *s, int board_size, int *x, int *y) {
+  if (!s || !x || !y || strlen(s) < 2) {
+    return 0;
+  }
+  int col = column_index_from_char(s[0]);
+  if (col < 0 || col >= board_size) {
+    return 0;
+  }
+  for (size_t i = 1; s[i] != '\0'; i++) {
+    if (!isdigit((unsigned char)s[i])) {
+      return 0;
+    }
+  }
+  int row = atoi(s + 1);
+  if (row < 0 || row >= board_size) {
+    return 0;
+  }
+  *x = row;
+  *y = col;
+  return 1;
 }
 
 /**
@@ -206,6 +251,7 @@ game_state_t *json_api_parse_game(const char *json_str, char *error_msg,
       .max_undo_allowed = max_undo_allowed,
       .skip_welcome = 1,
       .headless = 1, // Daemon mode - no stdout output
+      .stateless_mode = 1,
       .search_radius = radius,
       .json_file = "",
       .replay_file = "",
@@ -246,23 +292,25 @@ game_state_t *json_api_parse_game(const char *json_str, char *error_msg,
 
       // Parse move object
       json_object_object_foreach(move_obj, key, val) {
-        // Check for position: array [row, col] or notation string (e.g. "A2")
-        if (json_object_is_type(val, json_type_array) &&
-            json_object_array_length(val) == 2) {
+        // Check for position value (preferred string notation, legacy array)
+        if (json_object_is_type(val, json_type_string)) {
+          const char *coord = json_object_get_string(val);
+          if (!notation_to_coord(coord, board_size, &x, &y)) {
+            continue;
+          }
+          if (key[0] == 'X') {
+            player = AI_CELL_CROSSES;
+          } else if (key[0] == 'O') {
+            player = AI_CELL_NAUGHTS;
+          }
+        } else if (json_object_is_type(val, json_type_array) &&
+                   json_object_array_length(val) == 2) {
           x = json_object_get_int(json_object_array_get_idx(val, 0));
           y = json_object_get_int(json_object_array_get_idx(val, 1));
           if (key[0] == 'X')
             player = AI_CELL_CROSSES;
           else if (key[0] == 'O')
             player = AI_CELL_NAUGHTS;
-        } else if (json_object_is_type(val, json_type_string)) {
-          const char *notation = json_object_get_string(val);
-          if (notation && notation_to_board_coord(notation, &x, &y)) {
-            if (key[0] == 'X')
-              player = AI_CELL_CROSSES;
-            else if (key[0] == 'O')
-              player = AI_CELL_NAUGHTS;
-          }
         }
         if (strcmp(key, "time_ms") == 0) {
           time_taken = json_object_get_double(val) / 1000.0;
@@ -439,17 +487,13 @@ char *json_api_serialize_game_ex(game_state_t *game,
       player_name = is_ai ? "O (AI)" : "O (human)";
     }
 
-    // Position: array [row, col] (0-indexed) for compatibility
-    json_object *pos_array = json_object_new_array();
-    json_object_array_add(pos_array, json_object_new_int(move->x));
-    json_object_array_add(pos_array, json_object_new_int(move->y));
-    json_object_object_add(move_obj, player_name, pos_array);
-    // Human-readable notation (e.g. "A2", "J10")
-    char notation_buf[8];
-    board_coord_to_notation(move->x, move->y, notation_buf,
-                            sizeof(notation_buf));
-    json_object_object_add(move_obj, "notation",
-                           json_object_new_string(notation_buf));
+    // Position in compact board notation (e.g., "H7")
+    char coord[8];
+    if (coord_to_notation(move->x, move->y, game->board_size, coord,
+                          sizeof(coord))) {
+      json_object_object_add(move_obj, player_name,
+                             json_object_new_string(coord));
+    }
 
     // AI-specific fields
     if (is_ai && move->positions_evaluated > 0) {

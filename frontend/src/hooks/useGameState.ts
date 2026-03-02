@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react'
 import type { GameState, GameSettings, GamePhase, CellValue } from '../types'
 import { postGameState } from '../api'
 import { trackTimeout, trackCriticalTimeout } from '../analytics'
+import { toNotation, coordToRowCol } from '../coordinates'
 
 function buildEmptyBoard(size: number): string[] {
   const row = Array(size).fill('.').join(' ')
@@ -45,8 +46,8 @@ function getLastMoveCoords(state: GameState): [number, number] | null {
   if (state.moves.length === 0) return null
   const lastMove = state.moves[state.moves.length - 1]
   for (const key of ['X (human)', 'X (AI)', 'O (human)', 'O (AI)'] as const) {
-    const coords = lastMove[key]
-    if (coords) return coords
+    const coord = lastMove[key]
+    if (coord != null) return coordToRowCol(coord)
   }
   return null
 }
@@ -195,7 +196,7 @@ export function useGameState(settings: GameSettings) {
       board_state: newBoardState,
       moves: [
         ...gameState.moves,
-        { [moveKey]: [row, col] as [number, number], time_ms: elapsed },
+        { [moveKey]: toNotation(row, col), time_ms: elapsed },
       ],
     }
 
@@ -226,10 +227,13 @@ export function useGameState(settings: GameSettings) {
     let newBoard: string[] = []
     for (const move of newMoves) {
       for (const key of ['X (human)', 'X (AI)', 'O (human)', 'O (AI)'] as const) {
-        const coords = move[key]
-        if (coords) {
-          const piece = key.startsWith('X') ? 'X' as const : 'O' as const
-          newBoard = updateBoardState(newBoard, coords[0], coords[1], piece, gameState.board_size)
+        const coord = move[key]
+        if (coord != null) {
+          const rc = coordToRowCol(coord)
+          if (rc) {
+            const piece = key.startsWith('X') ? 'X' as const : 'O' as const
+            newBoard = updateBoardState(newBoard, rc[0], rc[1], piece, gameState.board_size)
+          }
         }
       }
     }

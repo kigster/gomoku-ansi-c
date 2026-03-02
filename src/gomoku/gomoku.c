@@ -68,20 +68,12 @@ int calc_combination_threat(int one, int two);
  * Fast incremental evaluation focusing on positions near last move
  * Much faster than full board evaluation
  */
-int evaluate_position_incremental(int **board, int size, int player, int last_x,
-                                  int last_y) {
+static int evaluate_position_local_region(int **board, int size, int player,
+                                          int last_x, int last_y) {
   populate_threat_matrix();
 
   int total_score = 0;
   int opponent = other_player(player);
-
-  // Check for immediate win/loss first
-  if (has_winner(board, size, player)) {
-    return 1000000; // Win
-  }
-  if (has_winner(board, size, opponent)) {
-    return -1000000; // Loss
-  }
 
   // Only evaluate positions within radius of the last move for speed
   int eval_radius = 3; // Increased radius for better accuracy
@@ -101,6 +93,23 @@ int evaluate_position_incremental(int **board, int size, int player, int last_x,
   }
 
   return total_score;
+}
+
+int evaluate_position_incremental(int **board, int size, int player, int last_x,
+                                  int last_y) {
+  // Keep full terminal semantics for legacy callers.
+  if (has_winner(board, size, player)) {
+    return 1000000; // Win
+  }
+  if (has_winner(board, size, other_player(player))) {
+    return -1000000; // Loss
+  }
+  return evaluate_position_local_region(board, size, player, last_x, last_y);
+}
+
+int evaluate_position_incremental_fast(int **board, int size, int player,
+                                       int last_x, int last_y) {
+  return evaluate_position_local_region(board, size, player, last_x, last_y);
 }
 
 /**

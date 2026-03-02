@@ -141,9 +141,10 @@ typedef struct {
     int stones_on_board;                       // Cached stone count
     int has_winner_cache[2];                   // Cache for winner detection [player1, player2]
     int winner_cache_valid;                    // Whether winner cache is valid
+    int disable_winner_cache;                  // If true, bypass winner cache entirely
 
     // Transposition table
-    transposition_entry_t transposition_table[TRANSPOSITION_TABLE_SIZE];
+    transposition_entry_t transposition_table[2][TRANSPOSITION_TABLE_SIZE];
     uint64_t zobrist_keys[2][361];            // Zobrist keys for hashing
     uint64_t current_hash;                     // Current position hash
 
@@ -279,6 +280,7 @@ uint64_t compute_zobrist_hash(game_state_t *game);
  * 
  * @param game The game state
  * @param hash Position hash
+ * @param ai_player The AI player (AI_CELL_CROSSES or AI_CELL_NOUGHTS)
  * @param value Evaluated value
  * @param depth Search depth
  * @param flag Type of bound (exact, lower, upper)
@@ -291,9 +293,10 @@ void store_transposition(game_state_t *game, uint64_t hash, int ai_player,
 
 /**
  * Probes the transposition table for a cached evaluation.
- * 
+ *
  * @param game The game state
  * @param hash Position hash
+ * @param ai_player The AI player (AI_CELL_CROSSES or AI_CELL_NOUGHTS)
  * @param depth Search depth
  * @param alpha Alpha value
  * @param beta Beta value

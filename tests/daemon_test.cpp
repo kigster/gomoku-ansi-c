@@ -103,9 +103,9 @@ TEST_F(DaemonJsonTest, TestClientParsesLastMove) {
       "  \"winner\": \"none\",\n"
       "  \"board_state\": [],\n"
       "  \"moves\": [\n"
-      "    { \"X (AI)\": [7, 7], \"time_ms\": 0.000 },\n"
-      "    { \"O (AI)\": [7, 8], \"time_ms\": 0.000 },\n"
-      "    { \"X (AI)\": [8, 8], \"time_ms\": 0.000 }\n"
+      "    { \"X (AI)\": \"H7\", \"time_ms\": 0.000 },\n"
+      "    { \"O (AI)\": \"J7\", \"time_ms\": 0.000 },\n"
+      "    { \"X (AI)\": \"J8\", \"time_ms\": 0.000 }\n"
       "  ]\n"
       "}\n";
 

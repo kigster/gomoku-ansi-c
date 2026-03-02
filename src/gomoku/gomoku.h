@@ -218,6 +218,13 @@ int evaluate_position_incremental(int **board, int size, int player, int last_x,
         int last_y);
 
 /**
+ * Incremental evaluation without terminal win/loss scans.
+ * Intended for search code paths that already checked terminal status.
+ */
+int evaluate_position_incremental_fast(int **board, int size, int player,
+                                       int last_x, int last_y);
+
+/**
  * Checks if the specified player has won the game (5 in a row).
  *
  * @param board 2D array representing the game board

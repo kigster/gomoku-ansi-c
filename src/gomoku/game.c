@@ -8,6 +8,7 @@
 #include "game.h"
 #include "ai.h"
 #include "json.h"
+#include <ctype.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,6 +22,50 @@ static json_object *json_ms_from_seconds(double seconds) {
   double ms = round(seconds * 1000000.0) / 1000.0; // Round to microseconds
   snprintf(buf, sizeof(buf), "%.3f", ms);
   return json_object_new_double_s(atof(buf), buf);
+}
+
+static int column_index_from_char(char c) {
+  static const char *columns = "ABCDEFGHJKLMNOPQRST";
+  char upper = (char)toupper((unsigned char)c);
+  for (int i = 0; columns[i] != '\0'; i++) {
+    if (columns[i] == upper) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static int coord_to_notation(int x, int y, int board_size, char *out,
+                             size_t out_len) {
+  static const char *columns = "ABCDEFGHJKLMNOPQRST";
+  if (!out || out_len == 0 || x < 0 || y < 0 || x >= board_size ||
+      y >= board_size || y >= (int)strlen(columns)) {
+    return 0;
+  }
+  snprintf(out, out_len, "%c%d", columns[y], x);
+  return 1;
+}
+
+static int notation_to_coord(const char *s, int board_size, int *x, int *y) {
+  if (!s || !x || !y || strlen(s) < 2) {
+    return 0;
+  }
+  int col = column_index_from_char(s[0]);
+  if (col < 0 || col >= board_size) {
+    return 0;
+  }
+  for (size_t i = 1; s[i] != '\0'; i++) {
+    if (!isdigit((unsigned char)s[i])) {
+      return 0;
+    }
+  }
+  int row = atoi(s + 1);
+  if (row < 0 || row >= board_size) {
+    return 0;
+  }
+  *x = row;
+  *y = col;
+  return 1;
 }
 
 uint64_t compute_zobrist_hash(game_state_t *game);
@@ -83,6 +128,7 @@ game_state_t *init_game(cli_config_t config) {
   game->move_start_time = 0.0;
   game->search_start_time = 0.0;
   game->search_timed_out = 0;
+  game->disable_winner_cache = config.stateless_mode ? 1 : 0;
 
   // Initialize optimization caches
   init_optimization_caches(game);
@@ -494,6 +540,10 @@ void invalidate_winner_cache(game_state_t *game) {
 }
 
 int get_cached_winner(game_state_t *game, int player) {
+  if (game->disable_winner_cache) {
+    return has_winner(game->board, game->board_size, player);
+  }
+
   if (!game->winner_cache_valid) {
     // Compute winner status for both players
     game->has_winner_cache[0] =
@@ -559,8 +609,9 @@ uint64_t compute_zobrist_hash(game_state_t *game) {
 void store_transposition(game_state_t *game, uint64_t hash, int ai_player,
                          int value, int depth, int flag, int best_x,
                          int best_y) {
+  int ai_index = (ai_player == AI_CELL_CROSSES) ? 0 : 1;
   int index = hash % TRANSPOSITION_TABLE_SIZE;
-  transposition_entry_t *entry = &game->transposition_table[index];
+  transposition_entry_t *entry = &game->transposition_table[ai_index][index];
 
   // Replace if this entry is deeper or empty
   if (entry->hash == 0 || entry->depth <= depth) {
@@ -576,8 +627,9 @@ void store_transposition(game_state_t *game, uint64_t hash, int ai_player,
 
 int probe_transposition(game_state_t *game, uint64_t hash, int ai_player,
                         int depth, int alpha, int beta, int *value) {
+  int ai_index = (ai_player == AI_CELL_CROSSES) ? 0 : 1;
   int index = hash % TRANSPOSITION_TABLE_SIZE;
-  transposition_entry_t *entry = &game->transposition_table[index];
+  transposition_entry_t *entry = &game->transposition_table[ai_index][index];
 
   if (entry->hash == hash && entry->ai_player == ai_player &&
       entry->depth >= depth) {
@@ -886,11 +938,13 @@ int write_game_json(game_state_t *game, const char *filename) {
       player_name = is_ai ? "O (AI)" : "O (human)";
     }
 
-    // Position array [x, y]
-    json_object *pos_array = json_object_new_array();
-    json_object_array_add(pos_array, json_object_new_int(move->x));
-    json_object_array_add(pos_array, json_object_new_int(move->y));
-    json_object_object_add(move_obj, player_name, pos_array);
+    // Position as human-readable board coordinate (e.g., "H7").
+    char coord[8];
+    if (coord_to_notation(move->x, move->y, game->board_size, coord,
+                          sizeof(coord))) {
+      json_object_object_add(move_obj, player_name,
+                             json_object_new_string(coord));
+    }
 
     // AI-specific fields
     if (is_ai && move->positions_evaluated > 0) {
@@ -992,9 +1046,19 @@ int load_game_json(const char *filename, replay_data_t *data) {
     // The move object has a key like "X (AI)" or "O (human)" with position
     // array
     json_object_object_foreach(move_obj, key, val) {
-      // Check for position array (the player key)
-      if (json_object_is_type(val, json_type_array) &&
-          json_object_array_length(val) == 2) {
+      // Check for position value under the player key
+      if (json_object_is_type(val, json_type_string)) {
+        const char *coord = json_object_get_string(val);
+        if (!notation_to_coord(coord, data->board_size, &move->x, &move->y)) {
+          continue;
+        }
+        if (key[0] == 'X') {
+          move->player = AI_CELL_CROSSES;
+        } else if (key[0] == 'O') {
+          move->player = AI_CELL_NAUGHTS;
+        }
+      } else if (json_object_is_type(val, json_type_array) &&
+                 json_object_array_length(val) == 2) {
         move->x = json_object_get_int(json_object_array_get_idx(val, 0));
         move->y = json_object_get_int(json_object_array_get_idx(val, 1));
 

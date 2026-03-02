@@ -7,13 +7,13 @@
   "X": {"player": "human"},
   "O": {"player": "AI", "depth": 4},
   "moves": [
-    {"X (human)": [7, 7]},
-    {"O (AI)": [7, 8]},
-    {"X (human)": [8, 8]},
-    {"O (AI)": [6, 8]},
-    {"X (human)": [9, 9]},
-    {"O (AI)": [5, 8]},
-    {"X (human)": [6, 6]}
+    {"X (human)": "H7"},
+    {"O (AI)": "J7"},
+    {"X (human)": "J8"},
+    {"O (AI)": "J6"},
+    {"X (human)": "K9"},
+    {"O (AI)": "J5"},
+    {"X (human)": "G6"}
   ],
   "forbidden_moves": [[10, 10], [5, 5]],
   "expected_behavior": "offensive",

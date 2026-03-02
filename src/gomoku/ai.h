@@ -90,7 +90,8 @@ static inline scoring_entry_t *scoring_report_add(scoring_report_t *report,
 void find_best_ai_move(game_state_t *game, int *best_x, int *best_y, scoring_report_t *report);
 
 /**
- * Finds the AI's first move (random placement near human's first move).
+ * Finds the AI's first response move from a small opening book
+ * (common white replies to black's first stone).
  * 
  * @param game The game state
  * @param best_x Pointer to store the best x coordinate
