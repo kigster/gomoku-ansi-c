@@ -22,7 +22,6 @@
 
 #define DEFAULT_HOST "127.0.0.1"
 #define DEFAULT_PORT 9900
-#define BUFFER_SIZE 65536
 
 // ANSI color codes
 #define COLOR_YELLOW "\033[33m"
@@ -167,83 +166,37 @@ static char *http_post(const char *host, int port, const char *path,
   }
   free(request);
 
-  // Receive response, calling tick_cb every ~1 second while waiting
-  char *response = malloc(BUFFER_SIZE);
-  if (!response) {
-    close(sock);
-    return NULL;
-  }
-
-  size_t total = 0;
-  while (1) {
-    fd_set readfds;
-    FD_ZERO(&readfds);
-    FD_SET(sock, &readfds);
-    struct timeval tv = {1, 0};
-
-    int ready = select(sock + 1, &readfds, NULL, NULL, &tv);
-    if (ready > 0) {
-      ssize_t n = recv(sock, response + total, BUFFER_SIZE - total - 1, 0);
-      if (n <= 0)
-        break;
-      total += (size_t)n;
-      if (total >= BUFFER_SIZE - 1)
-        break;
-    } else if (ready == 0) {
-      // Timeout — tick the timer display
-      if (tick_cb)
-        tick_cb(tick_ctx);
-    } else {
-      if (errno == EINTR)
-        continue;
-      break;
-    }
-  }
-  response[total] = '\0';
+  // Read full response using Content-Length (no fixed 64K limit)
+  size_t response_len = 0;
+  char *response_body = test_client_read_http_response(
+      sock, http_status, &response_len, 0, tick_cb, tick_ctx);
   close(sock);
 
-  // Find body (after \r\n\r\n)
-  char *body_start = strstr(response, "\r\n\r\n");
-  if (!body_start) {
+  if (!response_body) {
     fprintf(stderr, "Error: Invalid HTTP response\n");
-    free(response);
     return NULL;
   }
-  body_start += 4;
 
-  // Extract HTTP status code
-  int status_code = 0;
-  if (strncmp(response, "HTTP/1.1 ", 9) == 0 ||
-      strncmp(response, "HTTP/1.0 ", 9) == 0) {
-    status_code = atoi(response + 9);
-  }
-
-  if (http_status) {
-    *http_status = status_code;
-  }
+  int status_code = http_status ? *http_status : 0;
 
   // Check for HTTP error status (but let caller handle retryable errors)
   if (status_code < 200 || status_code >= 300) {
-    // Extract status line for error message
-    char status_line[128];
-    const char *end = strchr(response, '\r');
-    size_t len = end ? (size_t)(end - response) : strlen(response);
-    if (len >= sizeof(status_line))
-      len = sizeof(status_line) - 1;
-    memcpy(status_line, response, len);
-    status_line[len] = '\0';
-
     // For 503, don't print error - caller will handle retry
     if (status_code != 503) {
-      fprintf(stderr, "Error: Server returned: %s\n", status_line);
+      fprintf(stderr, "Error: Server returned: HTTP/1.1 %d\n", status_code);
     }
-    free(response);
+    free(response_body);
     return NULL;
   }
 
-  char *result = strdup(body_start);
-  free(response);
-  return result;
+  // Reject truncated responses so we never send invalid JSON back
+  if (!test_client_response_looks_complete(response_body, response_len)) {
+    fprintf(stderr, "Error: Response truncated or invalid (incomplete JSON)\n");
+    free(response_body);
+    return NULL;
+  }
+
+  return response_body;
 }
 
 //===============================================================================
@@ -598,7 +551,7 @@ static void print_usage(const char *program) {
   printf("  -r, --radius <n>      Search radius 1-4 (default: 2)\n");
   printf("  -b, --board <n>       Board size 15 or 19 (default: 15)\n");
   printf("  -t, --timeout <n>     Move timeout in seconds (default: none)\n");
-  printf("  -j, --json <file>     Save game to JSON file when finished\n");
+  printf("  -j, --json <file>     Save game to JSON file after every move\n");
   printf("  -q, --quiet           No terminal output (for batch/tournament)\n");
   printf("  -v, --verbose         Show game state after each move\n");
   printf("  --help                Show this help message\n\n");
@@ -799,6 +752,11 @@ int main(int argc, char *argv[]) {
 
     move_num++;
     winner = get_winner(game_state);
+
+    // Save game state after every move when -j is specified
+    if (json_file) {
+      save_game_json(json_file, game_state, &errors);
+    }
   }
 
   if (!quiet) {

@@ -158,12 +158,12 @@ int get_move_priority_optimized(game_state_t *game, int **board, int x, int y,
   int opp_threat =
       evaluate_threat_fast(board, x, y, other_player(player), game->board_size);
 
-  // Winning move should come first.
-  if (my_threat >= 100000) {
+  // Winning move should come first (open four or five-in-a-row only).
+  if (my_threat >= 500000) {
     return 2000000000;
   }
   // Blocking opponent's winning move is second priority.
-  if (opp_threat >= 100000) {
+  if (opp_threat >= 500000) {
     return 1500000000;
   }
   // Creating a compound threat (four+three, double-three) is very high
@@ -542,7 +542,7 @@ static int find_forced_win_recursive(game_state_t *game, int **board,
 
     // Check if this creates an immediate unstoppable win
     int post_threat = evaluate_threat_fast(board, mx, my, player, board_size);
-    if (post_threat >= 100000) {
+    if (post_threat >= 500000) {
       // Direct win
       board[mx][my] = AI_CELL_EMPTY;
       *result_x = mx;
@@ -1087,7 +1087,7 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
                                       ai_player, game->board_size);
     if (threat > our_max_score)
       our_max_score = threat;
-    if (threat >= 100000) {
+    if (threat >= 500000) {
       winning_moves_x[winning_move_count] = moves[i].x;
       winning_moves_y[winning_move_count] = moves[i].y;
       winning_move_count++;
@@ -1176,58 +1176,6 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
   }
 
   // =========================================================================
-  // STEP 2b: Create strong double-three-with-holes style compound threat
-  // (scored as 30000-39999), unless immediate defense from STEP 2 was needed.
-  // =========================================================================
-  step_start = get_current_time();
-  int compound_three_x[361];
-  int compound_three_y[361];
-  int compound_three_threat[361];
-  int compound_three_count = 0;
-  int max_compound_three = 0;
-
-  for (int i = 0; i < move_count; i++) {
-    int my_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
-                                         ai_player, game->board_size);
-    if (my_threat >= 30000 && my_threat < 40000) {
-      compound_three_x[compound_three_count] = moves[i].x;
-      compound_three_y[compound_three_count] = moves[i].y;
-      compound_three_threat[compound_three_count] = my_threat;
-      compound_three_count++;
-      if (my_threat > max_compound_three) {
-        max_compound_three = my_threat;
-      }
-    }
-  }
-
-  {
-    scoring_entry_t *e = scoring_report_add(report, "compound_three", 1);
-    if (e) {
-      e->evaluated_moves = compound_three_count;
-      e->score = max_compound_three;
-      e->time_ms = (get_current_time() - step_start) * 1000.0;
-      if (compound_three_count > 0)
-        e->decisive = 1;
-    }
-  }
-
-  if (compound_three_count > 0) {
-    int best_idx = 0;
-    for (int i = 1; i < compound_three_count; i++) {
-      if (compound_three_threat[i] > compound_three_threat[best_idx]) {
-        best_idx = i;
-      }
-    }
-    *best_x = compound_three_x[best_idx];
-    *best_y = compound_three_y[best_idx];
-    snprintf(game->ai_status_message, sizeof(game->ai_status_message),
-             "%s%c%s Creating compound three threat!", ai_color, ai_symbol,
-             COLOR_RESET);
-    add_ai_history_entry(game, compound_three_count);
-    return;
-  }
-
-  // =========================================================================
   // STEP 3: Offensive VCT — can we force a win?
   // =========================================================================
   step_start = get_current_time();
@@ -1294,6 +1242,58 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
              "%s%c%s Breaking opponent's VCT!", ai_color, ai_symbol,
              COLOR_RESET);
     add_ai_history_entry(game, move_count);
+    return;
+  }
+
+  // =========================================================================
+  // STEP 4b: Create strong compound threat (scored as 30000-39999).
+  // Moved after defensive VCT to ensure we don't ignore opponent forced wins.
+  // =========================================================================
+  step_start = get_current_time();
+  int compound_three_x[361];
+  int compound_three_y[361];
+  int compound_three_threat[361];
+  int compound_three_count = 0;
+  int max_compound_three = 0;
+
+  for (int i = 0; i < move_count; i++) {
+    int my_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
+                                         ai_player, game->board_size);
+    if (my_threat >= 30000 && my_threat < 40000) {
+      compound_three_x[compound_three_count] = moves[i].x;
+      compound_three_y[compound_three_count] = moves[i].y;
+      compound_three_threat[compound_three_count] = my_threat;
+      compound_three_count++;
+      if (my_threat > max_compound_three) {
+        max_compound_three = my_threat;
+      }
+    }
+  }
+
+  {
+    scoring_entry_t *e = scoring_report_add(report, "compound_three", 1);
+    if (e) {
+      e->evaluated_moves = compound_three_count;
+      e->score = max_compound_three;
+      e->time_ms = (get_current_time() - step_start) * 1000.0;
+      if (compound_three_count > 0)
+        e->decisive = 1;
+    }
+  }
+
+  if (compound_three_count > 0) {
+    int best_idx = 0;
+    for (int i = 1; i < compound_three_count; i++) {
+      if (compound_three_threat[i] > compound_three_threat[best_idx]) {
+        best_idx = i;
+      }
+    }
+    *best_x = compound_three_x[best_idx];
+    *best_y = compound_three_y[best_idx];
+    snprintf(game->ai_status_message, sizeof(game->ai_status_message),
+             "%s%c%s Creating compound three threat!", ai_color, ai_symbol,
+             COLOR_RESET);
+    add_ai_history_entry(game, compound_three_count);
     return;
   }
 

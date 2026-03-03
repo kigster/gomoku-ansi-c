@@ -178,8 +178,10 @@ void handle_request(struct http_request_s *request) {
   path_buf[path_len] = '\0';
   current_request.path = path_buf;
 
-  LOG_DEBUG("Request: %.*s %.*s from %s", (int)method.len, method.buf,
-            (int)target.len, target.buf, current_request.client_ip);
+  struct http_string_s req_body = http_request_body(request);
+  LOG_DEBUG("Request: %.*s %.*s from %s (%d bytes)", (int)method.len,
+            method.buf, (int)target.len, target.buf, current_request.client_ip,
+            (int)req_body.len);
 
   // Handle CORS preflight
   if (method_matches(request, "OPTIONS")) {
@@ -275,7 +277,7 @@ void handle_play(struct http_request_s *request) {
   memcpy(body_str, body.buf, body.len);
   body_str[body.len] = '\0';
 
-  LOG_DEBUG("Received game state: %zu bytes", body.len);
+  LOG_DEBUG("  received game state: %zu bytes", body.len);
 
   // Parse game state
   char error_msg[256] = {0};
@@ -291,7 +293,7 @@ void handle_play(struct http_request_s *request) {
 
   // Check if game already has a winner
   if (json_api_has_winner(game)) {
-    LOG_DEBUG("Game already finished, returning unchanged");
+    LOG_DEBUG("  game already finished, returning unchanged");
     char *response_json = json_api_serialize_game(game);
     cleanup_game(game);
 
@@ -319,7 +321,7 @@ void handle_play(struct http_request_s *request) {
   int saved_depth = game->max_depth;
   game->max_depth = game->depth_for_player[player_index];
 
-  LOG_DEBUG("AI playing as %s, move %d (depth=%d, radius=%d)",
+  LOG_DEBUG("  AI playing as %s, move %d (depth=%d, radius=%d)",
             (ai_player == AI_CELL_CROSSES) ? "X" : "O",
             game->move_history_count + 1, game->max_depth, game->search_radius);
 
@@ -349,6 +351,14 @@ void handle_play(struct http_request_s *request) {
   } else {
     // Use minimax
     find_best_ai_move(game, &best_x, &best_y, &scoring_report);
+
+    // Find decisive evaluator step and update move_type
+    for (int i = 0; i < scoring_report.entry_count; i++) {
+      if (scoring_report.entries[i].decisive) {
+        move_type = scoring_report.entries[i].evaluator;
+        break;
+      }
+    }
   }
 
   // Mark server as ready after AI computation
@@ -361,7 +371,7 @@ void handle_play(struct http_request_s *request) {
 
   // Make the move
   if (best_x < 0 || best_y < 0) {
-    LOG_ERROR("AI failed to find valid move after %.3fs", elapsed_time);
+    LOG_ERROR("  AI failed to find valid move after %.3fs", elapsed_time);
     cleanup_game(game);
     handle_internal_error(request, "AI failed to find a valid move");
     return;
@@ -378,14 +388,14 @@ void handle_play(struct http_request_s *request) {
 
   if (!make_move(game, best_x, best_y, ai_player, elapsed_time, moves_evaluated,
                  own_score, opp_score)) {
-    LOG_ERROR("Failed to make move at [%d, %d]", best_x, best_y);
+    LOG_ERROR("  failed to make move at [%d, %d]", best_x, best_y);
     cleanup_game(game);
     handle_internal_error(request, "Failed to apply AI move");
     return;
   }
 
-  LOG_DEBUG("AI move [%d,%d] via %s: %.3fs, %d evals, score=%d, opp=%d", best_x,
-            best_y, move_type, elapsed_time, moves_evaluated, own_score,
+  LOG_DEBUG("  AI move [%d,%d] via %s: %.3fs, %d evals, score=%d, opp=%d",
+            best_x, best_y, move_type, elapsed_time, moves_evaluated, own_score,
             opp_score);
 
   // Check for winner after move
@@ -403,16 +413,34 @@ void handle_play(struct http_request_s *request) {
     } else if (game->game_state == GAME_AI_WIN) {
       winner = "O";
     }
-    LOG_INFO("Game over: %s wins after %d moves", winner,
+    LOG_INFO("  game over: %s wins after %d moves", winner,
              game->move_history_count);
   }
 
   // Log move details at INFO level
   int player_depth = game->depth_for_player[player_index];
-  LOG_INFO("Move %d: %s [%d,%d] depth=%d radius=%d evals=%d time=%.3fs",
-           game->move_history_count, (ai_player == AI_CELL_CROSSES) ? "X" : "O",
-           best_x, best_y, player_depth, game->search_radius, moves_evaluated,
-           elapsed_time);
+  LOG_INFO(
+      "  move %d: %s [%d,%d] depth=%d radius=%d evals=%d time=%.3fs via %s",
+      game->move_history_count, (ai_player == AI_CELL_CROSSES) ? "X" : "O",
+      best_x, best_y, player_depth, game->search_radius, moves_evaluated,
+      elapsed_time, move_type);
+
+  // Log scoring pipeline summary (only when evaluators ran)
+  if (scoring_report.entry_count > 0) {
+    char pipeline[512];
+    int pos = 0;
+    for (int i = 0; i < scoring_report.entry_count && pos < 480; i++) {
+      scoring_entry_t *e = &scoring_report.entries[i];
+      pos +=
+          snprintf(pipeline + pos, sizeof(pipeline) - (size_t)pos,
+                   "%s%s(%.2fms)", i > 0 ? " " : "", e->evaluator, e->time_ms);
+      if (e->decisive) {
+        pos += snprintf(pipeline + pos, sizeof(pipeline) - (size_t)pos, "*");
+        break; // steps after decisive didn't run
+      }
+    }
+    LOG_INFO("  scoring: %s", pipeline);
+  }
 
   // Serialize and return (pass scoring report if enabled)
   char *response_json = json_api_serialize_game_ex(
@@ -420,6 +448,8 @@ void handle_play(struct http_request_s *request) {
   cleanup_game(game);
 
   if (response_json) {
+    LOG_INFO("Sending JSON response with a move (%zu bytes) HTTP 200",
+             strlen(response_json));
     send_json_response(request, 200, response_json);
     free(response_json);
   } else {

@@ -39,13 +39,11 @@ cd iac/cloud_run
 ./update.sh
 ```
 
-## Tasks to Accomplish Today
-
 ### Game Rules
 
 Please read in detail and understand the various nuanced versions of Gomoku Rules including Tournament rules, Renju, summarize this article: https://en.wikipedia.org/wiki/Gomoku into a markdown file RULES.md.
 
-Let's give each variation a name (such as "renju") and list each name and what the rules are in the document at the root of the repo called RULES.md.
+Let's give each variation a name (such as "renju") and list each name and what the rules are in the document at the root of the repo called `RULES.md`.
 
 Finally, let's add a new CLI argument `-g | --game-type [gomoku|renju|...]` and JSON member `"game_type": [ "renju" | etc ]` and then modify the game engine to support variout game rules. The default game play should be exactly as it is right now. We'll call this "simplified" or "street" version.
 
