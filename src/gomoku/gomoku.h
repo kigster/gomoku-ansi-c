@@ -30,45 +30,51 @@
     "  ?                ───→ to show game rules, \n" \
     "  ESC              ───→ to quit game." 
 
-static const char GAME_RULES_LONG[] = "\n"
-"  Gomoku, also known as a Five in a Row, is a two-player strategy board game.\n"
-"  The shortest way to describe it is that it's a tic-tac-toe on a large board,\n"
-"  andinstead of three in a row you must concoct five in a row. Depending on\n"
-"  the type of game, putting six in a row does not count as a win. Thus the\n"
-"  objective is to get five crosses or naughts in a row, either\n"
-"  horizontally, vertically, or diagonally. The game is played on a grid of\n"
-"  either 15x15 or 19x19 (default). X always starts the game, after which, one\n"
-"  after another, players place theircrosses or naughts (or, in the original\n"
-"  Gomoku game black and white stones) into the onuccupied square on the board\n"
-"  until either the board is filled up (draw) or one of the players creates a\n"
-"  five in a row. NOTE: this game is considered PSPACE-complete in a\n"
-"  mathematical sense — see the following reference:\n  "
-ESCAPE_CODE_UNDERLINE
-COLOR_BRIGHT_BLUE
-"https://en.wikipedia.org/wiki/PSPACE-complete\n"
-ESCAPE_CODE_RESET
-ESCAPE_CODE_BOLD
-COLOR_YELLOW
-"  \n"
-"  It's important to be aware that the first player has a slight advantage \n"
-"  over the second player due the first mover advantage. For this reason, \n"
-"  alternative versions of this game exist that introduce addtional rules to \n"
-"  to equalize the advantage of the first player, such as Renju. Nevertheless,\n"
-"  in this version, such variations are not (presently) supported.\n"
-"  \n"
-"  If you compiled this game from sources (make all), then two additional \n"
-"  executables appear in the source folder: the second one will be called \n"
-"  'gomoku-httpd' — a single-threaded game engine that can be used to play the\n"
-"  game over the network or to have the game play itself. The third executable\n"
-"  is called 'gomoku-http-client' and its the client for testing 'gomoku-httpd': \n"
-"  it merely mirrors the responses from the daemon, and forwards it to another.\n"
-"  This works because all the daemons are stateless, and the all the game data\n"
-"  is stored in the JSON payload that is sent to the daemon and back.\n"
-"  \n"
-"  See doc/HTTP.md for more info, the 'bin/gctl' script for booting the \n"
-"  cluster of gomoku-workers and a reverse proxy, as well as the long and \n"
-"  detailed README.md, not to mention all the wisdom in the doc/ folder.\n\n"
-"  Enjoy!\n";
+#define GAME_RULES_LONG \
+  ESCAPE_CODE_BOLD COLOR_BRIGHT_YELLOW "\nGomoku Terminal Edition" ESCAPE_CODE_RESET "\n" \
+  COLOR_BRIGHT_GREEN "Version: " GAME_VERSION ESCAPE_CODE_RESET "\n" \
+  "\n" \
+  "Gomoku, also known as Five in a Row, is a two-player strategy board game.\n" \
+  "The simplest way to think of it: tic-tac-toe on a much larger board.\n" \
+  "Instead of three in a row, you must create five.\n" \
+  "\n" \
+  "The objective is to place five of your marks in a row horizontally,\n" \
+  "vertically, or diagonally before your opponent does. Depending on the\n" \
+  "rule set, six in a row may not count as a win. In this version, exactly\n" \
+  "five consecutive stones wins the game; six or more (overline) does not.\n" \
+  "\n" \
+  "The game is played on a 15x15 or 19x19 grid (19x19 by default).\n" \
+  "Player X always moves first. Players then alternate placing their\n" \
+  "marks (crosses and naughts, or black and white stones) on empty\n" \
+  "intersections until one player forms five in a row or the board\n" \
+  "is filled, resulting in a draw.\n" \
+  "\n" \
+  "Mathematically, Gomoku is considered PSPACE-complete.\n" \
+  "\n" \
+  "It is worth noting that the first player has a slight advantage.\n" \
+  "Some variants, such as Renju, introduce additional rules to balance\n" \
+  "this first-move advantage. These rule variations are not currently\n" \
+  "supported in this edition.\n" \
+  "\n" \
+  ESCAPE_CODE_BOLD COLOR_BRIGHT_YELLOW "Network Mode" ESCAPE_CODE_RESET "\n" \
+  "\n" \
+  "If you build the project from source using `make all`, two additional\n" \
+  "executables will be produced:\n" \
+  "\n" \
+  "- gomoku-httpd\n" \
+  "  A single-threaded, stateless game engine that allows network play\n" \
+  "  or automated self-play.\n" \
+  "\n" \
+  "- gomoku-http-client\n" \
+  "  A minimal client used to interact with `gomoku-httpd`. It forwards\n" \
+  "  JSON payloads to the daemon and mirrors its responses.\n" \
+  "\n" \
+  "All daemons are stateless. The complete game state is contained in\n" \
+  "the JSON payload exchanged between client and server.\n" \
+  "\n" \
+  "For more information, see:\n" \
+  "\n" \
+  "- doc/HTTP.md, bin/gctl, README.md, doc/*.md\n"
 
 #define DEFAULT_BOARD_SIZE 19
 

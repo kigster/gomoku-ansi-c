@@ -121,7 +121,23 @@ void handle_input(game_state_t *game) {
 
 void clear_screen(void) { printf("\033[2J\033[H"); }
 
+void press_any_key_to_continue(const char *press_what) {
+  printf("\n%s%s%s%s%s\n\n", COLOR_BRIGHT_WHITE, ESCAPE_CODE_BOLD,
+         "       ❯ Press ", press_what, COLOR_RESET);
+
+  fflush(stdout);
+  get_key();
+  clear_screen();
+}
+
 void draw_game_header(void) {
+  char buffer[2048];
+  memset(buffer, 0, sizeof(buffer));
+  snprintf(buffer, sizeof(buffer), "%s", GAME_RULES_LONG);
+
+  printf(" %s%s%s%s\n", COLOR_RESET, COLOR_BRIGHT_YELLOW, buffer, COLOR_RESET);
+  press_any_key_to_continue("ENTER to continue...");
+
   printf("\n");
   printf(" %s%s %s(v%s%s)\n\n", COLOR_YELLOW, GAME_DESCRIPTION, COLOR_RED,
          GAME_VERSION, COLOR_RESET);
@@ -130,15 +146,7 @@ void draw_game_header(void) {
   printf(" %s%s%s\n\n", ESCAPE_CODE_BOLD, COLOR_BRIGHT_WHITE,
          "───────────────────────────────────────────────────────────────");
   printf(" %s%s%s\n\n\n", ESCAPE_CODE_BOLD, COLOR_MAGENTA, GAME_RULES_BRIEF);
-  printf(" %s%s%s%s\n", COLOR_RESET, COLOR_BRIGHT_YELLOW, GAME_RULES_LONG,
-         COLOR_RESET);
-  printf("\n%s%s%s%s\n\n", COLOR_BRIGHT_WHITE, ESCAPE_CODE_BOLD,
-         "       ❯ Press ENTER to start the game, or CTRL-C to quit...",
-         COLOR_RESET);
-
-  fflush(stdout);
-  get_key();
-  clear_screen();
+  press_any_key_to_continue("ENTER to start the game...");
 }
 
 void draw_game_history_sidebar(game_state_t *game, int start_row) {
