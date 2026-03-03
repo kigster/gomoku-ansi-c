@@ -152,7 +152,7 @@
       "description": "Human-readable move coordinate: column letter (A–T excluding I) plus 1-based row (1–19). Examples: A1, J10, T19. Converts to/from coordinate [row, col] via board_coord_to_notation / notation_to_board_coord."
     },
     "position": {
-      "oneOf": [
+      "anyOf": [
         { "$ref": "#/$defs/coordinate" },
         { "$ref": "#/$defs/notation" }
       ],
