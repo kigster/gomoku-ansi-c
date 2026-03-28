@@ -10,6 +10,8 @@ import GameStatus from './components/GameStatus'
 import ThinkingTimer from './components/ThinkingTimer'
 import PreviousGames from './components/PreviousGames'
 import JsonDebugModal from './components/JsonDebugModal'
+import RulesModal from './components/RulesModal'
+import AboutModal from './components/AboutModal'
 import logo from '../assets/images/logo.png'
 
 const STORAGE_KEY = 'gomoku_player_name'
@@ -25,6 +27,9 @@ export interface GameRecord {
   result: 'won' | 'lost'
   humanTimeSec: number
   date: string
+  depth: number
+  radius: number
+  gameJson?: object
 }
 
 function loadStats(): PlayerStats {
@@ -43,7 +48,16 @@ function loadHistory(): GameRecord[] {
   }
 }
 
-function recordResult(name: string, won: boolean, humanTimeMs: number) {
+interface RecordResultOpts {
+  name: string
+  won: boolean
+  humanTimeMs: number
+  depth: number
+  radius: number
+  gameJson?: object
+}
+
+function recordResult({ name, won, humanTimeMs, depth, radius, gameJson }: RecordResultOpts) {
   const stats = loadStats()
   if (!stats[name]) stats[name] = { won: 0, lost: 0 }
   if (won) stats[name].won++
@@ -56,10 +70,15 @@ function recordResult(name: string, won: boolean, humanTimeMs: number) {
     result: won ? 'won' : 'lost',
     humanTimeSec: Math.round(humanTimeMs / 1000),
     date: new Date().toLocaleDateString(),
+    depth,
+    radius,
+    gameJson,
   })
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history))
+  // Keep only the last 100 games
+  const trimmed = history.slice(-100)
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed))
 
-  return { stats: stats[name], history }
+  return { stats: stats[name], history: trimmed }
 }
 
 export default function App() {
@@ -100,6 +119,7 @@ export default function App() {
     lastAiMoveMs,
     turnStartMs,
     isHumanTurn,
+    gameState,
     startGame,
     makeMove,
     undoMove,
@@ -110,7 +130,14 @@ export default function App() {
   useEffect(() => {
     if (prevPhaseRef.current !== 'gameover' && phase === 'gameover' && playerName && winner !== 'draw') {
       const youWon = winner === settings.playerSide
-      const { stats: updated, history } = recordResult(playerName, youWon, humanTimeMs)
+      const { stats: updated, history } = recordResult({
+        name: playerName,
+        won: youWon,
+        humanTimeMs,
+        depth: settings.aiDepth,
+        radius: settings.aiRadius,
+        gameJson: gameState ?? undefined,
+      })
       setStats(updated)
       setGameHistory(history)
 
@@ -125,10 +152,37 @@ export default function App() {
       }
     }
     prevPhaseRef.current = phase
-  }, [phase, winner, playerName, settings.playerSide, humanTimeMs, aiTimeMs])
+  }, [phase, winner, playerName, settings.playerSide, settings.aiDepth, settings.aiRadius, humanTimeMs, aiTimeMs, gameState])
 
-  const [showHistory, setShowHistory] = useState(false)
-  const historyBtnRef = useRef<HTMLButtonElement>(null)
+  const boardRef = useRef<HTMLDivElement>(null)
+  const footerRef = useRef<HTMLElement>(null)
+
+  const scrollToBottom = useCallback(() => {
+    if (window.innerWidth < 950) {
+      setTimeout(() => {
+        if (boardRef.current) {
+          const rect = boardRef.current.getBoundingClientRect()
+          const bottomOfBoard = rect.bottom + window.scrollY
+          const target = bottomOfBoard - window.innerHeight
+          window.scrollTo({ top: Math.max(0, target), behavior: 'smooth' })
+        }
+      }, 200)
+    }
+  }, [])
+
+  const scrollToTop = useCallback(() => {
+    if (window.innerWidth < 950) {
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }, 200)
+    }
+  }, [])
+
+  const [showHistoryModal, setShowHistoryModal] = useState(false)
+  const [showRenameModal, setShowRenameModal] = useState(false)
+  const [showRulesModal, setShowRulesModal] = useState(false)
+  const [showAboutModal, setShowAboutModal] = useState(false)
+  const [showNavMenu, setShowNavMenu] = useState(false)
   const isActive = phase === 'playing' || phase === 'thinking'
 
   if (!playerName) {
@@ -138,42 +192,120 @@ export default function App() {
   return (
     <div className="min-h-screen relative z-10">
       {/* Navigation Bar */}
-      <nav className="bg-neutral-900/95 backdrop-blur-sm border-b border-neutral-800 shadow-lg">
+      <nav className="bg-neutral-900/95 backdrop-blur-sm border-b border-neutral-800 shadow-lg sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={logo} alt="Gomoku" className="h-9 w-auto" />
             <h1 className="font-heading text-2xl font-bold text-amber-400">Gomoku</h1>
-            <JsonDebugModal />
           </div>
-          <button
-            ref={historyBtnRef}
-            onClick={() => setShowHistory(s => !s)}
-            className="text-neutral-400 hover:text-neutral-200 transition-colors cursor-pointer"
-          >
-            Hello, <span className="text-neutral-200 font-medium">{playerName}</span>
-            {gameHistory.length >= 2 && (
-              <span className="ml-1 text-neutral-500 text-xs">{showHistory ? '\u25B2' : '\u25BC'}</span>
-            )}
-          </button>
+
+          {/* Desktop nav links */}
+          <div className="hidden md:flex items-center gap-4">
+            <JsonDebugModal />
+            <button
+              onClick={() => { setShowRulesModal(true); window.scrollTo(0, 0) }}
+              className="text-neutral-400 hover:text-neutral-200 transition-colors px-2 py-1 cursor-pointer"
+            >
+              Rules
+            </button>
+            <button
+              onClick={() => { setShowAboutModal(true); window.scrollTo(0, 0) }}
+              className="text-neutral-400 hover:text-neutral-200 transition-colors px-2 py-1 cursor-pointer"
+            >
+              About
+            </button>
+            <span className="text-neutral-700">|</span>
+            <button
+              onClick={() => { setShowHistoryModal(true); window.scrollTo(0, 0) }}
+              className="text-neutral-400 hover:text-neutral-200 transition-colors cursor-pointer"
+            >
+              Hello, <span className="text-neutral-200 font-medium">{playerName}</span>
+            </button>
+            <button
+              onClick={() => { setShowRenameModal(true); window.scrollTo(0, 0) }}
+              className="text-neutral-400 hover:text-neutral-200 transition-colors px-2 py-1 cursor-pointer"
+              title="Change your player name"
+            >
+              New Player
+            </button>
+          </div>
+
+          {/* Mobile: player name + hamburger */}
+          <div className="flex md:hidden items-center gap-3">
+            <span className="text-neutral-400 text-sm">
+              Hello, <span className="text-neutral-200 font-medium">{playerName}</span>
+            </span>
+            <button
+              onClick={() => setShowNavMenu(s => !s)}
+              className="text-neutral-400 hover:text-neutral-200 transition-colors p-1 cursor-pointer"
+              aria-label="Menu"
+            >
+              {showNavMenu ? (
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none"
+                     stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M18 6L6 18" /><path d="M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none"
+                     stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M3 12h18" /><path d="M3 6h18" /><path d="M3 18h18" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
+
+        {/* Mobile dropdown menu */}
+        {showNavMenu && (
+          <>
+            <div className="fixed inset-0 z-[1000] md:hidden" onClick={() => setShowNavMenu(false)} />
+            <div className="md:hidden absolute top-full left-0 right-0 z-[1001]
+                            bg-neutral-900 border-b border-neutral-800 shadow-xl">
+              <div className="max-w-6xl mx-auto px-4 py-2 flex flex-col font-semibold text-base">
+                <button
+                  onClick={() => { setShowNavMenu(false); setShowRulesModal(true); window.scrollTo(0, 0) }}
+                  className="text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800
+                             transition-colors px-3 py-2.5 text-left rounded cursor-pointer"
+                >
+                  Rules
+                </button>
+                <button
+                  onClick={() => { setShowNavMenu(false); setShowAboutModal(true); window.scrollTo(0, 0) }}
+                  className="text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800
+                             transition-colors px-3 py-2.5 text-left rounded cursor-pointer"
+                >
+                  About
+                </button>
+                <JsonDebugModal
+                  className="text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800
+                             transition-colors px-3 py-2.5 text-left rounded cursor-pointer w-full"
+                />
+                <hr className="border-neutral-800 my-1" />
+                <button
+                  onClick={() => { setShowNavMenu(false); setShowHistoryModal(true); window.scrollTo(0, 0) }}
+                  className="text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800
+                             transition-colors px-3 py-2.5 text-left rounded cursor-pointer"
+                >
+                  Game History
+                  {gameHistory.length > 0 && (
+                    <span className="ml-1 text-neutral-500 text-xs">({gameHistory.length})</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => { setShowNavMenu(false); setShowRenameModal(true); window.scrollTo(0, 0) }}
+                  className="text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800
+                             transition-colors px-3 py-2.5 text-left rounded cursor-pointer"
+                >
+                  New Player
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </nav>
 
-      {/* Previous Games dropdown — rendered outside nav to avoid backdrop-blur */}
-      {showHistory && gameHistory.length >= 2 && (
-        <>
-          <div className="fixed inset-0 z-[998]" onClick={() => setShowHistory(false)} />
-          <div className="fixed z-[999] w-80 shadow-2xl"
-               style={{
-                 top: (historyBtnRef.current?.getBoundingClientRect().bottom ?? 0) + 8,
-                 right: window.innerWidth - (historyBtnRef.current?.getBoundingClientRect().right ?? 0),
-               }}>
-            <PreviousGames history={gameHistory} />
-          </div>
-        </>
-      )}
-
       {/* Main Content */}
-      <div className="flex justify-center px-2 sm:px-4 py-4 sm:py-8">
+      <div className={`flex justify-center px-2 sm:px-4 pb-4 sm:py-8 ${isActive ? 'pt-0 -mt-[30px]' : 'pt-4'} sm:mt-0`}>
         <div className="game-panel rounded-2xl p-4 sm:p-8 max-w-5xl w-full text-neutral-100">
           <div className="flex flex-col lg:flex-row gap-4 sm:gap-8 items-center lg:items-start justify-center">
             {/* Left panel: Settings */}
@@ -185,7 +317,7 @@ export default function App() {
               >
                 {showSettings ? 'Hide Settings' : 'Settings'}
               </button>
-              <div className={`${showSettings ? 'block' : 'hidden'} lg:block`}>
+              <div className={`${showSettings || !isActive ? 'block' : 'hidden'} lg:block`}>
                 <SettingsPanel
                   settings={settings}
                   onChange={setSettings}
@@ -196,32 +328,19 @@ export default function App() {
               {/* Start / New Game Button */}
               <div className="mt-5">
                 {phase === 'idle' && (
-                  <>
-                    <button
-                      onClick={() => { setShowSettings(false); trackGameStart(settings); startGame(); }}
-                      className="w-full py-4 rounded-xl text-xl font-bold font-heading
-                                 bg-amber-600 hover:bg-amber-500 active:bg-amber-700
-                                 shadow-lg shadow-amber-900/30 transition-all
-                                 hover:shadow-xl hover:scale-[1.02]"
-                    >
-                      Start Game
-                    </button>
-                    <button
-                      onClick={() => {
-                        localStorage.removeItem(STORAGE_KEY)
-                        setPlayerName(null)
-                      }}
-                      className="w-full mt-2 py-2 rounded-lg text-sm
-                                 text-neutral-400 hover:text-neutral-200
-                                 bg-neutral-800 hover:bg-neutral-700 transition-colors"
-                    >
-                      Change Human Player
-                    </button>
-                  </>
+                  <button
+                    onClick={() => { setShowSettings(false); trackGameStart(settings); startGame(); scrollToBottom(); }}
+                    className="w-full py-4 rounded-xl text-xl font-bold font-heading
+                               bg-amber-600 hover:bg-amber-500 active:bg-amber-700
+                               shadow-lg shadow-amber-900/30 transition-all
+                               hover:shadow-xl hover:scale-[1.02]"
+                  >
+                    Start Game
+                  </button>
                 )}
                 {phase === 'gameover' && (
                   <button
-                    onClick={resetGame}
+                    onClick={() => { resetGame(); scrollToTop(); }}
                     className="w-full py-3 rounded-xl text-lg font-semibold font-heading
                                bg-neutral-700 hover:bg-neutral-600 transition-colors"
                   >
@@ -230,9 +349,9 @@ export default function App() {
                 )}
               </div>
 
-              {/* Undo Button + Timer */}
+              {/* Undo Button + Timer + Abort — desktop/large only */}
               {isActive && (
-                <div className="mt-auto pt-5">
+                <div className="hidden lg:block mt-auto pt-5">
                   {settings.undoEnabled && (
                     <button
                       onClick={undoMove}
@@ -247,7 +366,7 @@ export default function App() {
                   )}
                   <ThinkingTimer phase={phase} playerName={playerName} />
                   <button
-                    onClick={resetGame}
+                    onClick={() => { resetGame(); scrollToTop(); }}
                     className="w-full mt-3 py-3 rounded-xl text-lg font-bold font-heading
                                bg-amber-600 hover:bg-amber-500 active:bg-amber-700
                                shadow-lg shadow-amber-900/30 transition-all"
@@ -276,14 +395,46 @@ export default function App() {
                 turnStartMs={turnStartMs}
                 isHumanTurn={isHumanTurn}
               />
-              <Board
-                board={board}
-                boardSize={settings.boardSize}
-                displayMode={settings.displayMode}
-                interactive={phase === 'playing'}
-                lastMove={lastMove}
-                onCellClick={makeMove}
-              />
+
+              {/* Mobile: Thinking timer + Abort/Undo row above board */}
+              {isActive && (
+                <div className="lg:hidden w-full">
+                  <ThinkingTimer phase={phase} playerName={playerName} />
+                  <div className="flex justify-between mt-1">
+                    <button
+                      onClick={() => { resetGame(); scrollToTop(); }}
+                      className="w-[30%] py-2 rounded-xl text-sm font-bold font-heading
+                                 bg-amber-600 hover:bg-amber-500 active:bg-amber-700
+                                 shadow-lg shadow-amber-900/30 transition-all"
+                    >
+                      Abort
+                    </button>
+                    {settings.undoEnabled && (
+                      <button
+                        onClick={undoMove}
+                        disabled={phase !== 'playing' || moveCount < 2}
+                        className="w-[30%] py-2 rounded-xl text-sm font-bold font-heading
+                                   bg-amber-600 hover:bg-amber-500 active:bg-amber-700
+                                   shadow-lg shadow-amber-900/30 transition-all
+                                   disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Undo
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div ref={boardRef} className={isActive ? 'mt-[20px] lg:mt-0' : ''}>
+                <Board
+                  board={board}
+                  boardSize={settings.boardSize}
+                  displayMode={settings.displayMode}
+                  interactive={phase === 'playing'}
+                  lastMove={lastMove}
+                  onCellClick={makeMove}
+                />
+              </div>
             </div>
 
           </div>
@@ -291,7 +442,7 @@ export default function App() {
       </div>
 
       {/* Footer */}
-      <footer className="text-center py-6" style={{ fontSize: '12pt', fontWeight: 400 }}>
+      <footer ref={footerRef} className="text-center py-6" style={{ fontSize: '12pt', fontWeight: 400 }}>
         <p className="text-neutral-500">
           &copy; 2026{' '}
           <a href="https://kig.re/" target="_blank" rel="noopener noreferrer"
@@ -311,6 +462,21 @@ export default function App() {
           </a>
         </p>
       </footer>
+
+      {/* Overlay Modals */}
+      {showRenameModal && (
+        <NameModal
+          currentName={playerName}
+          onSubmit={(name) => {
+            handleNameSubmit(name)
+            setShowRenameModal(false)
+          }}
+          onClose={() => setShowRenameModal(false)}
+        />
+      )}
+      {showHistoryModal && <PreviousGames history={gameHistory} onClose={() => setShowHistoryModal(false)} />}
+      {showRulesModal && <RulesModal onClose={() => setShowRulesModal(false)} />}
+      {showAboutModal && <AboutModal onClose={() => setShowAboutModal(false)} />}
     </div>
   )
 }

@@ -38,7 +38,11 @@ function loadTheme(): string {
   return localStorage.getItem(THEME_STORAGE_KEY) || 'oneDark'
 }
 
-export default function JsonDebugModal() {
+interface JsonDebugModalProps {
+  className?: string
+}
+
+export default function JsonDebugModal({ className }: JsonDebugModalProps) {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<'request' | 'response'>('request')
   const [themeKey, setThemeKey] = useState(loadTheme)
@@ -59,20 +63,16 @@ export default function JsonDebugModal() {
       <button
         onClick={handleOpen}
         title="View last API exchange"
-        className="text-neutral-500 hover:text-amber-400 transition-colors cursor-pointer"
+        className={className ?? "text-neutral-400 hover:text-neutral-200 transition-colors cursor-pointer px-2 py-1"}
       >
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
-             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M16 18l6-6-6-6" />
-          <path d="M8 6l-6 6 6 6" />
-        </svg>
+        Game as JSON
       </button>
 
       {open && createPortal(
-        <div className="fixed inset-0 z-[100000]">
-          <div className="absolute inset-0 bg-black/60" onClick={handleClose} />
-          <div className="absolute top-4 left-4 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl
-                          w-full max-w-2xl max-h-[80vh] flex flex-col">
+        <div className="fixed inset-0 z-[100000] flex items-start sm:items-center justify-center pt-[5vh] sm:pt-0">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} />
+          <div className="relative bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl
+                          w-[95%] max-w-5xl max-h-[80vh] flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-700">
               <h3 className="font-heading text-lg font-bold text-amber-400">API Debug</h3>
@@ -143,31 +143,43 @@ export default function JsonDebugModal() {
                   </SyntaxHighlighter>
                 </div>
 
-                {/* Footer */}
-                <div className="flex items-center justify-between px-5 py-2 border-t border-neutral-700">
+                {/* Timestamp */}
+                <div className="px-5 py-2 border-t border-neutral-700">
                   <span className="text-xs text-neutral-500">
                     {new Date(exchange.timestamp).toLocaleTimeString()}
                   </span>
-                  <button
-                    onClick={() => {
-                      const data = exchange.response ?? exchange.request
-                      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-                      const url = URL.createObjectURL(blob)
-                      const a = document.createElement('a')
-                      a.href = url
-                      a.download = `gomoku-game-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`
-                      a.click()
-                      URL.revokeObjectURL(url)
-                    }}
-                    className="px-3 py-1 text-xs font-medium rounded
-                               bg-amber-600 hover:bg-amber-500 text-white
-                               transition-colors cursor-pointer"
-                  >
-                    Download Game
-                  </button>
                 </div>
               </>
             )}
+            <div className="flex gap-3 px-5 pb-4 pt-2">
+              {exchange && (
+                <button
+                  onClick={() => {
+                    const data = exchange.response ?? exchange.request
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `gomoku-game-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  }}
+                  className="flex-1 py-3 rounded-xl text-lg font-bold font-heading
+                             bg-amber-500 hover:bg-amber-400 active:bg-amber-600
+                             shadow-lg shadow-amber-900/30 transition-all cursor-pointer"
+                >
+                  Download JSON
+                </button>
+              )}
+              <button
+                onClick={handleClose}
+                className="flex-1 py-3 rounded-xl text-lg font-bold font-heading
+                           bg-green-600 hover:bg-green-500 active:bg-green-700
+                           shadow-lg shadow-green-900/30 transition-all cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>,
         document.body,
