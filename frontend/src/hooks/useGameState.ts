@@ -293,6 +293,7 @@ export function useGameState(settings: GameSettings) {
     lastAiMoveMs: lastAiMoveMs.current,
     turnStartMs: turnStartMs.current,
     isHumanTurn: phase === 'playing',
+    gameState,
     startGame,
     makeMove,
     undoMove,
