@@ -63,3 +63,21 @@ Nginx Config in particular references /Users/kig/.letsencrypt folder where the S
 
 Right now, detecting running processes is not working, killing them is not working, and sometimes starting them is not working. The script has a lot of duplication.
 
+# Instructions to the LLM
+
+Gomoku in the current version has become a fully networked game.There are very few games or any web sites that have a ReactJS talk to the C-backend. Therefore I would like for you go explore what additional stateful persistent technology we can employ that would be the easiest to build, and yet secure by all moderns stanards. That means at the very least "create account with Google", "Login with Google".
+
+Once you have an account on our servder (we should offer unique usernames first come first serve), have user profildes with avatars etc. There shold be a server-wide chat bubble open in the bottom left. The user can minimize it, and reopen it later. This consists of the global chat between any live player and everyone else. For now the AI won't be chatting, but we might eventually make LLM contestant one of the game options, perhaps premium. 
+
+So it's obvious we need a persistence mechanism to be added to Google Run, one that wouln'd tbe removed if there are zero active users at the moment, etc. Let's assume it's a relatinal table, Cloud SQL (PostgreSQL).
+
+Then, we'd need users table obviously, maybe 1-1 profiles (for avatars and bios), and then one of the central tables called "games". 
+
+A Game has a hex UUID, basic stats such as created_at, started_at, finished_at, errored_at.sd
+
+This table should have an AASM state machine:
+
+
+
+ubclassed by "ActiveGame", "FinishedGame", "TimeoutGame", and "AbandonedGame", kand nd permanent game history DB table which is going to have a reference to what/who is playing first, and who/what is the second. For this reason i suggest creating the polymorphic table "contestants" or "oppponents", where a single raw b
+

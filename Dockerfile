@@ -54,5 +54,5 @@ EXPOSE 8787 8788
 # This starts the Gomoku HTTP daemon with:
 # - HTTP API on port 8787
 # - HAProxy agent-check on port 8788 (reports ready/drain status)
-CMD ["./gomoku-httpd", "-b", "0.0.0.0:8787", "-a", "8788", "-L", "debug"]
+CMD ["./gomoku-httpd", "-b", "0.0.0.0:8787", "-a", "8788", "-r", "-L", "debug"]
 
