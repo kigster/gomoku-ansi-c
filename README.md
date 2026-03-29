@@ -1,4 +1,4 @@
-[![CI](https://github.com/kigster/gomoku-ansi-c/actions/workflows/ci.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/ci.yml)
+[![CI Ruby Validation](https://github.com/kigster/gomoku-ansi-c/actions/workflows/ruby.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/ruby.yml)
 
 # Gomoku (Five-in-a-Row) Game
 
