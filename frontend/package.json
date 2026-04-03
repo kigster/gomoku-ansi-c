@@ -28,7 +28,7 @@
     "@types/react-syntax-highlighter": "15.5.13",
     "@vitejs/plugin-react": "^4.3.4",
     "ajv": "8.18.0",
-    "ajv-cli": "0.6.0",
+    "ajv-cli": "5.0.0",
     "autoprefixer": "^10.4.20",
     "jsdom": "29.0.1",
     "postcss": "^8.4.49",
