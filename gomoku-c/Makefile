@@ -71,6 +71,10 @@ all: 		$(TARGET) $(DAEMON_PACKAGE) $(DAEMON_CLIENT_TARGET)
 install: 	all
 		cp -pv $(TARGET) $(DAEMON_TARGET) $(DAEMON_CLIENT_TARGET) ../bin
 
+docker-install: all
+		cp -pv $(TARGET) $(DAEMON_TARGET) $(DAEMON_CLIENT_TARGET) ./bin
+
+
 rebuild: 	clean all install
 
 json-c: 	$(JSONC_LIB)
