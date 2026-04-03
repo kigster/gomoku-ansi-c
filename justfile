@@ -3,7 +3,7 @@
 
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
-version := `grep 'GAME_VERSION' gomoku-c/src/gomoku/gomoku.h | awk '{print $3}' | tr -d '"'`
+version := `grep 'GAME_VERSION' gomoku-c/src/gomoku/gomoku.h | awk '{print $3}' | tr -d '"'| tr -d '\n'`
 tag     := "v" + version
 
 [no-exit-message]
