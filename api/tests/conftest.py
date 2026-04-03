@@ -1,26 +1,27 @@
 import os
-
-from dotenv import load_dotenv
-
-load_dotenv()
+from pathlib import Path
 
 import asyncpg
 import httpx
 import pytest
+from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
 
-# Derive DSNs from DATABASE_URL (.env or CI environment).
-_db_url = os.environ.get("DATABASE_URL", "postgresql://postgres@localhost:5432/gomoku_test")
-_admin_dsn = _db_url.rsplit("/", 1)[0] + "/postgres"
-TEST_DSN = _db_url
+# Load .env.ci if ENVIRONMENT=ci, otherwise .env (local dev)
+_api_dir = Path(__file__).resolve().parent.parent
+_env_file = _api_dir / f".env.{os.environ.get('ENVIRONMENT', '')}"
+if not _env_file.is_file():
+    _env_file = _api_dir / ".env"
+load_dotenv(_env_file, override=False)
 
-# Set test env BEFORE any app imports
-os.environ.setdefault("DATABASE_URL", TEST_DSN)
 os.environ.setdefault("JWT_SECRET", "test-secret-key-for-unit-tests-only!!")
 os.environ.setdefault("GOMOKU_HTTPD_URL", "http://localhost:1")
 
-from app.database import create_pool
-from app.main import app, fastapi_app
+TEST_DSN = os.environ.get("DATABASE_URL", "postgresql://postgres@localhost:5432/gomoku_test")
+_admin_dsn = TEST_DSN.rsplit("/", 1)[0] + "/postgres"
+
+from app.database import create_pool  # noqa: E402
+from app.main import app, fastapi_app  # noqa: E402
 
 _initialized = False
 
