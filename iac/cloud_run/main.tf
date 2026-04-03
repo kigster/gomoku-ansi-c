@@ -33,11 +33,6 @@ resource "google_project_service" "cloudbuild_api" {
   disable_on_destroy = false
 }
 
-resource "google_project_service" "sqladmin_api" {
-  service            = "sqladmin.googleapis.com"
-  disable_on_destroy = false
-}
-
 # Artifact Registry Repository
 resource "google_artifact_registry_repository" "repo" {
   location      = var.region
@@ -63,7 +58,7 @@ resource "google_cloud_run_v2_service" "httpd" {
     }
 
     containers {
-      image = var.container_image
+      image = var.httpd_image
 
       ports {
         container_port = 8787
@@ -104,29 +99,20 @@ resource "google_cloud_run_v2_service" "httpd" {
 }
 
 # ──────────────────────────────────────────────
-# gomoku-api — FastAPI (auth, scoring, proxy)
+# gomoku-api — FastAPI + React SPA (PUBLIC)
+# Serves static frontend, auth, scoring,
+# leaderboard, and proxies game moves to httpd.
 # ──────────────────────────────────────────────
-
-locals {
-  httpd_url = google_cloud_run_v2_service.httpd.uri
-}
 
 resource "google_cloud_run_v2_service" "api" {
   name     = "gomoku-api"
   location = var.region
-  ingress  = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+  ingress  = "INGRESS_TRAFFIC_ALL"
 
   template {
     scaling {
       min_instance_count = 0
       max_instance_count = 5
-    }
-
-    volumes {
-      name = "cloudsql"
-      cloud_sql_instance {
-        instances = [var.db_instance_connection]
-      }
     }
 
     containers {
@@ -138,22 +124,12 @@ resource "google_cloud_run_v2_service" "api" {
 
       env {
         name  = "GOMOKU_HTTPD_URL"
-        value = local.httpd_url
+        value = google_cloud_run_v2_service.httpd.uri
       }
 
       env {
-        name  = "DB_SOCKET"
-        value = "/cloudsql/${var.db_instance_connection}"
-      }
-
-      env {
-        name  = "DB_NAME"
-        value = "gomoku"
-      }
-
-      env {
-        name  = "DB_USER"
-        value = "postgres"
+        name  = "DATABASE_URL"
+        value = var.database_url
       }
 
       env {
@@ -161,9 +137,9 @@ resource "google_cloud_run_v2_service" "api" {
         value = var.jwt_secret
       }
 
-      volume_mounts {
-        name       = "cloudsql"
-        mount_path = "/cloudsql"
+      env {
+        name  = "CORS_ORIGINS"
+        value = jsonencode(var.cors_origins)
       }
 
       startup_probe {
@@ -194,7 +170,7 @@ resource "google_cloud_run_v2_service" "api" {
     percent = 100
   }
 
-  depends_on = [google_project_service.run_api, google_project_service.sqladmin_api]
+  depends_on = [google_project_service.run_api]
 }
 
 # Allow API to invoke httpd (service-to-service auth)
@@ -205,72 +181,10 @@ resource "google_cloud_run_service_iam_member" "api_invokes_httpd" {
   member   = "serviceAccount:${google_cloud_run_v2_service.api.template[0].service_account}"
 }
 
-# ──────────────────────────────────────────────
-# gomoku-frontend — nginx serving React SPA
-# ──────────────────────────────────────────────
-
-locals {
-  api_host = replace(google_cloud_run_v2_service.api.uri, "https://", "")
-  api_url  = "${local.api_host}:443"
-}
-
-resource "google_cloud_run_v2_service" "frontend" {
-  name     = "gomoku-frontend"
-  location = var.region
-  ingress  = "INGRESS_TRAFFIC_ALL"
-
-  template {
-    scaling {
-      min_instance_count = 0
-      max_instance_count = 3
-    }
-
-    containers {
-      image = var.frontend_image
-
-      ports {
-        container_port = 80
-      }
-
-      env {
-        name  = "API_URL"
-        value = local.api_url
-      }
-
-      startup_probe {
-        http_get {
-          path = "/nginx-health"
-          port = 80
-        }
-        initial_delay_seconds = 2
-        period_seconds        = 3
-        failure_threshold     = 5
-        timeout_seconds       = 3
-      }
-
-      resources {
-        limits = {
-          cpu    = "1000m"
-          memory = "512Mi"
-        }
-      }
-    }
-
-    max_instance_request_concurrency = 80
-  }
-
-  traffic {
-    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
-    percent = 100
-  }
-
-  depends_on = [google_project_service.run_api]
-}
-
-# Only frontend is public-facing
-resource "google_cloud_run_service_iam_member" "frontend_public_access" {
-  location = google_cloud_run_v2_service.frontend.location
-  service  = google_cloud_run_v2_service.frontend.name
+# API is public-facing (serves the SPA + API)
+resource "google_cloud_run_service_iam_member" "api_public_access" {
+  location = google_cloud_run_v2_service.api.location
+  service  = google_cloud_run_v2_service.api.name
   role     = "roles/run.invoker"
   member   = "allUsers"
 }

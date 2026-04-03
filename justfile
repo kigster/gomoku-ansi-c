@@ -149,7 +149,7 @@ docker-build-httpd:
     docker build -t gomoku-httpd:latest gomoku-c/
 
 # Build the gomoku-api docker container (includes frontend static assets)
-docker-build-api: build-frontend
+docker-build-api: install-frontend
     docker build -t gomoku-api:latest api/
 
 # Build all docker containers
@@ -160,11 +160,14 @@ docker-build-httpd-amd64:
     docker buildx build --platform linux/amd64 -t gomoku-httpd:latest --load gomoku-c/
 
 # Build gomoku-api for linux/amd64 (for GCP, includes frontend)
-docker-build-api-amd64: build-frontend
+docker-build-api-amd64: install-frontend
     docker buildx build --platform linux/amd64 -t gomoku-api:latest --load api/
 
 # Build all containers for linux/amd64
 docker-build-all-amd64: docker-build-httpd-amd64 docker-build-api-amd64
+
+# Build everything and prepare Docker images for Cloud Run deploy
+cr-prepare: docker-build-all-amd64
 
 # Run the gomoku-httpd docker container
 docker-run:

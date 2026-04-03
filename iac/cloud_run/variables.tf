@@ -9,31 +9,25 @@ variable "region" {
   default     = "us-central1"
 }
 
-variable "container_image" {
-  description = "The full Docker image path for gomoku-httpd"
+variable "httpd_image" {
+  description = "Docker image for gomoku-httpd (C game engine)"
   type        = string
 }
 
 variable "api_image" {
-  description = "The full Docker image path for the FastAPI service"
-  type        = string
-  default     = "placeholder"
-}
-
-variable "frontend_image" {
-  description = "The full Docker image path for the frontend (nginx + React SPA)"
+  description = "Docker image for gomoku-api (FastAPI + React SPA)"
   type        = string
   default     = "placeholder"
 }
 
 variable "min_instances" {
-  description = "Minimum number of instances to keep warm"
+  description = "Minimum number of gomoku-httpd instances to keep warm"
   type        = number
   default     = 0
 }
 
 variable "max_instances" {
-  description = "Maximum number of instances to scale up to"
+  description = "Maximum number of gomoku-httpd instances to scale up to"
   type        = number
   default     = 20
 }
@@ -44,8 +38,14 @@ variable "jwt_secret" {
   sensitive   = true
 }
 
-variable "db_instance_connection" {
-  description = "Cloud SQL instance connection name (project:region:instance)"
+variable "database_url" {
+  description = "PostgreSQL connection string (e.g. Neon DSN)"
   type        = string
-  default     = "fine-booking-486503-k7:us-central1:gomoku-db"
+  sensitive   = true
+}
+
+variable "cors_origins" {
+  description = "List of allowed CORS origins"
+  type        = list(string)
+  default     = ["*"]
 }

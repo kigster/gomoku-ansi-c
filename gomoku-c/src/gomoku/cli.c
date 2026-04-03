@@ -203,7 +203,7 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
 
     case 'q':
       config.headless = 1;
-      config.skip_welcome = 1;     // Quiet mode implies skip welcome
+      config.skip_welcome = 1;               // Quiet mode implies skip welcome
       config.player_x_type = PLAYER_TYPE_AI; // No terminal for human input
       config.player_o_type = PLAYER_TYPE_AI;
       break;
@@ -317,7 +317,8 @@ void print_help(const char *program_name) {
   printf("                        Useful for batch/eval scripts with -j.\n");
   printf("  %s-i, --hints%s           Highlight threatening patterns (fours,\n",
          COLOR_YELLOW, COLOR_RESET);
-  printf("                        open threes, compound threats) with blink.\n");
+  printf(
+      "                        open threes, compound threats) with blink.\n");
   printf("  %s-t, --timeout T%s       Timeout in seconds that AI (and human)\n",
          COLOR_YELLOW, COLOR_RESET);
   printf("                        have to make their move, otherwise AI must "

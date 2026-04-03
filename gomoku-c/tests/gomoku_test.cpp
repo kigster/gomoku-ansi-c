@@ -1038,13 +1038,13 @@ TEST_F(GomokuTest, OddDepthFindsWinEvenDepthMisses) {
  */
 TEST_F(GomokuTest, AIBlocksBeforeCreatingOpenFour) {
   // X stones (7 moves played)
-  game->board[7][8] = AI_CELL_CROSSES;   // J7 — move 13
-  game->board[8][8] = AI_CELL_CROSSES;   // J8 — move 5
-  game->board[8][9] = AI_CELL_CROSSES;   // K8 — move 1
-  game->board[8][10] = AI_CELL_CROSSES;  // L8 — move 7
-  game->board[9][8] = AI_CELL_CROSSES;   // J9 — move 11
-  game->board[9][9] = AI_CELL_CROSSES;   // K9 — move 3
-  game->board[10][8] = AI_CELL_CROSSES;  // J10 — move 9
+  game->board[7][8] = AI_CELL_CROSSES;  // J7 — move 13
+  game->board[8][8] = AI_CELL_CROSSES;  // J8 — move 5
+  game->board[8][9] = AI_CELL_CROSSES;  // K8 — move 1
+  game->board[8][10] = AI_CELL_CROSSES; // L8 — move 7
+  game->board[9][8] = AI_CELL_CROSSES;  // J9 — move 11
+  game->board[9][9] = AI_CELL_CROSSES;  // K9 — move 3
+  game->board[10][8] = AI_CELL_CROSSES; // J10 — move 9
 
   // O stones (6 moves played)
   game->board[8][7] = AI_CELL_NAUGHTS;   // H8 — move 8
