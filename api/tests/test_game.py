@@ -96,7 +96,7 @@ async def test_game_play_proxy_returns_503_when_engine_down(client: AsyncClient)
             "timeout": "none",
             "winner": "none",
             "board_state": [],
-            "moves": [{"X (human)": "J9", "time_ms": 500}],
+            "moves": [{"X (human)": "J10", "time_ms": 500}],
         },
     )
     assert resp.status_code == 503

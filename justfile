@@ -61,6 +61,10 @@ test-frontend:
 # Run all tests across the monorepo
 test-all: test test-api test-frontend
 
+# Run all pre-commit tests and linters
+ci:
+    @lefthook run --all-files pre-commit
+
 # ─── Version & Release ────────────────────────────────────────────────────────
 
 # Print the current version and tag

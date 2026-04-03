@@ -42,7 +42,7 @@ static int coord_to_notation(int x, int y, int board_size, char *out,
       y >= board_size || y >= (int)strlen(columns)) {
     return 0;
   }
-  snprintf(out, out_len, "%c%d", columns[y], x);
+  snprintf(out, out_len, "%c%d", columns[y], x + 1);
   return 1;
 }
 
@@ -60,10 +60,10 @@ static int notation_to_coord(const char *s, int board_size, int *x, int *y) {
     }
   }
   int row = atoi(s + 1);
-  if (row < 0 || row >= board_size) {
+  if (row < 1 || row > board_size) {
     return 0;
   }
-  *x = row;
+  *x = row - 1;
   *y = col;
   return 1;
 }

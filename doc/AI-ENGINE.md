@@ -313,16 +313,10 @@ level, while still allowing the AI to play winning moves immediately.
 
 ## 8. Additional Observations
 
-### 8.1 Notation Inconsistency
+### 8.1 Notation (Fixed)
 
-Two separate notation functions exist with different row numbering:
-
-- `gomoku-c/src/net/json_api.c:coord_to_notation()`: 0-based rows (`"%c%d", col, x`)
-- `gomoku-c/src/gomoku/board.c:board_coord_to_notation()`: 1-based rows (`"%c%d", col, x+1`)
-
-These are never mixed in practice (JSON API uses its own, TUI uses
-board.c's), but the inconsistency is confusing and error-prone.
-See BUG-002 below.
+All notation functions now use 1-based rows, matching standard Go/Gomoku
+convention. See BUG-002 below for details.
 
 ### 8.2 Overline Rule
 
@@ -518,39 +512,27 @@ See `gomoku-c/tests/gomoku_test.cpp`:
 
 ---
 
-### BUG-002: Notation Inconsistency Between json_api.c and board.c
+### BUG-002: Notation Inconsistency Between json_api.c and board.c (Fixed)
 
-**Status**: Identified, not yet fixed (deferred — cosmetic, internally consistent)
-**Severity**: Medium — causes confusion, potential for client-server mismatch
-**Files**: `gomoku-c/src/net/json_api.c` (lines 44-74), `gomoku-c/src/gomoku/board.c` (lines 80-130)
+**Status**: Fixed
+**Severity**: Medium — caused confusion, potential for client-server mismatch
+**Files**: `gomoku-c/src/net/json_api.c`, `gomoku-c/src/gomoku/game.c`, `frontend/src/coordinates.ts`
 
 #### Summary
 
-Two separate notation systems exist:
+Three separate notation implementations used 0-based row numbering while
+`board.c` (TUI display) used 1-based. Standard Go/Gomoku notation is 1-based
+(A1 through T19), and the JSON schema already documented 1-based notation,
+creating a mismatch between spec and implementation.
 
-| Function | File | Row in "N6" | System |
-|----------|------|-------------|--------|
-| `coord_to_notation()` | json_api.c | row = 6 (0-based) | `"%c%d", col_letter, x` |
-| `board_coord_to_notation()` | board.c | row = 5 (1-based) | `"%c%d", col_letter, row_x + 1` |
+#### Fix Applied
 
-The JSON API is internally consistent (0-based in/out), and the TUI sidebar
-uses 1-based for human-readable display. But having two incompatible notation
-systems is a source of confusion and potential bugs if code ever mixes them.
+Standardized all notation on 1-based rows (matching Go/Gomoku convention):
 
-#### Impact
-
-If a client sends notation using 1-based rows (as standard Go notation
-expects) to the JSON API, moves will be placed one row off. The API's
-`notation_to_coord()` interprets "N6" as row 6, but standard Go notation
-"N6" means the 6th row (1-based = row index 5).
-
-#### Proposed Fix
-
-Standardize on 1-based notation everywhere (matching Go/Gomoku convention):
-
-1. Update `coord_to_notation()` in json_api.c to use `x + 1`.
-2. Update `notation_to_coord()` in json_api.c to use `row - 1`.
-3. Or, replace both json_api.c functions with calls to the board.c functions.
+1. `coord_to_notation()` in json_api.c and game.c: output `x + 1`
+2. `notation_to_coord()` in json_api.c and game.c: parse 1-based, store `row - 1`
+3. `toNotation()` / `fromNotation()` in frontend coordinates.ts: same conversion
+4. All test fixtures updated (C fixtures, eval expectations, API test data)
 
 ---
 

@@ -51,7 +51,11 @@ static int parse_coord_notation(const char *s, int *x, int *y) {
       return 0;
     }
   }
-  *x = atoi(s + 1);
+  int row = atoi(s + 1);
+  if (row < 1) {
+    return 0;
+  }
+  *x = row - 1;
   *y = col;
   return 1;
 }

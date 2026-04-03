@@ -27,16 +27,16 @@
     ". . . . . . . . . . . . . . . . . . ."
   ],
   "moves": [
-    { "X (human)": "K9", "time_ms": 500.000 },
-    { "O (AI)": "K8", "time_ms": 200.000, "moves_searched": 150 },
-    { "X (human)": "J8", "time_ms": 500.000 },
-    { "O (AI)": "L9", "time_ms": 200.000, "moves_searched": 180 },
+    { "X (human)": "K10", "time_ms": 500.000 },
+    { "O (AI)": "K9", "time_ms": 200.000, "moves_searched": 150 },
     { "X (human)": "J9", "time_ms": 500.000 },
-    { "O (AI)": "L10", "time_ms": 200.000, "moves_searched": 200 },
+    { "O (AI)": "L10", "time_ms": 200.000, "moves_searched": 180 },
     { "X (human)": "J10", "time_ms": 500.000 },
-    { "O (AI)": "J7", "time_ms": 200.000, "moves_searched": 220 },
+    { "O (AI)": "L11", "time_ms": 200.000, "moves_searched": 200 },
     { "X (human)": "J11", "time_ms": 500.000 },
-    { "O (AI)": "K10", "time_ms": 200.000, "moves_searched": 250 },
-    { "X (human)": "J12", "time_ms": 500.000, "winner": true }
+    { "O (AI)": "J8", "time_ms": 200.000, "moves_searched": 220 },
+    { "X (human)": "J12", "time_ms": 500.000 },
+    { "O (AI)": "K11", "time_ms": 200.000, "moves_searched": 250 },
+    { "X (human)": "J13", "time_ms": 500.000, "winner": true }
   ]
 }

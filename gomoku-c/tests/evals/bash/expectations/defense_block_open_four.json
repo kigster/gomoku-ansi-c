@@ -7,13 +7,13 @@
   "X": {"player": "human"},
   "O": {"player": "AI", "depth": 4},
   "moves": [
-    {"X (human)": "H7"},
-    {"O (AI)": "J8"},
-    {"X (human)": "J7"},
-    {"O (AI)": "K8"},
-    {"X (human)": "K7"},
-    {"O (AI)": "L8"},
-    {"X (human)": "L7"}
+    {"X (human)": "H8"},
+    {"O (AI)": "J9"},
+    {"X (human)": "J8"},
+    {"O (AI)": "K9"},
+    {"X (human)": "K8"},
+    {"O (AI)": "L9"},
+    {"X (human)": "L8"}
   ],
   "expected_moves": [[7, 6], [7, 11]],
   "explanation": "X has open four at row 7: [7,7] [7,8] [7,9] [7,10]. O must play [7,6] or [7,11] to block."

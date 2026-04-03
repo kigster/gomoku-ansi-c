@@ -6,7 +6,7 @@
   "timeout": "none",
   "winner": "none",
   "moves": [
-    { "X (human)": "K9", "time_ms": 0.000 },
-    { "O (AI)": "K9", "time_ms": 0.000 }
+    { "X (human)": "K10", "time_ms": 0.000 },
+    { "O (AI)": "K10", "time_ms": 0.000 }
   ]
 }

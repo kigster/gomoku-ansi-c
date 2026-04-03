@@ -7,14 +7,14 @@
   "X": {"player": "AI", "depth": 4},
   "O": {"player": "human"},
   "moves": [
-    {"X (AI)": "H7"},
-    {"O (human)": "J8"},
-    {"X (AI)": "J7"},
-    {"O (human)": "K8"},
-    {"X (AI)": "K7"},
-    {"O (human)": "L8"},
-    {"X (AI)": "L7"},
-    {"O (human)": "K9"}
+    {"X (AI)": "H8"},
+    {"O (human)": "J9"},
+    {"X (AI)": "J8"},
+    {"O (human)": "K9"},
+    {"X (AI)": "K8"},
+    {"O (human)": "L9"},
+    {"X (AI)": "L8"},
+    {"O (human)": "K10"}
   ],
   "expected_moves": [[7, 6], [7, 11]],
   "explanation": "X has four in a row and can win by playing [7,6] or [7,11]"
