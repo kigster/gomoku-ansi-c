@@ -1,20 +1,28 @@
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import asyncpg
 import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+# Derive DSNs from DATABASE_URL (.env or CI environment).
+_db_url = os.environ.get("DATABASE_URL", "postgresql://postgres@localhost:5432/gomoku_test")
+_admin_dsn = _db_url.rsplit("/", 1)[0] + "/postgres"
+TEST_DSN = _db_url
+
 # Set test env BEFORE any app imports
-os.environ["DATABASE_URL"] = "postgresql://kig@localhost:5432/gomoku_test"
-os.environ["JWT_SECRET"] = "test-secret-key-for-unit-tests-only!!"
-os.environ["GOMOKU_HTTPD_URL"] = "http://localhost:1"
+os.environ.setdefault("DATABASE_URL", TEST_DSN)
+os.environ.setdefault("JWT_SECRET", "test-secret-key-for-unit-tests-only!!")
+os.environ.setdefault("GOMOKU_HTTPD_URL", "http://localhost:1")
 
 from app.database import create_pool
 from app.main import app, fastapi_app
 
 _initialized = False
-TEST_DSN = "postgresql://kig@localhost:5432/gomoku_test"
 
 
 async def _ensure_initialized():
@@ -24,13 +32,14 @@ async def _ensure_initialized():
     _initialized = True
 
     # Create test database if needed
-    conn = await asyncpg.connect("postgresql://kig@localhost:5432/postgres")
+    conn = await asyncpg.connect(_admin_dsn)
     try:
+        db_name = TEST_DSN.rsplit("/", 1)[-1].split("?")[0]
         exists = await conn.fetchval(
-            "SELECT 1 FROM pg_database WHERE datname = 'gomoku_test'"
+            "SELECT 1 FROM pg_database WHERE datname = $1", db_name
         )
         if not exists:
-            await conn.execute("CREATE DATABASE gomoku_test")
+            await conn.execute(f'CREATE DATABASE "{db_name}"')
     finally:
         await conn.close()
 
@@ -44,7 +53,8 @@ async def _ensure_initialized():
             schema_path = os.path.join(
                 os.path.dirname(__file__), "..", "..", "iac", "cloud_sql", "setup.sql"
             )
-            await conn.execute(open(schema_path).read())
+            with open(schema_path) as f:
+                await conn.execute(f.read())
     finally:
         await conn.close()
 
@@ -63,7 +73,6 @@ async def client():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
-    # Clean up with a SEPARATE connection (not from the pool)
     conn = await asyncpg.connect(TEST_DSN)
     try:
         await conn.execute("TRUNCATE games, password_reset_tokens, users CASCADE")
