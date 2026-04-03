@@ -70,4 +70,6 @@ class UserOut(BaseModel):
     username: str
     email: str | None
     created_at: datetime
+    games_won: int = 0
+    games_lost: int = 0
     personal_best: PersonalBest | None = None

@@ -6,6 +6,9 @@ COPY pyproject.toml uv.lock* ./
 RUN uv sync --frozen --no-dev 2>/dev/null || uv sync --no-dev
 COPY app/ app/
 
+# Frontend static assets — pre-built via `just stage-frontend`
+COPY public/ public/
+
 # Stage 2: Runtime — slim image with just the venv
 FROM python:3.13-slim
 WORKDIR /app

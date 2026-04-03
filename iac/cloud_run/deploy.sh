@@ -16,6 +16,8 @@ if [ -z "$TF_VAR_jwt_secret" ]; then
     exit 1
 fi
 
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+
 echo "Starting deployment for Project: $PROJECT_ID, Region: $REGION"
 
 # 1. Initialize Terraform
@@ -43,18 +45,13 @@ REGISTRY="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME"
 
 HTTPD_IMAGE="$REGISTRY/gomoku-httpd:latest"
 echo "Building gomoku-httpd for linux/amd64..."
-docker buildx build --platform linux/amd64 -t "$HTTPD_IMAGE" --load ../../
+docker buildx build --platform linux/amd64 -t "$HTTPD_IMAGE" --load "$REPO_ROOT/gomoku-c/"
 docker push "$HTTPD_IMAGE"
 
 API_IMAGE="$REGISTRY/gomoku-api:latest"
-echo "Building gomoku-api for linux/amd64..."
-docker buildx build --platform linux/amd64 -t "$API_IMAGE" --load ../../api/
+echo "Building gomoku-api for linux/amd64 (includes frontend)..."
+docker buildx build --platform linux/amd64 -t "$API_IMAGE" --load "$REPO_ROOT/api/"
 docker push "$API_IMAGE"
-
-FRONTEND_IMAGE="$REGISTRY/gomoku-frontend:latest"
-echo "Building gomoku-frontend for linux/amd64..."
-docker buildx build --platform linux/amd64 -t "$FRONTEND_IMAGE" --load ../../frontend/
-docker push "$FRONTEND_IMAGE"
 
 # 5. Deploy all Cloud Run Services
 echo "Deploying Cloud Run Services..."
@@ -63,12 +60,10 @@ terraform apply \
     -var="region=$REGION" \
     -var="container_image=$HTTPD_IMAGE" \
     -var="api_image=$API_IMAGE" \
-    -var="frontend_image=$FRONTEND_IMAGE" \
     -var="jwt_secret=$TF_VAR_jwt_secret" \
     -auto-approve
 
 echo ""
 echo "Deployment Complete!"
 echo "Backend (internal):  $(terraform output -raw httpd_url)"
-echo "API (internal):      $(terraform output -raw api_url)"
-echo "Frontend (public):   $(terraform output -raw frontend_url)"
+echo "API (public):        $(terraform output -raw api_url)"

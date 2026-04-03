@@ -24,13 +24,14 @@ LDFLAGS          	= -lm $(JSONC_LIB)
 PACKAGE 		= gomoku
 DAEMON_PACKAGE  	= gomoku-httpd
 DAEMON_CLIENT  		= gomoku-http-client
+BINDIR           	= bin
 
-TARGET           	= $(PACKAGE)
+TARGET           	= $(BINDIR)/$(PACKAGE)
 SOURCES          	= src/gomoku/main.c src/gomoku/gomoku.c src/gomoku/board.c src/gomoku/game.c src/gomoku/ai.c src/gomoku/ui.c src/gomoku/cli.c
 OBJECTS          	= $(SOURCES:.c=.o)
 
 # Daemon configuration
-DAEMON_TARGET    	= $(DAEMON_PACKAGE)
+DAEMON_TARGET    	= $(BINDIR)/$(DAEMON_PACKAGE)
 DAEMON_CORE      	= src/gomoku/gomoku.o src/gomoku/board.o src/gomoku/game.o src/gomoku/ai.o
 DAEMON_NET       	= src/net/main.o src/net/cli.o src/net/handlers.o src/net/json_api.o src/net/logger.o
 HTTPSERVER_DIR   	= src/vendor/httpserver
@@ -43,18 +44,18 @@ endif
 DAEMON_CFLAGS    	= $(CFLAGS) -I$(HTTPSERVER_DIR) $(HTTPSERVER_PLATFORM)
 
 # Test HTTP client
-DAEMON_CLIENT_TARGET 	= $(DAEMON_CLIENT)
+DAEMON_CLIENT_TARGET 	= $(BINDIR)/$(DAEMON_CLIENT)
 TEST_HTTP_SRC    	= src/net/test_client.c src/net/test_client_utils.c
 
 # Test configuration
-TEST_TARGET     	= test_gomoku
+TEST_TARGET     	= $(BINDIR)/test_gomoku
 TEST_SOURCES    	= tests/gomoku_test.cpp src/gomoku.c src/board.c src/game.c src/ai.c
 TEST_OBJECTS    	= $(TEST_SOURCES:.cpp=.o)
 GTEST_LIB       	= tests/googletest/build/lib/libgtest.a
 GTEST_MAIN_LIB  	= tests/googletest/build/lib/libgtest_main.a
 
 # Daemon test configuration
-DAEMON_TEST_TARGET = test_daemon
+DAEMON_TEST_TARGET = $(BINDIR)/test_daemon
 DAEMON_TEST_CXXFLAGS = $(ALL_CXXFLAGS)
 
 # CMake build directory
@@ -62,9 +63,15 @@ BUILD_DIR = build
 
 .PHONY: all clean test tests rebuild json-c gomoku-httpd googletest test-client test-daemon cmake-clean
 
-all: 		$(TARGET) $(DAEMON_TARGET) $(DAEMON_CLIENT_TARGET)
+$(BINDIR):
+		@mkdir -p $(BINDIR)
 
-rebuild: 	clean $(TARGET)
+all: 		$(TARGET) $(DAEMON_PACKAGE) $(DAEMON_CLIENT_TARGET)
+
+install: 	all
+		cp -pv $(TARGET) $(DAEMON_TARGET) $(DAEMON_CLIENT_TARGET) ../bin
+
+rebuild: 	clean all install
 
 json-c: 	$(JSONC_LIB)
 
@@ -76,18 +83,18 @@ $(JSONC_LIB):
 			LDFLAGS="" $(MAKE) -C $(JSONC_BUILD) -j4; \
 		fi
 
-$(TARGET): $(JSONC_LIB) $(OBJECTS)
+$(TARGET): $(JSONC_LIB) $(OBJECTS) | $(BINDIR)
 		$(CC) $(OBJECTS) $(LDFLAGS) -o $(TARGET)
 
 # Daemon targets (must come before generic src/%.o rule)
-gomoku-httpd: $(JSONC_LIB) $(DAEMON_CORE) $(DAEMON_NET)
+gomoku-httpd: $(JSONC_LIB) $(DAEMON_CORE) $(DAEMON_NET) | $(BINDIR)
 		$(CC) $(DAEMON_CORE) $(DAEMON_NET) $(LDFLAGS) -lpthread -o $(DAEMON_TARGET)
 
 src/net/%.o: src/net/%.c | $(JSONC_LIB)
 		$(CC) $(DAEMON_CFLAGS) -c $< -o $@
 
 # HTTP test client
-$(DAEMON_CLIENT_TARGET): $(TEST_HTTP_SRC)
+$(DAEMON_CLIENT_TARGET): $(TEST_HTTP_SRC) | $(BINDIR)
 		$(CC) $(CFLAGS) $(TEST_HTTP_SRC) -o $(DAEMON_CLIENT_TARGET)
 
 test-client: 	$(DAEMON_CLIENT_TARGET)
@@ -99,7 +106,7 @@ src/gomoku/%.o: src/gomoku/%.c | $(JSONC_LIB)
 googletest:
 		@bash -c "./tests/tests-setup"
 
-$(TEST_TARGET): googletest $(JSONC_LIB) tests/gomoku_test.o src/gomoku/gomoku.o src/gomoku/board.o src/gomoku/game.o src/gomoku/ai.o
+$(TEST_TARGET): googletest $(JSONC_LIB) tests/gomoku_test.o src/gomoku/gomoku.o src/gomoku/board.o src/gomoku/game.o src/gomoku/ai.o | $(BINDIR)
 		$(CXX) $(ALL_CXXFLAGS) tests/gomoku_test.o src/gomoku/gomoku.o src/gomoku/board.o src/gomoku/game.o src/gomoku/ai.o $(GTEST_LIB) $(GTEST_MAIN_LIB) $(JSONC_LIB) -pthread -o $(TEST_TARGET)
 
 tests/gomoku_test.o: googletest tests/gomoku_test.cpp src/gomoku/gomoku.h src/gomoku/board.h src/gomoku/game.h src/gomoku/ai.h
@@ -115,7 +122,7 @@ test: 		$(TEST_TARGET) $(DAEMON_TEST_TARGET) $(TARGET)
 tests: 		test
 
 # Daemon tests
-$(DAEMON_TEST_TARGET): googletest $(JSONC_LIB) tests/daemon_test.o $(DAEMON_CORE) src/net/cli.o src/net/json_api.o src/net/test_client_utils.o src/net/logger.o
+$(DAEMON_TEST_TARGET): googletest $(JSONC_LIB) tests/daemon_test.o $(DAEMON_CORE) src/net/cli.o src/net/json_api.o src/net/test_client_utils.o src/net/logger.o | $(BINDIR)
 		$(CXX) $(ALL_CXXFLAGS) tests/daemon_test.o $(DAEMON_CORE) src/net/cli.o src/net/json_api.o src/net/test_client_utils.o src/net/logger.o $(GTEST_LIB) $(GTEST_MAIN_LIB) $(JSONC_LIB) -pthread -o $(DAEMON_TEST_TARGET)
 
 tests/daemon_test.o: googletest tests/daemon_test.cpp src/net/cli.h src/net/json_api.h
@@ -125,9 +132,9 @@ test-daemon: 	$(DAEMON_TEST_TARGET)
 		./$(DAEMON_TEST_TARGET) | GREP_COLOR=32 grep --color=always -E 'Daemon[A-Za-z]*Test\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
 
 clean:  	cmake-clean
-		rm -f $(TARGET) $(TEST_TARGET) $(OBJECTS) tests/gomoku_test.o
-		rm -f $(DAEMON_TARGET) $(DAEMON_TEST_TARGET) $(DAEMON_CORE) $(DAEMON_NET) src/net/test_client_utils.o tests/daemon_test.o
-		rm -f $(DAEMON_CLIENT_TARGET)
+		rm -rf $(BINDIR)
+		rm -f $(OBJECTS) tests/gomoku_test.o
+		rm -f $(DAEMON_CORE) $(DAEMON_NET) src/net/test_client_utils.o tests/daemon_test.o
 		rm -rf tests/googletest
 		find . -name '*.a' -type f -delete || true
 

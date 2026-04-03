@@ -14,7 +14,7 @@ type View = 'login' | 'signup' | 'forgot' | 'reset'
 const USERNAME_RE = /^[\w\u00C0-\u024F\-^]{2,30}$/
 
 export default function AuthModal({ onAuth, currentName, onClose, apiBase, initialView }: AuthModalProps) {
-  const [view, setView] = useState<View>(initialView ?? (currentName ? 'login' : 'signup'))
+  const [view, setView] = useState<View>(initialView ?? 'login')
   const [username, setUsername] = useState(currentName ?? '')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -60,7 +60,8 @@ export default function AuthModal({ onAuth, currentName, onClose, apiBase, initi
       switchView('login')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Something went wrong'
-      showError(msg)
+      const detail = err instanceof Error ? err.stack : String(err)
+      showError(msg, detail)
       setFieldError(msg)
     } finally {
       setLoading(false)
@@ -96,7 +97,8 @@ export default function AuthModal({ onAuth, currentName, onClose, apiBase, initi
       switchView('login')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Something went wrong'
-      showError(msg)
+      const detail = err instanceof Error ? err.stack : String(err)
+      showError(msg, detail)
       setFieldError(msg)
     } finally {
       setLoading(false)
@@ -146,7 +148,8 @@ export default function AuthModal({ onAuth, currentName, onClose, apiBase, initi
       onAuth(data.username, data.access_token)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Something went wrong'
-      showError(msg)
+      const detail = err instanceof Error ? err.stack : String(err)
+      showError(msg, detail)
       setFieldError(msg)
     } finally {
       setLoading(false)

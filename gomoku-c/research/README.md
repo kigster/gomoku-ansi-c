@@ -2,12 +2,12 @@
 
 This document summarizes the key concepts and optimizations described in the research papers located in this directory. These papers provide the theoretical foundation for many of the advanced AI techniques used in this Gomoku project.
 
----
+______________________________________________________________________
 
 ## 1. "Go-Moku and Threat-Space Search" (1994, Allis, van den Herik, Huntjens)
 
 > [!TIP]
-> [Source Article as a PDF](1994-allis—go-moku-and-threat-space-search.pdf)
+> [Source Article as a PDF](1994-allis%E2%80%94go-moku-and-threat-space-search.pdf)
 
 ### Primary Context
 
@@ -18,6 +18,7 @@ This seminal paper asserts that Go-Moku is a theoretical win for the first playe
 **Threat-Space Search:** This is the most critical concept and is a major departure from a standard minimax search. Instead of exploring all possible moves, this technique focuses only on moves that create a **threat**.
 
 - **Threat Definition**: A move that forces an immediate response. Examples include:
+
   - **Four**: A line of four stones, which threatens to become a five on the next turn. The opponent *must* block it.
   - **Three**: A line of three stones, which threatens to become a *straight four* (an unblockable line of four) on the next turn. This also forces a response.
   - **Double Threat**: A move that creates two or more threats simultaneously, which is usually a winning move as the opponent can only block one.
@@ -25,18 +26,18 @@ This seminal paper asserts that Go-Moku is a theoretical win for the first playe
 - **How it Works**: The search algorithm operates in a "threat space" rather than the "game space". It builds a sequence of threats, assuming the opponent's only moves are the ones that parry the immediate threat. The goal is to find a sequence of forcing moves that inevitably leads to a double threat.
 
 - **Advantages**:
+
   - **Massively Reduced Search Space**: It prunes away almost all moves that don't create or respond to a threat, dramatically reducing the branching factor. It mirrors how human experts think, by focusing only on the critical, forcing lines of play.
   - **Deep Searches**: Because the branching factor is so low, threat-space search can find winning lines that are 20-30+ ply (moves) deep, far beyond what a conventional alpha-beta search could manage.
 
 **Proof-Number Search (PNS):** This technique is used in combination with Threat-Space Search. When Threat-Space Search fails to find a winning line, PNS is used to try and prove whether a position is a win, loss, or draw. It's particularly effective in positions with a large branching factor where threat-based analysis isn't sufficient.
 
----
+______________________________________________________________________
 
 ## 2. "AI Agent for Playing Gomoku" (2000s, Stanford University Poster)
 
 > [!TIP]
-> [Source Article as a PDF](2000s—stanford—ai-agent-for-playing-gomoku.pdf)
-
+> [Source Article as a PDF](2000s%E2%80%94stanford%E2%80%94ai-agent-for-playing-gomoku.pdf)
 
 ### Primary Context
 
@@ -59,12 +60,12 @@ This is a poster from a student project at Stanford that compares the performanc
 - **How it Works**: MCTS builds a search tree by running many random "playouts" (simulations) to the end of the game. It uses the results of these simulations to estimate which moves are most promising, gradually focusing the search on better parts of the game tree.
 - **Heuristic Roll-out Policy**: Instead of purely random simulations, they suggest incorporating the same domain knowledge (threat patterns) from the minimax evaluation function to guide the simulations. This makes the playouts "smarter" and allows the MCTS to converge on a good move with fewer simulations.
 
----
+______________________________________________________________________
 
 ## 3. "Solving Renju" (2001, Wágner, Virág)
 
 > [!TIP]
-> [Source Article as a PDF](2001—solving-renju-by-wagner-et-al.pdf)
+> [Source Article as a PDF](2001%E2%80%94solving-renju-by-wagner-et-al.pdf)
 
 ### Primary Context
 
@@ -75,8 +76,8 @@ This paper claims to have solved **Free Renju**, a professional variant of Gomok
 **Iterative Deepening Threat-Sequence Search:** The core of their solver is a **threat-sequence search**, building directly on the concepts from Allis (1994). Their program works by:
 
 1. Generating a winning tree for Black based on threat sequences.
-2. Storing this tree in a database.
-3. Using an iterative-deepening approach, where they search for threat sequences up to a certain depth (e.g., 17 plies).
+1. Storing this tree in a database.
+1. Using an iterative-deepening approach, where they search for threat sequences up to a certain depth (e.g., 17 plies).
 
 **Human-Expert-Guided Search:** A key part of their process involved leveraging human expertise to manage the enormous search space.
 

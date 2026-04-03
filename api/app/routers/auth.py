@@ -1,3 +1,4 @@
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 
@@ -15,11 +16,14 @@ from app.models.user import (
 from app.security import create_token, hash_password, verify_password
 from app.services.email import send_password_reset_email
 
+logger = logging.getLogger("gomoku.auth")
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/signup", response_model=TokenResponse)
 async def signup(body: UserCreate, pool=Depends(get_pool)):
+    logger.info("Signup attempt: username=%s email=%s", body.username, body.email)
     hashed = hash_password(body.password)
     try:
         row = await pool.fetchrow(
@@ -31,21 +35,26 @@ async def signup(body: UserCreate, pool=Depends(get_pool)):
             hashed,
         )
     except UniqueViolationError:
+        logger.warning("Signup conflict: username=%s email=%s", body.username, body.email)
         raise HTTPException(status.HTTP_409_CONFLICT, "Username or email already taken")
 
+    logger.info("Signup success: user_id=%s username=%s", row["id"], row["username"])
     token = create_token(str(row["id"]), row["username"])
     return TokenResponse(access_token=token, username=row["username"])
 
 
 @router.post("/login", response_model=TokenResponse)
 async def login(body: UserLogin, pool=Depends(get_pool)):
+    logger.info("Login attempt: username=%s", body.username)
     row = await pool.fetchrow(
         "SELECT id, username, password_hash FROM users WHERE lower(username) = lower($1)",
         body.username,
     )
     if row is None or not verify_password(body.password, row["password_hash"]):
+        logger.warning("Login failed: username=%s", body.username)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid username or password")
 
+    logger.info("Login success: user_id=%s username=%s", row["id"], row["username"])
     token = create_token(str(row["id"]), row["username"])
     return TokenResponse(access_token=token, username=row["username"])
 

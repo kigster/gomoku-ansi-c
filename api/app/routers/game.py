@@ -1,10 +1,10 @@
 import json as json_mod
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from httpx import AsyncClient
 
 from app.database import get_pool
-from app.models.game import GameSaveRequest, GameSaveResponse
+from app.models.game import GameHistoryEntry, GameHistoryResponse, GameSaveRequest, GameSaveResponse
 from app.scoring import game_score, rating
 from app.security import get_current_user
 
@@ -115,3 +115,56 @@ async def save(
             )
 
     return GameSaveResponse(id=str(row["id"]), score=score, rating=rating(score))
+
+
+@router.get("/history", response_model=GameHistoryResponse)
+async def game_history(
+    limit: int = Query(default=50, ge=1, le=200),
+    user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    """Return the authenticated user's games in reverse chronological order."""
+    rows = await pool.fetch(
+        """SELECT id, player_name, winner, human_player, score, depth,
+                  round(human_time_s::numeric, 1) AS human_time_s,
+                  round(ai_time_s::numeric, 1) AS ai_time_s,
+                  played_at
+           FROM games
+           WHERE user_id = $1::uuid
+           ORDER BY played_at DESC
+           LIMIT $2""",
+        str(user["id"]),
+        limit,
+    )
+    return GameHistoryResponse(
+        games=[
+            GameHistoryEntry(
+                id=str(r["id"]),
+                player_name=r["player_name"],
+                won=r["winner"] == r["human_player"],
+                score=r["score"],
+                depth=r["depth"],
+                human_time_s=float(r["human_time_s"]),
+                ai_time_s=float(r["ai_time_s"]),
+                played_at=r["played_at"],
+            )
+            for r in rows
+        ]
+    )
+
+
+@router.get("/{game_id}/json")
+async def download_game_json(
+    game_id: str,
+    user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    """Return the full game JSON for a single game (for download)."""
+    row = await pool.fetchrow(
+        "SELECT game_json FROM games WHERE id = $1::uuid AND user_id = $2::uuid",
+        game_id,
+        str(user["id"]),
+    )
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Game not found")
+    return row["game_json"]

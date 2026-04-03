@@ -32,11 +32,7 @@ const THEMES: Record<string, { label: string; style: Record<string, React.CSSPro
   solarizedDarkAtom:  { label: 'Solarized Dark',   style: solarizedDarkAtom },
 }
 
-const THEME_STORAGE_KEY = 'gomoku_debug_theme'
-
-function loadTheme(): string {
-  return localStorage.getItem(THEME_STORAGE_KEY) || 'oneDark'
-}
+const DEFAULT_THEME = 'oneDark'
 
 interface JsonDebugModalProps {
   className?: string
@@ -45,7 +41,7 @@ interface JsonDebugModalProps {
 export default function JsonDebugModal({ className }: JsonDebugModalProps) {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<'request' | 'response'>('request')
-  const [themeKey, setThemeKey] = useState(loadTheme)
+  const [themeKey, setThemeKey] = useState(DEFAULT_THEME)
 
   const exchange = getLastExchange()
 
@@ -53,7 +49,6 @@ export default function JsonDebugModal({ className }: JsonDebugModalProps) {
   const handleClose = useCallback(() => setOpen(false), [])
   const handleThemeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     setThemeKey(e.target.value)
-    localStorage.setItem(THEME_STORAGE_KEY, e.target.value)
   }, [])
 
   const activeTheme = THEMES[themeKey] ?? THEMES.oneDark

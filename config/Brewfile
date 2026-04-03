@@ -1,0 +1,81 @@
+# frozen_string_literal: true
+
+# vim: ft=ruby
+# © 2026 Konstantin Gredeskoul
+
+# This is the "minimum" development tooling list of Brew Packages
+# that every developer should have on their MacOS system. It's 
+# nowhere near complete, and is minimal for a reason (for those
+# that prefer minimalistic approach).
+#
+# The Brewfile is a relatively recent concept that `brew` on MacOS
+# supports. If you ever worked with Ruby, you'd know what the Gemfile
+# is, as well as the auto-generated Gemfile.lock. For frontend developers,
+# the same thing applies to package.json and package-lock.json.
+#
+# USING IT
+# $ brew bundle --no-upgrade
+#
+# This commands installs all the packages (or casks) defined in this
+# file, and generates Brewfile.lock.json. If you check that file in, 
+# and on another system run `brew bundle --no-upgrade` it will ensure
+# that: install does not run brew upgrade on outdated dependencies. 
+# check does not check for outdated dependencies. Note they may still 
+# be upgraded by brew install if needed. 
+# 
+# Generally this command defaults to the --upgrade option, which
+# will upgrade these packages to the latest versions and update the 
+# lock file, leaving you to check it in to the repository.
+#
+# @see https://docs.brew.sh/Brew-Bundle-and-Brewfile
+# @see https://gist.github.com/kigster/064281da409ffcd498d39d68ea8dd303
+#
+# NOTE: on MacOS arm64 all binaries are symlinked (and available from)
+#       /opt/homebrew/bin directory. 
+#
+# Just remember to either add Homebrew plugin to your shell manager, or 
+# add the following to your ~/.bash_profile: 
+# eval "$(brew shellenv)"
+
+brew 'bash'               # Installs bash v5 on MacOS
+brew 'bat'                # Like cat but syntax highlights code
+brew 'bottom'             # Modern, interactive, full-screen system monitor.
+brew 'btop'               # Modern, interactive, full-screen system monitor.
+brew 'codespell'          # Checks spelling in the source code
+brew 'coreutils'          # GNU tools
+brew 'ctop'               # Container terminal, a modern, interactive, full-screen system monitor for Docker and Kubernetes.
+brew 'curl'               # Curl, a command line tool for transferring data with URLs.
+brew 'direnv'             # direnv: set/unset environment as you cd in/out of a directory.
+brew 'fd'                 # [rust] Replacement for `find` that's 1000 times better
+brew 'fzf'                # Fuzzy searcher — a dependency of many other tools
+brew 'gawk'               # gawk, replacement for ancient /usr/bin/awk
+brew 'gsed'               # gsed, replacement for the ancient /usr/bin/sed
+brew 'jq'                 # jq, JSON transformer / formatter / extractor.
+brew 'just'               # Modern replacement for `make`, see https://just.systems
+brew 'lefthook'           # Convenient git pre-commit hook aggregator 
+brew 'mdformat'           # Markdown formatter
+brew 'memcached'          # Caching server, not running by the default(1)
+brew 'oha'                # Modern HTTP benchmark (replaces ab/wrk)
+brew 'postgresql@18'      # PostgreSQL version 18. Not running by the default (1)
+brew 'rbenv'              # Ruby version manager
+brew 'redis'              # Redis Server, not running by the default (1) 
+brew 'ripgrep'            # Modern replacement for grep, run as rg.
+brew 'ruby-build'         # Ruby build tool and installer
+brew 'ruff'               # Very fast Python linter and formatter.
+brew 'uv'                 # An extremely fast Python package manager.
+brew 'volta'              # An extremely fast Node package manager.
+brew 'yq'                 # yq, YAML transformer / formatter / extractor.
+
+# (1) Not running by the default means that this particular package can be 
+#     run via `brew services` family of commands. For instance: 
+#
+#     brew services start postgresql@18
+#     brew services stop postgresql@18
+#     brew services restart postgresql@18
+#     brew services list
+#     brew services info postgresql@18
+#     brew services logs postgresql@18
+#     brew services cleanup postgresql@18
+#     brew services reset postgresql@18
+#     brew services restart postgresql@18
+#     brew services restart postgresql@18

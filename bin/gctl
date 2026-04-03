@@ -1,11 +1,20 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2126
-
 set +e
+
+declare project_root
+project_root="$(cd $(dirname "$(dirname "${BASH_SOURCE[0]}")") && pwd -P)"
+export project_root
+
+export BASHMATIC_HOME=${BASHMATIC_HOME:-~/.bashmatic}
+
+# Use Bashmatic to speed up the development process and take advantage of ni  ce UI features.
+[[ -d ${BASHMATIC_HOME} ]] || bash -c "$(curl -fsSL https://bashmatic.re1.re); bashmatic-install -q -l" >/dev/null 2>&1
+[[ -d ${BASHMATIC_HOME} ]] && source "${BASHMATIC_HOME}/init" >/dev/null 2>&1
 
 # =============================================================================
 # Globals
 # =============================================================================
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 export SCRIPT_DIR
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -13,7 +22,14 @@ export PROJECT_DIR
 
 export PROJECT_ROOT="$(pwd -P)"
 
-[[ -s "${PROJECT_DIR}/Makefile" ]] || {
+[[ -f .secret || -n ${SECRET} ]] || {
+  error "No \$SECRET is set in the environment"
+  exit 1
+}
+
+export SECRET=${SECRET:-$(cat .secret | tr -d '\n')}
+
+[[ -s "${PROJECT_DIR}/gomoku-c/Makefile" ]] || {
   error "PROJECT_DIR is not valid." "PROJECT_DIR: ${PROJECT_DIR}"
   return 1
 }
@@ -48,9 +64,9 @@ declare -a PACKAGES=(clang-format shfmt btop htop ctop bottom)
 export PACKAGES
 
 # Component order for stop/restart/status (reverse of start)
-declare -a STOP_ORDER=(frontend api gomoku envoy nginx)
+declare -a STOP_ORDER=(api gomoku envoy nginx)
 export STOP_ORDER
-export START_COMPONENTS=(nginx envoy gomoku api frontend)
+export START_COMPONENTS=(nginx envoy gomoku api)
 
 # =============================================================================
 # Process Management — self-contained, no bashmatic dependency
@@ -408,9 +424,9 @@ envoy.restart() {
 envoy.status() {
   component.status "envoy" "[e]nvoy"
   if cluster.is-running "[e]nvoy" && command -v curl >/dev/null 2>&1; then
-    echo "  Admin: http://127.0.0.1:9901"
+    info "  Admin: http://127.0.0.1:9901"
     if curl -s http://127.0.0.1:9901/ready >/dev/null 2>&1; then
-      echo "  Cluster status:"
+      info "  Cluster status:"
       curl -s http://127.0.0.1:9901/clusters 2>/dev/null | grep -E "^gomoku_cluster::" | head -5
     fi
   fi
@@ -438,14 +454,14 @@ api.start() {
   # Ensure deps are installed
   if [[ ! -d "$api_dir/.venv" ]]; then
     inf "Installing API dependencies..."
-    (cd "$api_dir" && uv sync --all-extras) >/dev/null 2>&1
+    (cd "$api_dir" && just install) >/dev/null 2>&1
     ui.closer.ok:
   fi
 
   nohup bash -c "cd '$api_dir' && \
-    DATABASE_URL=postgresql://kig@localhost:5432/gomoku \
+    DATABASE_URL=postgresql://postgres:@localhost:5432/gomoku \
     GOMOKU_HTTPD_URL=http://localhost:10000 \
-    JWT_SECRET=dev-secret-change-in-production-longer-key \
+    JWT_SECRET=${SECRET} \
     uv run uvicorn app.main:app --host 0.0.0.0 --port 8000" \
     >/var/log/gomoku-api.log 2>&1 &
   sleep 2
@@ -469,8 +485,8 @@ api.restart() {
 api.status() {
   component.status "api" "[u]vicorn.*app.main"
   if cluster.is-running "[u]vicorn.*app.main" && command -v curl >/dev/null 2>&1; then
-    echo "  URL: http://localhost:8000"
-    curl -sf http://localhost:8000/health 2>/dev/null && echo "" || echo "  (not responding)"
+    info "  URL: http://localhost:8000"
+    curl -sf http://localhost:8000/health 2>/dev/null && info "" || info "  (not responding)"
   fi
 }
 
@@ -538,7 +554,7 @@ frontend.restart() {
 }
 frontend.status() {
   component.status "frontend" "[v]ite"
-  cluster.is-running "[v]ite" && echo "  URL: http://localhost:5173"
+  cluster.is-running "[v]ite" && info "  URL: http://localhost:5173"
 }
 
 # =============================================================================
@@ -553,12 +569,16 @@ gomoku.start() {
     info "Stopping existing gomoku-httpd instances first..."
     "$SCRIPT_DIR/gomoku-httpd-ctl" stop
     sleep 1
+  else
+    inf "No existing gomoku-httpd instances found."
   fi
 
   if cluster.is-running "[g]omoku-httpd" "gomoku-http-client"; then
     ui.closer.not-ok:
     error "Could not stop existing gomoku-httpd instances."
     return 1
+  else
+    inf "No existing gomoku-httpd instances found."
   fi
 
   "$SCRIPT_DIR/gomoku-httpd-ctl" start -w "$workers"
@@ -611,14 +631,14 @@ gomoku.status() {
     local -a pids
     mapfile -t pids < <(cluster.pids "[g]omoku-httpd" "gomoku-http-client")
     local count=${#pids[@]}
-    echo "  Checking ${count} instances:"
+    info "  Checking ${count} instances:"
     local port
     for ((i = 0; i < count; i++)); do
       port=$((9500 + i))
       if curl -s --max-time 1 "http://127.0.0.1:$port/ready" >/dev/null 2>&1; then
-        echo "    :$port responding"
+        info "    :$port responding"
       else
-        echo "    :$port not responding"
+        info "    :$port not responding"
       fi
     done
   fi
@@ -739,7 +759,7 @@ cmd_ps() {
   if [[ -n "$output" ]]; then
     arrow.blk-on-ylw "Gomoku Cluster processes (sorted by PID):"
     echo
-    echo "$output"
+    info "$output"
     echo
     hr
   else

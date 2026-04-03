@@ -22,79 +22,14 @@ import logo from '../assets/images/logo.png'
 
 const STORAGE_KEY = 'gomoku_player_name'
 const TOKEN_KEY = 'gomoku_auth_token'
-const STATS_KEY = 'gomoku_player_stats'
-const HISTORY_KEY = 'gomoku_game_history'
 const API_BASE = import.meta.env.VITE_API_BASE || ''
-
-interface PlayerStats {
-  [name: string]: { won: number; lost: number }
-}
-
-export interface GameRecord {
-  name: string
-  result: 'won' | 'lost'
-  humanTimeSec: number
-  date: string
-  depth: number
-  radius: number
-  gameJson?: object
-}
-
-function loadStats(): PlayerStats {
-  try {
-    return JSON.parse(localStorage.getItem(STATS_KEY) || '{}')
-  } catch {
-    return {}
-  }
-}
-
-function loadHistory(): GameRecord[] {
-  try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]')
-  } catch {
-    return []
-  }
-}
-
-interface RecordResultOpts {
-  name: string
-  won: boolean
-  humanTimeMs: number
-  depth: number
-  radius: number
-  gameJson?: object
-}
-
-function recordResult({ name, won, humanTimeMs, depth, radius, gameJson }: RecordResultOpts) {
-  const stats = loadStats()
-  if (!stats[name]) stats[name] = { won: 0, lost: 0 }
-  if (won) stats[name].won++
-  else stats[name].lost++
-  localStorage.setItem(STATS_KEY, JSON.stringify(stats))
-
-  const history = loadHistory()
-  history.push({
-    name,
-    result: won ? 'won' : 'lost',
-    humanTimeSec: Math.round(humanTimeMs / 1000),
-    date: new Date().toLocaleDateString(),
-    depth,
-    radius,
-    gameJson,
-  })
-  // Keep only the last 100 games
-  const trimmed = history.slice(-100)
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed))
-
-  return { stats: stats[name], history: trimmed }
-}
 
 export default function App() {
   const [playerName, setPlayerName] = useState<string | null>(
-    () => localStorage.getItem(STORAGE_KEY)
+    () => sessionStorage.getItem(STORAGE_KEY)
   )
   const [authToken, setAuthToken] = useState<string | null>(
-    () => localStorage.getItem(TOKEN_KEY)
+    () => sessionStorage.getItem(TOKEN_KEY)
   )
 
   // Set analytics user from persisted session
@@ -107,35 +42,55 @@ export default function App() {
 
   const handleAuth = useCallback((username: string, token: string) => {
     window.history.replaceState({}, '', window.location.pathname)
-    localStorage.setItem(STORAGE_KEY, username)
-    localStorage.setItem(TOKEN_KEY, token)
+    sessionStorage.setItem(STORAGE_KEY, username)
+    sessionStorage.setItem(TOKEN_KEY, token)
     setPlayerName(username)
     setAuthToken(token)
     setHasResetToken(false)
-    setStats(loadStats()[username] ?? null)
-    setGameHistory(loadHistory())
     setAnalyticsUser(username)
     trackLogin(username)
     showInfo(`Welcome, ${username}!`)
+
+    fetch(`${API_BASE}/user/me`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) setStats({ won: data.games_won ?? 0, lost: data.games_lost ?? 0 })
+      })
+      .catch(() => {})
   }, [])
 
   const handleSessionExpired = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY)
+    sessionStorage.removeItem(TOKEN_KEY)
     setAuthToken(null)
     showError('Session expired. Please log in again.')
   }, [])
 
   const [settings, setSettings] = useState<GameSettings>(DEFAULT_SETTINGS)
   const [showSettings, setShowSettings] = useState(false)
-  const [stats, setStats] = useState<{ won: number; lost: number } | null>(
-    () => {
-      const name = localStorage.getItem(STORAGE_KEY)
-      if (!name) return null
-      return loadStats()[name] ?? null
-    }
-  )
-  const [gameHistory, setGameHistory] = useState<GameRecord[]>(() => loadHistory())
+  const [stats, setStats] = useState<{ won: number; lost: number } | null>(null)
   const prevPhaseRef = useRef<string>('idle')
+
+  // Fetch win/loss stats from API on mount
+  useEffect(() => {
+    const token = sessionStorage.getItem(TOKEN_KEY)
+    if (!token) return
+    fetch(`${API_BASE}/user/me`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+      .then(r => {
+        if (r.status === 401) {
+          handleSessionExpired()
+          return null
+        }
+        return r.ok ? r.json() : null
+      })
+      .then(data => {
+        if (data) setStats({ won: data.games_won ?? 0, lost: data.games_lost ?? 0 })
+      })
+      .catch(() => {})
+  }, [handleSessionExpired])
 
   const {
     board,
@@ -166,16 +121,14 @@ export default function App() {
         showInfo('The game ended in a draw!')
       } else if (winner !== 'none') {
         const youWon = winner === settings.playerSide
-        const { stats: updated, history } = recordResult({
-          name: playerName,
-          won: youWon,
-          humanTimeMs,
-          depth: settings.aiDepth,
-          radius: settings.aiRadius,
-          gameJson: gameState ?? undefined,
+
+        setStats(prev => {
+          if (!prev) return { won: youWon ? 1 : 0, lost: youWon ? 0 : 1 }
+          return {
+            won: prev.won + (youWon ? 1 : 0),
+            lost: prev.lost + (youWon ? 0 : 1),
+          }
         })
-        setStats(updated)
-        setGameHistory(history)
 
         if (youWon) {
           showInfo(`Congratulations ${playerName}! You won!`)
@@ -205,7 +158,7 @@ export default function App() {
                 showInfo(`Score: ${data.score} (Rating: ${data.rating}/100)`)
               }
             })
-            .catch(() => { /* local stats already saved */ })
+            .catch(() => {})
         }
 
         trackGameFinish(
@@ -308,8 +261,8 @@ export default function App() {
             <button
               onClick={() => {
                 if (playerName) trackLogout(playerName)
-                localStorage.removeItem(TOKEN_KEY)
-                localStorage.removeItem(STORAGE_KEY)
+                sessionStorage.removeItem(TOKEN_KEY)
+                sessionStorage.removeItem(STORAGE_KEY)
                 setAnalyticsUser(null)
                 setAuthToken(null)
                 setPlayerName(null)
@@ -385,15 +338,14 @@ export default function App() {
                              transition-colors px-3 py-2.5 text-left rounded cursor-pointer"
                 >
                   Game History
-                  {gameHistory.length > 0 && (
-                    <span className="ml-1 text-neutral-500 text-xs">({gameHistory.length})</span>
-                  )}
                 </button>
                 <button
                   onClick={() => {
                     setShowNavMenu(false)
-                    localStorage.removeItem(TOKEN_KEY)
-                    localStorage.removeItem(STORAGE_KEY)
+                    if (playerName) trackLogout(playerName)
+                    sessionStorage.removeItem(TOKEN_KEY)
+                    sessionStorage.removeItem(STORAGE_KEY)
+                    setAnalyticsUser(null)
                     setAuthToken(null)
                     setPlayerName(null)
                   }}
@@ -579,7 +531,7 @@ export default function App() {
       </footer>
 
       {/* Overlay Modals */}
-      {showHistoryModal && <PreviousGames history={gameHistory} onClose={() => { trackModalClose('history'); setShowHistoryModal(false) }} />}
+      {showHistoryModal && <PreviousGames authToken={authToken!} apiBase={API_BASE} onClose={() => { trackModalClose('history'); setShowHistoryModal(false) }} />}
       {showRulesModal && <RulesModal onClose={() => { trackModalClose('rules'); setShowRulesModal(false) }} />}
       {showAboutModal && <AboutModal onClose={() => { trackModalClose('about'); setShowAboutModal(false) }} />}
       {showLeaderboardModal && <LeaderboardModal apiBase={API_BASE} onClose={() => { trackModalClose('leaderboard'); setShowLeaderboardModal(false) }} />}

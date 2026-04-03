@@ -1,0 +1,29 @@
+output:
+  - summary
+  - failure
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: lint
+      root: api/
+      run: uv run --group dev ruff check {staged_files}
+      glob: "api/**/*.{py,ipynb}"
+      stage_fixed: true
+
+    - name: check for conflict markers and whitespace issues
+      run: git --no-pager diff --check
+
+    - name: run api tests
+      run: cd api && just test
+
+    - name: spell check
+      root: api/
+      run: uv run --group dev codespell {staged_files}
+      glob: "api/**/*.{py,ipynb,md}"
+
+    - name: format markdown
+      root: api/
+      run: uv run --group dev mdformat {staged_files}
+      glob: "api/**/*.md"
+      stage_fixed: true

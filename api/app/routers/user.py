@@ -28,10 +28,21 @@ async def get_me(user: dict = Depends(get_current_user), pool=Depends(get_pool))
             played_at=best["played_at"],
         )
 
+    wl = await pool.fetchrow(
+        """SELECT
+               COUNT(*) FILTER (WHERE winner = human_player) AS won,
+               COUNT(*) FILTER (WHERE winner != human_player AND winner != 'draw') AS lost
+           FROM games
+           WHERE user_id = $1::uuid""",
+        str(user["id"]),
+    )
+
     return UserOut(
         id=str(user["id"]),
         username=user["username"],
         email=user.get("email"),
         created_at=user["created_at"],
+        games_won=wl["won"] if wl else 0,
+        games_lost=wl["lost"] if wl else 0,
         personal_best=personal_best,
     )

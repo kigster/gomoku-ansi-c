@@ -21,28 +21,26 @@ describe('AuthModal', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders signup tab by default for new users', () => {
+  it('renders login tab by default', () => {
     renderAuth()
     expect(screen.getByText('Welcome to')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Confirm Password')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Email (optional)')).toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('Confirm Password')).not.toBeInTheDocument()
+    expect(screen.getByText('Forgot your password?')).toBeInTheDocument()
   })
 
-  it('switches to login tab and hides signup fields', async () => {
+  it('switches to signup tab and shows signup fields', async () => {
     const user = userEvent.setup()
     renderAuth()
 
-    await user.click(screen.getByRole('button', { name: 'Login' }))
-    expect(screen.queryByPlaceholderText('Confirm Password')).not.toBeInTheDocument()
-    expect(screen.queryByPlaceholderText('Email (optional)')).not.toBeInTheDocument()
-    expect(screen.getByText('Forgot your password?')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Sign Up' }))
+    expect(screen.getByPlaceholderText('Confirm Password')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Email (optional)')).toBeInTheDocument()
   })
 
   it('shows forgot password view when link is clicked', async () => {
     const user = userEvent.setup()
     renderAuth()
 
-    await user.click(screen.getByRole('button', { name: 'Login' }))
     await user.click(screen.getByText('Forgot your password?'))
     expect(screen.getByText('Reset Your Password')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('Email address')).toBeInTheDocument()
@@ -60,6 +58,7 @@ describe('AuthModal', () => {
     const user = userEvent.setup()
     renderAuth()
 
+    await user.click(screen.getByRole('button', { name: 'Sign Up' }))
     await user.type(screen.getByPlaceholderText('Username'), 'a')
     await user.type(screen.getByPlaceholderText('Password'), 'password1')
     await user.type(screen.getByPlaceholderText('Confirm Password'), 'password1')
@@ -73,6 +72,7 @@ describe('AuthModal', () => {
     const user = userEvent.setup()
     renderAuth()
 
+    await user.click(screen.getByRole('button', { name: 'Sign Up' }))
     await user.type(screen.getByPlaceholderText('Username'), 'testuser')
     await user.type(screen.getByPlaceholderText('Password'), 'short')
     await user.type(screen.getByPlaceholderText('Confirm Password'), 'short')
@@ -86,6 +86,7 @@ describe('AuthModal', () => {
     const user = userEvent.setup()
     renderAuth()
 
+    await user.click(screen.getByRole('button', { name: 'Sign Up' }))
     await user.type(screen.getByPlaceholderText('Username'), 'testuser')
     await user.type(screen.getByPlaceholderText('Password'), 'password1')
     await user.type(screen.getByPlaceholderText('Confirm Password'), 'different')
@@ -105,6 +106,7 @@ describe('AuthModal', () => {
 
     renderAuth()
 
+    await user.click(screen.getByRole('button', { name: 'Sign Up' }))
     await user.type(screen.getByPlaceholderText('Username'), 'newuser')
     await user.type(screen.getByPlaceholderText('Password'), 'password1')
     await user.type(screen.getByPlaceholderText('Confirm Password'), 'password1')
@@ -124,13 +126,13 @@ describe('AuthModal', () => {
 
     renderAuth()
 
+    await user.click(screen.getByRole('button', { name: 'Sign Up' }))
     await user.type(screen.getByPlaceholderText('Username'), 'taken')
     await user.type(screen.getByPlaceholderText('Password'), 'password1')
     await user.type(screen.getByPlaceholderText('Confirm Password'), 'password1')
     await user.click(screen.getByRole('button', { name: 'Create Account' }))
 
     await waitFor(() => {
-      // Error appears in both the inline form error and the alert toast
       const matches = screen.getAllByText('Username already taken')
       expect(matches.length).toBeGreaterThanOrEqual(1)
     })
@@ -147,7 +149,7 @@ describe('AuthModal', () => {
 
     renderAuth()
 
-    await user.click(screen.getByRole('button', { name: 'Login' }))
+    // Login is already the active tab — target the submit button (not the tab)
     await user.type(screen.getByPlaceholderText('Username'), 'existing')
     await user.type(screen.getByPlaceholderText('Password'), 'password1')
     await user.click(screen.getAllByRole('button', { name: 'Login' })[1])

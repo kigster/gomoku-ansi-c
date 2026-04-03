@@ -1,14 +1,26 @@
+import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import close_pool, create_pool
+from app.logging_config import setup_logging
 from app.middleware.client_ip import ClientIPMiddleware
+from app.middleware.request_logging import RequestLoggingMiddleware
 from app.routers import auth, game, leaderboard, user
 
+setup_logging()
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "public"
+
+print(STATIC_DIR)
 
 @asynccontextmanager
 async def lifespan(fastapi_app: FastAPI):
@@ -23,8 +35,11 @@ async def lifespan(fastapi_app: FastAPI):
     await close_pool()
 
 
+logger = logging.getLogger("gomoku.app")
+
 fastapi_app = FastAPI(title="Gomoku API", version="0.1.0", lifespan=lifespan)
 
+fastapi_app.add_middleware(RequestLoggingMiddleware)
 fastapi_app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -32,6 +47,26 @@ fastapi_app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@fastapi_app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError):
+    # Build JSON-safe error list (exc.errors() can contain non-serializable ValueError)
+    safe_errors = []
+    for err in exc.errors():
+        safe = {k: v for k, v in err.items() if k != "ctx"}
+        if "input" in safe and isinstance(safe["input"], bytes):
+            safe["input"] = safe["input"].decode("utf-8", errors="replace")
+        safe_errors.append(safe)
+
+    logger.warning(
+        "Validation error on %s %s: %s | body=%s",
+        request.method,
+        request.url.path,
+        safe_errors,
+        exc.body,
+    )
+    return JSONResponse(status_code=422, content={"detail": safe_errors})
+
 
 fastapi_app.include_router(auth.router)
 fastapi_app.include_router(game.router)
@@ -42,6 +77,22 @@ fastapi_app.include_router(user.router)
 @fastapi_app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# Serve frontend static assets if the public/ directory exists
+if STATIC_DIR.is_dir():
+    # Mount static assets (JS, CSS, images) under /assets
+    assets_dir = STATIC_DIR / "assets"
+    if assets_dir.is_dir():
+        fastapi_app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+    # SPA catch-all: serve index.html for any unmatched route
+    @fastapi_app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        file_path = STATIC_DIR / full_path
+        if file_path.is_file():
+            return FileResponse(str(file_path))
+        return FileResponse(str(STATIC_DIR / "index.html"))
 
 
 # Wrap with pure ASGI middleware (after all routes are registered)

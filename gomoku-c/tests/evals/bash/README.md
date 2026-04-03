@@ -20,6 +20,7 @@ python3 tournament.py --games 10 --depth1 2 --depth2 4 --board 15
 ```
 
 **Options:**
+
 - `--bin`: Path to gomoku binary (default: `./gomoku` in root)
 - `--games`: Number of games to play
 - `--depth1`: Search depth for Player X
@@ -34,17 +35,20 @@ A client to play against the `gomoku-httpd` server. Can be used manually or with
 ### Usage
 
 **Manual Play:**
+
 ```bash
 python3 llm_player.py --manual --url http://127.0.0.1:8080
 ```
 
 **LLM Play:**
+
 ```bash
 export OPENAI_API_KEY="sk-..."
 python3 llm_player.py --model gpt-4 --url http://127.0.0.1:8080
 ```
 
 **Options:**
+
 - `--url`: URL of the gomoku-httpd server
 - `--model`: Model name (default: gpt-4)
 - `--manual`: Enable manual input mode
