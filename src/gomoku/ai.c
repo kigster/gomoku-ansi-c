@@ -363,14 +363,15 @@ int evaluate_threat_fast(int **board, int x, int y, int player,
   if (num_open_threes >= 1 && num_threes >= 2) {
     max_threat = max(max_threat, 30000);
   }
-  // Two or more intersecting open twos = creates double open three when played
-  // This is a serious developing threat that should be valued highly
+  // Two or more intersecting open twos = one move from double open three (40000).
+  // This is a fork setup (diamond pattern): each two is harmless alone, but the
+  // pivot cell creates two open threes simultaneously — a forced win in 5 moves.
   if (num_open_twos >= 2) {
-    max_threat = max(max_threat, 2000); // Strong developing position
+    max_threat = max(max_threat, 25000);
   }
   // Open two + open three = developing into compound threat
   if (num_open_twos >= 1 && num_open_threes >= 1) {
-    max_threat = max(max_threat, 3000);
+    max_threat = max(max_threat, 15000);
   }
 
   return max_threat;
@@ -1074,12 +1075,18 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
                                             game->max_depth);
 
   // =========================================================================
-  // STEP 1: Check for immediate winning moves
+  // STEP 1: Check for immediate winning moves (actual five = 1000000)
+  // Also collect open fours (500000) for use after blocking checks.
+  // An open four wins in TWO turns, so the opponent gets to move first.
+  // We must check for opponent threats before committing to an open four.
   // =========================================================================
   double step_start = get_current_time();
   int winning_moves_x[361];
   int winning_moves_y[361];
   int winning_move_count = 0;
+  int open_four_moves_x[361];
+  int open_four_moves_y[361];
+  int open_four_count = 0;
   int our_max_score = 0;
 
   for (int i = 0; i < move_count; i++) {
@@ -1087,10 +1094,14 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
                                       ai_player, game->board_size);
     if (threat > our_max_score)
       our_max_score = threat;
-    if (threat >= 500000) {
+    if (threat >= 1000000) {
       winning_moves_x[winning_move_count] = moves[i].x;
       winning_moves_y[winning_move_count] = moves[i].y;
       winning_move_count++;
+    } else if (threat >= 500000) {
+      open_four_moves_x[open_four_count] = moves[i].x;
+      open_four_moves_y[open_four_count] = moves[i].y;
+      open_four_count++;
     }
   }
 
@@ -1118,7 +1129,10 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
   }
 
   // =========================================================================
-  // STEP 2: Block opponent >= 40000 (open four / compound threats)
+  // STEP 2: Block opponent closed four, open four, or five (>= 100000).
+  // A closed four has one open end — opponent wins next move if not blocked.
+  // Lower threats (compound threats, open threes) are handled by minimax,
+  // which can properly weigh offense vs defense with lookahead.
   // =========================================================================
   step_start = get_current_time();
   int blocking_moves_x[361];
@@ -1132,7 +1146,7 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
                                           opponent, game->board_size);
     if (opp_threat > max_opp_threat)
       max_opp_threat = opp_threat;
-    if (opp_threat >= 40000) {
+    if (opp_threat >= 100000) {
       blocking_moves_x[blocking_move_count] = moves[i].x;
       blocking_moves_y[blocking_move_count] = moves[i].y;
       blocking_threat_level[blocking_move_count] = opp_threat;
@@ -1146,13 +1160,13 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
       e->evaluated_moves = move_count;
       e->score = -max_opp_threat;
       e->time_ms = (get_current_time() - step_start) * 1000.0;
-      if (blocking_move_count > 0 && max_opp_threat >= 40000)
+      if (blocking_move_count > 0)
         e->decisive = 1;
     }
     report->defensive_max_score = -max_opp_threat;
   }
 
-  if (blocking_move_count > 0 && max_opp_threat >= 40000) {
+  if (blocking_move_count > 0) {
     int best_blocks_x[361];
     int best_blocks_y[361];
     int best_block_count = 0;
@@ -1172,6 +1186,32 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
              "%s%c%s Blocking opponent's threat!", ai_color, ai_symbol,
              COLOR_RESET);
     add_ai_history_entry(game, blocking_move_count);
+    return;
+  }
+
+  // =========================================================================
+  // STEP 2.5: Play our open four (500000) — safe now that opponent's
+  // immediate threats have been checked and blocked by Step 2.
+  // =========================================================================
+  if (open_four_count > 0) {
+    int selected = rand() % open_four_count;
+    *best_x = open_four_moves_x[selected];
+    *best_y = open_four_moves_y[selected];
+
+    {
+      scoring_entry_t *e = scoring_report_add(report, "open_four", 1);
+      if (e) {
+        e->evaluated_moves = open_four_count;
+        e->score = 500000;
+        e->time_ms = 0;
+        e->decisive = 1;
+      }
+    }
+
+    snprintf(game->ai_status_message, sizeof(game->ai_status_message),
+             "%s%c%s Creating unstoppable open four!", ai_color, ai_symbol,
+             COLOR_RESET);
+    add_ai_history_entry(game, open_four_count);
     return;
   }
 
@@ -1246,217 +1286,14 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
   }
 
   // =========================================================================
-  // STEP 4b: Create strong compound threat (scored as 30000-39999).
-  // Moved after defensive VCT to ensure we don't ignore opponent forced wins.
+  // STEPS 4b–6 REMOVED: compound threats, open-three blocking, and forcing
+  // fours are now handled by minimax, which can properly weigh offense vs
+  // defense with multi-ply lookahead. The pre-minimax steps above only
+  // handle truly immediate, unambiguous situations (five, open-four, VCT).
   // =========================================================================
-  step_start = get_current_time();
-  int compound_three_x[361];
-  int compound_three_y[361];
-  int compound_three_threat[361];
-  int compound_three_count = 0;
-  int max_compound_three = 0;
-
-  for (int i = 0; i < move_count; i++) {
-    int my_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
-                                         ai_player, game->board_size);
-    if (my_threat >= 30000 && my_threat < 40000) {
-      compound_three_x[compound_three_count] = moves[i].x;
-      compound_three_y[compound_three_count] = moves[i].y;
-      compound_three_threat[compound_three_count] = my_threat;
-      compound_three_count++;
-      if (my_threat > max_compound_three) {
-        max_compound_three = my_threat;
-      }
-    }
-  }
-
-  {
-    scoring_entry_t *e = scoring_report_add(report, "compound_three", 1);
-    if (e) {
-      e->evaluated_moves = compound_three_count;
-      e->score = max_compound_three;
-      e->time_ms = (get_current_time() - step_start) * 1000.0;
-      if (compound_three_count > 0)
-        e->decisive = 1;
-    }
-  }
-
-  if (compound_three_count > 0) {
-    int best_idx = 0;
-    for (int i = 1; i < compound_three_count; i++) {
-      if (compound_three_threat[i] > compound_three_threat[best_idx]) {
-        best_idx = i;
-      }
-    }
-    *best_x = compound_three_x[best_idx];
-    *best_y = compound_three_y[best_idx];
-    snprintf(game->ai_status_message, sizeof(game->ai_status_message),
-             "%s%c%s Creating compound three threat!", ai_color, ai_symbol,
-             COLOR_RESET);
-    add_ai_history_entry(game, compound_three_count);
-    return;
-  }
 
   // =========================================================================
-  // STEP 5: Block opponent open three (1500) only if we have NO initiative
-  // Narrowed: only true open three (1500) and compound threats (30000-40000)
-  // NOT 2000 (shared open twos), 3000 (developing), or 8000 (gapped four)
-  // =========================================================================
-  step_start = get_current_time();
-  int open_three_blocks_x[361];
-  int open_three_blocks_y[361];
-  int open_three_block_threat[361];
-  int open_three_block_count = 0;
-  int max_open_three_threat = 0;
-
-  for (int i = 0; i < move_count; i++) {
-    int opp_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
-                                          opponent, game->board_size);
-    int needs_blocking =
-        (opp_threat == 1500) || (opp_threat >= 30000 && opp_threat < 40000);
-    if (needs_blocking) {
-      open_three_blocks_x[open_three_block_count] = moves[i].x;
-      open_three_blocks_y[open_three_block_count] = moves[i].y;
-      open_three_block_threat[open_three_block_count] = opp_threat;
-      if (opp_threat > max_open_three_threat) {
-        max_open_three_threat = opp_threat;
-      }
-      open_three_block_count++;
-    }
-  }
-
-  int blocked_open_three = 0;
-  if (open_three_block_count > 0) {
-    // Check if we have initiative
-    int our_max_threat_val = 0;
-    int our_four_count = 0;
-    int our_open_three_count = 0;
-
-    for (int i = 0; i < move_count; i++) {
-      int my_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
-                                           ai_player, game->board_size);
-      if (my_threat > our_max_threat_val)
-        our_max_threat_val = my_threat;
-      if (my_threat >= 10000)
-        our_four_count++;
-      else if (my_threat >= 1500)
-        our_open_three_count++;
-    }
-
-    int we_have_initiative =
-        (our_max_threat_val >= 40000) || (our_four_count >= 2) ||
-        (our_four_count >= 1 && our_open_three_count >= 1) ||
-        (our_max_threat_val >= 1500 &&
-         our_max_threat_val > max_open_three_threat);
-
-    if (!we_have_initiative) {
-      int best_blocks_x[361];
-      int best_blocks_y[361];
-      int best_block_count = 0;
-
-      for (int i = 0; i < open_three_block_count; i++) {
-        if (open_three_block_threat[i] == max_open_three_threat) {
-          best_blocks_x[best_block_count] = open_three_blocks_x[i];
-          best_blocks_y[best_block_count] = open_three_blocks_y[i];
-          best_block_count++;
-        }
-      }
-
-      int best_block_idx = 0;
-      int best_block_own_threat = 0;
-      for (int i = 0; i < best_block_count; i++) {
-        int own_threat =
-            evaluate_threat_fast(game->board, best_blocks_x[i],
-                                 best_blocks_y[i], ai_player, game->board_size);
-        if (own_threat > best_block_own_threat) {
-          best_block_own_threat = own_threat;
-          best_block_idx = i;
-        }
-      }
-
-      *best_x = best_blocks_x[best_block_idx];
-      *best_y = best_blocks_y[best_block_idx];
-      blocked_open_three = 1;
-
-      snprintf(game->ai_status_message, sizeof(game->ai_status_message),
-               "%s%c%s Blocking opponent's open three!", ai_color, ai_symbol,
-               COLOR_RESET);
-    }
-  }
-
-  {
-    scoring_entry_t *e = scoring_report_add(report, "block_open_three", 0);
-    if (e) {
-      e->evaluated_moves = open_three_block_count;
-      e->score = -max_open_three_threat;
-      e->time_ms = (get_current_time() - step_start) * 1000.0;
-      if (blocked_open_three)
-        e->decisive = 1;
-    }
-  }
-
-  if (blocked_open_three) {
-    add_ai_history_entry(game, open_three_block_count);
-    return;
-  }
-
-  // =========================================================================
-  // STEP 6: Play our forcing four
-  // =========================================================================
-  step_start = get_current_time();
-  int forcing_moves_x[361];
-  int forcing_moves_y[361];
-  int forcing_move_count = 0;
-  int max_forcing_threat = 0;
-
-  for (int i = 0; i < move_count; i++) {
-    int my_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
-                                         ai_player, game->board_size);
-    if (my_threat >= 10000) {
-      forcing_moves_x[forcing_move_count] = moves[i].x;
-      forcing_moves_y[forcing_move_count] = moves[i].y;
-      forcing_move_count++;
-      if (my_threat > max_forcing_threat) {
-        max_forcing_threat = my_threat;
-      }
-    }
-  }
-
-  int played_forcing = 0;
-  if (forcing_move_count > 0) {
-    for (int i = 0; i < move_count; i++) {
-      int my_threat = evaluate_threat_fast(game->board, moves[i].x, moves[i].y,
-                                           ai_player, game->board_size);
-      if (my_threat == max_forcing_threat) {
-        *best_x = moves[i].x;
-        *best_y = moves[i].y;
-        played_forcing = 1;
-        snprintf(game->ai_status_message, sizeof(game->ai_status_message),
-                 "%s%c%s Creating forcing threat!", ai_color, ai_symbol,
-                 COLOR_RESET);
-        break;
-      }
-    }
-  }
-
-  {
-    scoring_entry_t *e = scoring_report_add(report, "forcing_four", 1);
-    if (e) {
-      e->evaluated_moves = forcing_move_count;
-      e->score = max_forcing_threat;
-      e->time_ms = (get_current_time() - step_start) * 1000.0;
-      if (played_forcing)
-        e->decisive = 1;
-    }
-  }
-
-  if (played_forcing) {
-    add_ai_history_entry(game, forcing_move_count);
-    return;
-  }
-
-  // =========================================================================
-  // STEP 7: Minimax iterative deepening search
+  // STEP 5: Minimax search
   // =========================================================================
   step_start = get_current_time();
 

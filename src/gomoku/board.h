@@ -47,12 +47,21 @@ int is_valid_move(int **board, int x, int y, int size);
 //===============================================================================
 
 /**
- * Converts a 0-based index to Unicode coordinate display.
- * 
+ * Converts a 0-based index to Unicode circled number (❶–⓳).
+ *
  * @param index 0-based coordinate index
  * @return Unicode string representation of the coordinate
  */
 const char* get_coordinate_unicode(int index);
+
+/**
+ * Converts a 0-based column index to a Unicode circled letter (Ⓐ–Ⓣ,
+ * skipping Ⓘ) matching the A–T notation used in JSON game records.
+ *
+ * @param index 0-based column index (0–18)
+ * @return Unicode circled letter string
+ */
+const char* get_column_letter_unicode(int index);
 
 /**
  * Converts board coordinates to display coordinates (1-based).

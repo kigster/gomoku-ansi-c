@@ -116,6 +116,189 @@ void handle_input(game_state_t *game) {
 }
 
 //===============================================================================
+// HINT MODE — THREAT PATTERN DETECTION
+//===============================================================================
+
+#define HINT_NONE   0
+#define HINT_THREAT 1
+#define MAX_BOARD_DIM 19
+
+// Scan the board for threatening patterns and mark cells in hint_map.
+// Highlighted patterns:
+//   - Four in a row (open or closed on one side)
+//   - Compound: two open threes for the same player
+//   - Compound: open three + four for the same player
+static void compute_hint_map(int **board, int board_size,
+                             int hint_map[MAX_BOARD_DIM][MAX_BOARD_DIM]) {
+  int dirs[4][2] = {{0, 1}, {1, 0}, {1, 1}, {1, -1}};
+
+  // Collected patterns per player: fours and open threes
+  // Store cell coordinates so we can mark them later
+  typedef struct {
+    int cells[5][2];
+    int length;
+    int open_ends;
+    int player;
+  } pattern_t;
+
+  #define MAX_PATTERNS 200
+  pattern_t fours[MAX_PATTERNS];
+  int four_count = 0;
+  pattern_t open_threes[MAX_PATTERNS];
+  int open_three_count = 0;
+
+  for (int d = 0; d < 4; d++) {
+    int dx = dirs[d][0], dy = dirs[d][1];
+
+    for (int i = 0; i < board_size; i++) {
+      for (int j = 0; j < board_size; j++) {
+        int player = board[i][j];
+        if (player == AI_CELL_EMPTY)
+          continue;
+
+        // Only process the start of a run (previous cell is different)
+        int pi = i - dx, pj = j - dy;
+        if (pi >= 0 && pi < board_size && pj >= 0 && pj < board_size &&
+            board[pi][pj] == player)
+          continue;
+
+        // Walk the run and record cells
+        int len = 0;
+        int cells[10][2];
+        int cx = i, cy = j;
+        while (cx >= 0 && cx < board_size && cy >= 0 && cy < board_size &&
+               board[cx][cy] == player && len < 10) {
+          cells[len][0] = cx;
+          cells[len][1] = cy;
+          len++;
+          cx += dx;
+          cy += dy;
+        }
+
+        // Check openness of each end
+        int before_open =
+            (pi >= 0 && pi < board_size && pj >= 0 && pj < board_size &&
+             board[pi][pj] == AI_CELL_EMPTY);
+        int after_open =
+            (cx >= 0 && cx < board_size && cy >= 0 && cy < board_size &&
+             board[cx][cy] == AI_CELL_EMPTY);
+        int open_ends = before_open + after_open;
+
+        if (len == 4 && open_ends > 0 && four_count < MAX_PATTERNS) {
+          fours[four_count].length = len;
+          fours[four_count].open_ends = open_ends;
+          fours[four_count].player = player;
+          for (int k = 0; k < len; k++) {
+            fours[four_count].cells[k][0] = cells[k][0];
+            fours[four_count].cells[k][1] = cells[k][1];
+          }
+          four_count++;
+        } else if (len == 3 && open_ends == 2 &&
+                   open_three_count < MAX_PATTERNS) {
+          open_threes[open_three_count].length = len;
+          open_threes[open_three_count].open_ends = open_ends;
+          open_threes[open_three_count].player = player;
+          for (int k = 0; k < len; k++) {
+            open_threes[open_three_count].cells[k][0] = cells[k][0];
+            open_threes[open_three_count].cells[k][1] = cells[k][1];
+          }
+          open_three_count++;
+        }
+      }
+    }
+  }
+
+  // Mark all fours (open or closed — always dangerous)
+  for (int f = 0; f < four_count; f++) {
+    for (int k = 0; k < fours[f].length; k++) {
+      hint_map[fours[f].cells[k][0]][fours[f].cells[k][1]] = HINT_THREAT;
+    }
+  }
+
+  // For each player, check compound threats involving open threes
+  for (int player = -1; player <= 1; player += 2) {
+    int p_open_threes = 0, p_fours = 0;
+    for (int f = 0; f < four_count; f++)
+      if (fours[f].player == player)
+        p_fours++;
+    for (int t = 0; t < open_three_count; t++)
+      if (open_threes[t].player == player)
+        p_open_threes++;
+
+    // Three-three or three-four compound: mark the open threes
+    if (p_open_threes >= 2 || (p_open_threes >= 1 && p_fours >= 1)) {
+      for (int t = 0; t < open_three_count; t++) {
+        if (open_threes[t].player == player) {
+          for (int k = 0; k < open_threes[t].length; k++) {
+            hint_map[open_threes[t].cells[k][0]]
+                    [open_threes[t].cells[k][1]] = HINT_THREAT;
+          }
+        }
+      }
+    }
+  }
+  #undef MAX_PATTERNS
+}
+
+//===============================================================================
+// VICTORY HIGHLIGHT — FIND THE WINNING FIVE
+//===============================================================================
+
+#define WIN_CELL 1
+
+// Locate the winning 5-in-a-row for the given player and mark those cells.
+static void find_winning_cells(int **board, int board_size, int player,
+                               int win_map[MAX_BOARD_DIM][MAX_BOARD_DIM]) {
+  int dirs[4][2] = {{1, 0}, {0, 1}, {1, 1}, {1, -1}};
+
+  for (int i = 0; i < board_size; i++) {
+    for (int j = 0; j < board_size; j++) {
+      if (board[i][j] != player)
+        continue;
+
+      for (int d = 0; d < 4; d++) {
+        int dx = dirs[d][0], dy = dirs[d][1];
+        int count = 1;
+
+        // Positive direction
+        int x = i + dx, y = j + dy;
+        while (x >= 0 && x < board_size && y >= 0 && y < board_size &&
+               board[x][y] == player) {
+          count++;
+          x += dx;
+          y += dy;
+        }
+        // Negative direction
+        x = i - dx;
+        y = j - dy;
+        while (x >= 0 && x < board_size && y >= 0 && y < board_size &&
+               board[x][y] == player) {
+          count++;
+          x -= dx;
+          y -= dy;
+        }
+
+        if (count != 5)
+          continue;
+
+        // Walk back to the start of the line (negative-most end)
+        int sx = i, sy = j;
+        while (sx - dx >= 0 && sx - dx < board_size && sy - dy >= 0 &&
+               sy - dy < board_size && board[sx - dx][sy - dy] == player) {
+          sx -= dx;
+          sy -= dy;
+        }
+        // Mark the 5 cells
+        for (int k = 0; k < 5; k++) {
+          win_map[sx + k * dx][sy + k * dy] = WIN_CELL;
+        }
+        return; // Only one winning line to highlight
+      }
+    }
+  }
+}
+
+//===============================================================================
 // DISPLAY FUNCTIONS
 //===============================================================================
 
@@ -207,13 +390,12 @@ void draw_game_history_sidebar(game_state_t *game, int start_row) {
 void draw_board(game_state_t *game) {
   printf("\n     ");
 
-  // Column numbers with Unicode characters
+  // Column letters with negative circled characters (A–T, skipping I)
   for (int j = 0; j < game->board_size; j++) {
     if (j > 9) {
-      printf("%s%2s%s ", COLOR_BLUE, get_coordinate_unicode(j - 10),
-             COLOR_RESET);
+      printf("%s%s%s ", COLOR_BLUE, get_column_letter_unicode(j), COLOR_RESET);
     } else {
-      printf("%s%2s%s ", COLOR_GREEN, get_coordinate_unicode(j), COLOR_RESET);
+      printf("%s%s%s ", COLOR_GREEN, get_column_letter_unicode(j), COLOR_RESET);
     }
   }
   printf("\n");
@@ -233,6 +415,25 @@ void draw_board(game_state_t *game) {
   if (game->move_history_count > 0) {
     last_move_x = game->move_history[game->move_history_count - 1].x;
     last_move_y = game->move_history[game->move_history_count - 1].y;
+  }
+
+  // Compute hint map if hints are enabled
+  int hint_map[MAX_BOARD_DIM][MAX_BOARD_DIM];
+  memset(hint_map, 0, sizeof(hint_map));
+  if (game->config.hints_enabled) {
+    compute_hint_map(game->board, game->board_size, hint_map);
+  }
+
+  // Compute winning cells map if someone won
+  int win_map[MAX_BOARD_DIM][MAX_BOARD_DIM];
+  memset(win_map, 0, sizeof(win_map));
+  int winner_player = 0;
+  if (game->game_state == GAME_HUMAN_WIN) {
+    winner_player = AI_CELL_CROSSES;
+    find_winning_cells(game->board, game->board_size, winner_player, win_map);
+  } else if (game->game_state == GAME_AI_WIN) {
+    winner_player = AI_CELL_NAUGHTS;
+    find_winning_cells(game->board, game->board_size, winner_player, win_map);
   }
 
   for (int i = 0; i < game->board_size; i++) {
@@ -266,28 +467,28 @@ void draw_board(game_state_t *game) {
         }
       } else if (game->board[i][j] == AI_CELL_CROSSES) {
         if (is_cursor_here) {
-          // X stone with cursor: add yellow background (background must be
-          // last)
           printf("%s%s%s%s", COLOR_X_NORMAL, COLOR_BG_CURSOR_OCCUPIED,
                  UNICODE_CROSSES, COLOR_RESET);
+        } else if (win_map[i][j] == WIN_CELL) {
+          printf("%s%s%s", COLOR_X_WIN, UNICODE_CROSSES, COLOR_RESET);
         } else if (is_last_move) {
-          // X stone that was the last move: highlight it
           printf("%s%s%s", COLOR_X_LAST_MOVE, UNICODE_CROSSES, COLOR_RESET);
+        } else if (hint_map[i][j] == HINT_THREAT) {
+          printf("%s%s%s", COLOR_X_HINT, UNICODE_CROSSES, COLOR_RESET);
         } else {
-          // X stone without cursor: normal red
           printf("%s%s%s", COLOR_X_NORMAL, UNICODE_CROSSES, COLOR_RESET);
         }
       } else { // AI_CELL_NAUGHTS
         if (is_cursor_here) {
-          // O stone with cursor: add yellow background (background must be
-          // last)
           printf("%s%s%s%s", COLOR_O_NORMAL, COLOR_BG_CURSOR_OCCUPIED,
                  UNICODE_NAUGHTS, COLOR_RESET);
+        } else if (win_map[i][j] == WIN_CELL) {
+          printf("%s%s%s", COLOR_O_WIN, UNICODE_NAUGHTS, COLOR_RESET);
         } else if (is_last_move) {
-          // O stone that was the last move: highlight it
           printf("%s%s%s", COLOR_O_LAST_MOVE, UNICODE_NAUGHTS, COLOR_RESET);
+        } else if (hint_map[i][j] == HINT_THREAT) {
+          printf("%s%s%s", COLOR_O_HINT, UNICODE_NAUGHTS, COLOR_RESET);
         } else {
-          // O stone without cursor: normal blue
           printf("%s%s%s", COLOR_O_NORMAL, UNICODE_NAUGHTS, COLOR_RESET);
         }
       }

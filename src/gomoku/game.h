@@ -481,6 +481,9 @@ typedef struct {
     int move_count;
     move_history_t moves[MAX_MOVE_HISTORY];
     char winner[8];  // "X", "O", "draw", or "none"
+    int depth_x;     // AI depth for X (-1 = use default)
+    int depth_o;     // AI depth for O (-1 = use default)
+    int radius;      // Search radius (-1 = use default)
 } replay_data_t;
 
 /**

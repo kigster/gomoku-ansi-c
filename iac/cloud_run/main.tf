@@ -17,21 +17,24 @@ provider "google" {
   region  = var.region
 }
 
-# Enable Cloud Run API
+# Enable APIs
 resource "google_project_service" "run_api" {
-  service = "run.googleapis.com"
+  service            = "run.googleapis.com"
   disable_on_destroy = false
 }
 
-# Enable Artifact Registry API (for storing the image)
 resource "google_project_service" "artifact_registry_api" {
-  service = "artifactregistry.googleapis.com"
+  service            = "artifactregistry.googleapis.com"
   disable_on_destroy = false
 }
 
-# Enable Cloud Build API (for gcloud builds submit, if used)
 resource "google_project_service" "cloudbuild_api" {
-  service = "cloudbuild.googleapis.com"
+  service            = "cloudbuild.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "sqladmin_api" {
+  service            = "sqladmin.googleapis.com"
   disable_on_destroy = false
 }
 
@@ -39,16 +42,19 @@ resource "google_project_service" "cloudbuild_api" {
 resource "google_artifact_registry_repository" "repo" {
   location      = var.region
   repository_id = "gomoku-repo"
-  description   = "Docker repository for Gomoku HTTPD"
+  description   = "Docker repository for Gomoku services"
   format        = "DOCKER"
   depends_on    = [google_project_service.artifact_registry_api]
 }
 
-# Cloud Run Service
-resource "google_cloud_run_v2_service" "default" {
+# ──────────────────────────────────────────────
+# gomoku-httpd — C game engine (INTERNAL only)
+# ──────────────────────────────────────────────
+
+resource "google_cloud_run_v2_service" "httpd" {
   name     = "gomoku-httpd"
   location = var.region
-  ingress  = "INGRESS_TRAFFIC_ALL"
+  ingress  = "INGRESS_TRAFFIC_INTERNAL_ONLY"
 
   template {
     scaling {
@@ -58,7 +64,7 @@ resource "google_cloud_run_v2_service" "default" {
 
     containers {
       image = var.container_image
-      
+
       ports {
         container_port = 8787
       }
@@ -84,10 +90,8 @@ resource "google_cloud_run_v2_service" "default" {
         }
       }
     }
-    
-    # Critical: Set max_instance_request_concurrency to 1
-    # because the daemon is single-threaded. This triggers auto-scaling
-    # immediately when a request comes in and the instance is busy.
+
+    # Single-threaded: one request at a time per instance
     max_instance_request_concurrency = 1
   }
 
@@ -99,22 +103,115 @@ resource "google_cloud_run_v2_service" "default" {
   depends_on = [google_project_service.run_api]
 }
 
-# Make the backend service public
-resource "google_cloud_run_service_iam_member" "public_access" {
-  location = google_cloud_run_v2_service.default.location
-  service  = google_cloud_run_v2_service.default.name
+# ──────────────────────────────────────────────
+# gomoku-api — FastAPI (auth, scoring, proxy)
+# ──────────────────────────────────────────────
+
+locals {
+  httpd_url = google_cloud_run_v2_service.httpd.uri
+}
+
+resource "google_cloud_run_v2_service" "api" {
+  name     = "gomoku-api"
+  location = var.region
+  ingress  = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+
+  template {
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 5
+    }
+
+    volumes {
+      name = "cloudsql"
+      cloud_sql_instance {
+        instances = [var.db_instance_connection]
+      }
+    }
+
+    containers {
+      image = var.api_image
+
+      ports {
+        container_port = 8000
+      }
+
+      env {
+        name  = "GOMOKU_HTTPD_URL"
+        value = local.httpd_url
+      }
+
+      env {
+        name  = "DB_SOCKET"
+        value = "/cloudsql/${var.db_instance_connection}"
+      }
+
+      env {
+        name  = "DB_NAME"
+        value = "gomoku"
+      }
+
+      env {
+        name  = "DB_USER"
+        value = "postgres"
+      }
+
+      env {
+        name  = "JWT_SECRET"
+        value = var.jwt_secret
+      }
+
+      volume_mounts {
+        name       = "cloudsql"
+        mount_path = "/cloudsql"
+      }
+
+      startup_probe {
+        http_get {
+          path = "/health"
+          port = 8000
+        }
+        initial_delay_seconds = 5
+        period_seconds        = 3
+        failure_threshold     = 5
+        timeout_seconds       = 3
+      }
+
+      resources {
+        limits = {
+          cpu    = "1000m"
+          memory = "512Mi"
+        }
+      }
+    }
+
+    # Async — can handle many concurrent requests
+    max_instance_request_concurrency = 80
+  }
+
+  traffic {
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+    percent = 100
+  }
+
+  depends_on = [google_project_service.run_api, google_project_service.sqladmin_api]
+}
+
+# Allow API to invoke httpd (service-to-service auth)
+resource "google_cloud_run_service_iam_member" "api_invokes_httpd" {
+  location = google_cloud_run_v2_service.httpd.location
+  service  = google_cloud_run_v2_service.httpd.name
   role     = "roles/run.invoker"
-  member   = "allUsers"
+  member   = "serviceAccount:${google_cloud_run_v2_service.api.template[0].service_account}"
 }
 
 # ──────────────────────────────────────────────
-# Frontend (nginx serving React SPA, proxying API to backend)
+# gomoku-frontend — nginx serving React SPA
 # ──────────────────────────────────────────────
 
-# Derive backend hostname from the backend service URI (e.g., "https://gomoku-httpd-xxx.a.run.app")
 locals {
-  backend_host = replace(google_cloud_run_v2_service.default.uri, "https://", "")
-  backend_url  = "${local.backend_host}:443"
+  api_host = replace(google_cloud_run_v2_service.api.uri, "https://", "")
+  api_url  = "${local.api_host}:443"
 }
 
 resource "google_cloud_run_v2_service" "frontend" {
@@ -136,18 +233,8 @@ resource "google_cloud_run_v2_service" "frontend" {
       }
 
       env {
-        name  = "BACKEND_URL"
-        value = local.backend_url
-      }
-
-      env {
-        name  = "BACKEND_PROTO"
-        value = "https"
-      }
-
-      env {
-        name  = "BACKEND_HOST"
-        value = local.backend_host
+        name  = "API_URL"
+        value = local.api_url
       }
 
       startup_probe {
@@ -169,7 +256,6 @@ resource "google_cloud_run_v2_service" "frontend" {
       }
     }
 
-    # nginx can handle many concurrent connections
     max_instance_request_concurrency = 80
   }
 
@@ -181,7 +267,7 @@ resource "google_cloud_run_v2_service" "frontend" {
   depends_on = [google_project_service.run_api]
 }
 
-# Make the frontend service public
+# Only frontend is public-facing
 resource "google_cloud_run_service_iam_member" "frontend_public_access" {
   location = google_cloud_run_v2_service.frontend.location
   service  = google_cloud_run_v2_service.frontend.name

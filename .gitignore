@@ -88,3 +88,32 @@ crash.log
 # *.override.tf
 # *.override.tf.json
 /.rubymate
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+.env
+
+# Test / coverage artifacts
+.coverage
+htmlcov/
+.pytest_cache/
+/.secret
+/tmp
+

@@ -1,0 +1,113 @@
+{
+  "X":{
+    "player":"AI",
+    "depth":6,
+    "time_ms":160018.134
+  },
+  "O":{
+    "player":"AI",
+    "depth":6,
+    "time_ms":0.000
+  },
+  "board_size":15,
+  "radius":4,
+  "timeout":"none",
+  "undo":true,
+  "undo_limit":5,
+  "winner":"none",
+  "board_state":[
+    ". . . . . . . . . . . . . . .",
+    ". . . . . . . . . . . . . . .",
+    ". . . . . . . . . . . . . . .",
+    ". . . . . . . . . . . . . . .",
+    ". . . . . . . . . . . . . . .",
+    ". . . . . . . . . . . . . . .",
+    ". . . . . . . . . . . . . . .",
+    ". . . . . . . X . . . . . . .",
+    ". . . . . . . . O X . . . . .",
+    ". . . . . . . . . . . . . . .",
+    ". . . . . . . . . . . . . . .",
+    ". . . . . . . . . . . . . . .",
+    ". . . . . . . . . . . . . . .",
+    ". . . . . . . . . . . . . . .",
+    ". . . . . . . . . . . . . . ."
+  ],
+  "moves":[
+    {
+      "X (AI)":"H7",
+      "time_ms":0.000
+    },
+    {
+      "O (AI)":"J8",
+      "opponent":100,
+      "time_ms":0.000
+    },
+    {
+      "X (AI)":"K8",
+      "moves_evaluated":576,
+      "opponent":100,
+      "time_ms":160018.134,
+      "offensive_max_score":100,
+      "defensive_max_score":-100,
+      "think_time_ms":160018.134,
+      "scoring":[
+        {
+          "player":"current",
+          "evaluator":"have_win",
+          "evaluated_moves":96,
+          "score":100,
+          "time_ms":0.003
+        },
+        {
+          "player":"opponent",
+          "evaluator":"block_threat",
+          "evaluated_moves":96,
+          "score":-100,
+          "time_ms":0.002
+        },
+        {
+          "player":"current",
+          "evaluator":"have_vct",
+          "evaluated_moves":0,
+          "score":0,
+          "time_ms":0.011
+        },
+        {
+          "player":"opponent",
+          "evaluator":"block_vct",
+          "evaluated_moves":0,
+          "score":0,
+          "time_ms":0.010
+        },
+        {
+          "player":"current",
+          "evaluator":"compound_three",
+          "evaluated_moves":0,
+          "score":0,
+          "time_ms":0.002
+        },
+        {
+          "player":"opponent",
+          "evaluator":"block_open_three",
+          "evaluated_moves":0,
+          "score":0,
+          "time_ms":0.003
+        },
+        {
+          "player":"current",
+          "evaluator":"forcing_four",
+          "evaluated_moves":0,
+          "score":0,
+          "time_ms":0.002
+        },
+        {
+          "player":"current",
+          "evaluator":"minimax",
+          "evaluated_moves":576,
+          "score":-1020,
+          "time_ms":160018.086
+        }
+      ]
+    }
+  ]
+}

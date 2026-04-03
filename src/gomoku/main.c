@@ -61,11 +61,19 @@ static int run_replay_mode(cli_config_t *config) {
     return 1;
   }
 
-  // Create a minimal config for the game state
+  // Create config from the replay file's settings
   cli_config_t game_config = *config;
   game_config.board_size = replay.board_size;
   game_config.player_x_type = PLAYER_TYPE_HUMAN; // Doesn't matter for replay
   game_config.player_o_type = PLAYER_TYPE_HUMAN;
+  if (replay.depth_x > 0) game_config.depth_x = replay.depth_x;
+  if (replay.depth_o > 0) game_config.depth_o = replay.depth_o;
+  if (replay.depth_x > 0 || replay.depth_o > 0) {
+    int dx = (replay.depth_x > 0) ? replay.depth_x : game_config.max_depth;
+    int do_ = (replay.depth_o > 0) ? replay.depth_o : game_config.max_depth;
+    game_config.max_depth = (dx > do_) ? dx : do_;
+  }
+  if (replay.radius > 0) game_config.search_radius = replay.radius;
 
   // Initialize game state
   game_state_t *game = init_game(game_config);
@@ -85,7 +93,16 @@ static int run_replay_mode(cli_config_t *config) {
 
   // Display replay info
   printf("\n  Replaying game from: %s\n", config->replay_file);
-  printf("  Total moves: %d | Winner: %s\n", replay.move_count, replay.winner);
+  printf("  Total moves: %d | Winner: %s", replay.move_count, replay.winner);
+  if (replay.depth_x > 0 || replay.depth_o > 0) {
+    printf(" | Depth: X=%d O=%d",
+           replay.depth_x > 0 ? replay.depth_x : game_config.max_depth,
+           replay.depth_o > 0 ? replay.depth_o : game_config.max_depth);
+  }
+  if (replay.radius > 0) {
+    printf(" | Radius: %d", replay.radius);
+  }
+  printf("\n");
   if (config->replay_wait > 0) {
     printf("  Auto-advance: %.1fs delay\n", config->replay_wait);
   } else {

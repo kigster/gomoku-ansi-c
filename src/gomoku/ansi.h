@@ -44,6 +44,14 @@
 #define COLOR_O_INVALID "\033[0m\033[5;37;41m" // Red background for invalid moves
 #define COLOR_X_INVALID "\033[0m\033[5;37;41m"
 
+// Hint mode: bold + blink for threatening patterns
+#define COLOR_X_HINT "\033[1;5;31m"  // Bold blinking red for X threats
+#define COLOR_O_HINT "\033[1;5;32m"  // Bold blinking green for O threats
+
+// Victory highlight: bold + blink for the winning five
+#define COLOR_X_WIN "\033[1;5;31m"    // Bold blinking red
+#define COLOR_O_WIN "\033[1;5;32m"    // Bold blinking green
+
 // Cursor movement
 #define ESCAPE_RESTORE_CURSOR_POSITION "\033[u"
 #define ESCAPE_SAVE_CURSOR_POSITION "\033[s"

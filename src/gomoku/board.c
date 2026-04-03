@@ -74,6 +74,18 @@ const char *get_coordinate_unicode(int index) {
   return "?";
 }
 
+const char *get_column_letter_unicode(int index) {
+  // Negative circled capital letters A–T, skipping I (matches JSON notation)
+  static const char *cols[] = {"🅐", "🅑", "🅒", "🅓", "🅔", "🅕", "🅖",
+                               "🅗", "🅙", "🅚", "🅛", "🅜", "🅝", "🅞",
+                               "🅟", "🅠", "🅡", "🅢", "🅣"};
+
+  if (index >= 0 && index < 19) {
+    return cols[index];
+  }
+  return "?";
+}
+
 int board_to_display_coord(int board_coord) { return board_coord + 1; }
 
 int display_to_board_coord(int display_coord) { return display_coord - 1; }

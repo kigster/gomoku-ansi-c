@@ -40,7 +40,8 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
       .depth_x = -1,                      // -1 means use max_depth
       .depth_o = -1,                      // -1 means use max_depth
       .player_x_explicit = 0,             // Track if -x was explicitly set
-      .player_o_explicit = 0              // Track if -o was explicitly set
+      .player_o_explicit = 0,             // Track if -o was explicitly set
+      .hints_enabled = 0                  // Hint mode off by default
   };
 
   // Command line options structure
@@ -60,13 +61,14 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
       {"quiet", no_argument, 0, 'q'},
       {"player-x", required_argument, 0, 'x'},
       {"player-o", required_argument, 0, 'o'},
+      {"hints", no_argument, 0, 'i'},
       {0, 0, 0, 0}};
 
   int c;
   int option_index = 0;
 
   // Parse command-line arguments using getopt_long
-  while ((c = getopt_long(argc, argv, "d:l:t:b:r:j:p:w:hU:usqx:o:",
+  while ((c = getopt_long(argc, argv, "d:l:t:b:r:j:p:w:hU:usqx:o:i",
                           long_options, &option_index)) != -1) {
     switch (c) {
     case 'd':
@@ -201,7 +203,9 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
 
     case 'q':
       config.headless = 1;
-      config.skip_welcome = 1; // Quiet mode implies skip welcome
+      config.skip_welcome = 1;     // Quiet mode implies skip welcome
+      config.player_x_type = PLAYER_TYPE_AI; // No terminal for human input
+      config.player_o_type = PLAYER_TYPE_AI;
       break;
 
     case 'x':
@@ -228,6 +232,10 @@ cli_config_t parse_arguments(int argc, char *argv[]) {
         printf("Valid options are: human, ai\n\n");
         config.invalid_args = 1;
       }
+      break;
+
+    case 'i':
+      config.hints_enabled = 1;
       break;
 
     case 'h':
@@ -307,6 +315,9 @@ void print_help(const char *program_name) {
       "  %s-q, --quiet%s           Quiet mode: suppress all terminal output.\n",
       COLOR_YELLOW, COLOR_RESET);
   printf("                        Useful for batch/eval scripts with -j.\n");
+  printf("  %s-i, --hints%s           Highlight threatening patterns (fours,\n",
+         COLOR_YELLOW, COLOR_RESET);
+  printf("                        open threes, compound threats) with blink.\n");
   printf("  %s-t, --timeout T%s       Timeout in seconds that AI (and human)\n",
          COLOR_YELLOW, COLOR_RESET);
   printf("                        have to make their move, otherwise AI must "

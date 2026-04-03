@@ -20,7 +20,6 @@ export PROJECT_ROOT="$(pwd -P)"
 
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 export OS
-export DEFAULT_PROXY="envoy"
 export NGINX_USER="_www"
 
 declare -i DEFAULT_WORKERS=10
@@ -39,9 +38,9 @@ declare -a LOG_FILES=(
   "/var/log/nginx/access.log"
   "/var/log/nginx/error.log"
   "/var/log/envoy.log"
-  "/var/log/haproxy.log"
   "/var/log/gomoku-httpd.log"
   "/var/log/gomoku-frontend.log"
+  "/var/log/gomoku-api.log"
 )
 export LOG_FILES
 
@@ -49,19 +48,15 @@ declare -a PACKAGES=(clang-format shfmt btop htop ctop bottom)
 export PACKAGES
 
 # Component order for stop/restart/status (reverse of start)
-declare -a STOP_ORDER=(frontend gomoku envoy haproxy nginx)
+declare -a STOP_ORDER=(frontend api gomoku envoy nginx)
 export STOP_ORDER
-export START_COMPONENTS=(nginx haproxy envoy gomoku frontend)
+export START_COMPONENTS=(nginx envoy gomoku api frontend)
 
 # =============================================================================
 # Process Management — self-contained, no bashmatic dependency
 # =============================================================================
 
 # Return PIDs matching $1, excluding lines matching $2.
-# Uses bracket trick: pass "[n]ginx" so grep never matches itself.
-# Always excludes monitoring tools (htop, btop, ctop, btm, gctl).
-# Usage: cluster.pids "[e]nvoy"
-#        cluster.pids "[g]omoku-httpd" "gomoku-http-client"
 cluster.pids() {
   local pattern="$1"
   local exclude="${2:-}"
@@ -209,8 +204,7 @@ cmd_certificates() {
 
 cmd_configs() {
   local workers="${1:-10}"
-  local template_dir="$PROJECT_DIR/iac/templates"
-  local output
+  local template_dir="$PROJECT_DIR/iac/local/templates"
 
   local nginx_config
   nginx_config="$(nginx -h 2>&1 | grep -- '-c.*default' | tr -d ')' | awk 'BEGIN{FS="default: "}{print $2}')"
@@ -218,27 +212,22 @@ cmd_configs() {
   local nginx_home
   nginx_home="$(dirname "${nginx_config}")"
 
-  h3 "Generating haproxy.cfg config for ${workers} workers..."
-  output="${BREW_HOME}/etc/haproxy.cfg"
-  bash "$template_dir/haproxy.cfg.sh" "$workers" >"$output"
-  success "haproxy.cfg config generated."
-
   h3 "Generating envoy.yaml config for ${workers} workers..."
-  output="$PROJECT_DIR/iac/envoy/envoy.yaml"
+  local output="$PROJECT_DIR/iac/local/envoy/envoy.yaml"
   bash "$template_dir/envoy.yaml.sh" "$workers" >"$output"
   success "envoy.yaml config generated."
 
   h3 "Generating nginx.conf..."
-  output="$PROJECT_DIR/iac/config/nginx.conf"
+  output="$PROJECT_DIR/iac/local/nginx.conf"
   bash "$template_dir/nginx.conf.sh" >"$output"
   success "nginx.conf config generated."
 
   if [[ -f ${nginx_home}/nginx.conf ]]; then
     run "sudo mv ${nginx_home}/nginx.conf ${nginx_home}/nginx.conf.bak"
-    run "sudo ln -nfs ${PROJECT_DIR}/iac/config/nginx.conf ${nginx_home}/nginx.conf"
+    run "sudo ln -nfs ${PROJECT_DIR}/iac/local/nginx.conf ${nginx_home}/nginx.conf"
     success "${nginx_home}/nginx.conf has been symlinked."
   elif [[ -d ${nginx_home} ]]; then
-    run "sudo ln -nfs ${PROJECT_DIR}/iac/config/nginx.conf ${nginx_home}/nginx.conf"
+    run "sudo ln -nfs ${PROJECT_DIR}/iac/local/nginx.conf ${nginx_home}/nginx.conf"
     success "${nginx_home}/nginx.conf has been symlinked."
   else
     error "Couldn't determine nginx home directory. " \
@@ -249,11 +238,9 @@ cmd_configs() {
 }
 
 # =============================================================================
-# Generic component stop / status — covers haproxy, envoy, frontend
+# Generic component stop / status
 # =============================================================================
 
-# Generic stop: kill processes matching a grep pattern.
-# Usage: component.stop <display-name> <grep-pattern> [exclude] [sudo]
 component.stop() {
   local name="$1" pattern="$2" exclude="${3:-}" use_sudo="${4:-}"
   inf "Stopping $name..."
@@ -274,7 +261,6 @@ component.stop() {
   fi
 }
 
-# Generic status: show PIDs for a grep pattern.
 component.status() {
   local name="$1" pattern="$2" exclude="${3:-}"
   inf "$name status..."
@@ -331,7 +317,6 @@ nginx.stop() {
   sudo "${BREW_HOME}/bin/nginx" -s stop 2>/dev/null || true
   sleep 2
 
-  # Force-kill any survivors via xargs (handles root-owned processes)
   if cluster.is-running "[n]ginx"; then
     warning "nginx didn't stop gracefully, force killing..."
     cluster.pids "[n]ginx" | sudo xargs /bin/kill -9 2>/dev/null || true
@@ -360,47 +345,6 @@ nginx.status() {
 }
 
 # =============================================================================
-# HAPROXY
-# =============================================================================
-
-haproxy.start() {
-  inf "Starting haproxy..."
-
-  if cluster.is-running "[h]aproxy"; then
-    ui.closer.kind-of-ok:
-    success "haproxy is already running."
-    return 0
-  fi
-
-  "${BREW_HOME}/opt/haproxy/bin/haproxy" -D -f "${BREW_HOME}/etc/haproxy.cfg"
-  sleep 1
-
-  if cluster.is-running "[h]aproxy"; then
-    ui.closer.ok:
-    success "haproxy started."
-  else
-    ui.closer.not-ok:
-    error "haproxy failed to start."
-    return 1
-  fi
-}
-
-haproxy.stop() { component.stop "haproxy" "[h]aproxy"; }
-haproxy.restart() {
-  haproxy.stop
-  sleep 1
-  haproxy.start
-}
-haproxy.status() {
-  component.status "haproxy" "[h]aproxy"
-  if cluster.is-running "[h]aproxy" && [[ -f "${BREW_HOME}/etc/haproxy.cfg" ]]; then
-    local url
-    url=$(grep -A 3 stats "${BREW_HOME}/etc/haproxy.cfg" | grep bind | awk '{print $2}' | head -1)
-    [[ -n "$url" ]] && echo "  Admin: http://${url}/stats"
-  fi
-}
-
-# =============================================================================
 # ENVOY
 # =============================================================================
 
@@ -419,7 +363,7 @@ envoy.start() {
     ui.closer.ok:
   fi
 
-  local envoy_config="$PROJECT_DIR/iac/envoy/envoy.yaml"
+  local envoy_config="$PROJECT_DIR/iac/local/envoy/envoy.yaml"
   [[ -f "$envoy_config" ]] || {
     error "Envoy config not found: $envoy_config"
     return 1
@@ -473,6 +417,64 @@ envoy.status() {
 }
 
 # =============================================================================
+# FASTAPI SERVER
+# =============================================================================
+
+api.start() {
+  inf "Starting FastAPI server..."
+
+  if cluster.is-running "[u]vicorn.*app.main"; then
+    ui.closer.kind-of-ok:
+    success "FastAPI server is already running."
+    return 0
+  fi
+
+  local api_dir="$PROJECT_DIR/api"
+  [[ -f "$api_dir/app/main.py" ]] || {
+    error "api/app/main.py not found."
+    return 1
+  }
+
+  # Ensure deps are installed
+  if [[ ! -d "$api_dir/.venv" ]]; then
+    inf "Installing API dependencies..."
+    (cd "$api_dir" && uv sync --all-extras) >/dev/null 2>&1
+    ui.closer.ok:
+  fi
+
+  nohup bash -c "cd '$api_dir' && \
+    DATABASE_URL=postgresql://kig@localhost:5432/gomoku \
+    GOMOKU_HTTPD_URL=http://localhost:10000 \
+    JWT_SECRET=dev-secret-change-in-production-longer-key \
+    uv run uvicorn app.main:app --host 0.0.0.0 --port 8000" \
+    >/var/log/gomoku-api.log 2>&1 &
+  sleep 2
+
+  if cluster.is-running "[u]vicorn.*app.main"; then
+    ui.closer.ok:
+    success "FastAPI server started (http://localhost:8000)."
+  else
+    ui.closer.not-ok:
+    error "FastAPI server failed to start. Check /var/log/gomoku-api.log"
+    return 1
+  fi
+}
+
+api.stop() { component.stop "api" "[u]vicorn.*app.main"; }
+api.restart() {
+  api.stop
+  sleep 1
+  api.start
+}
+api.status() {
+  component.status "api" "[u]vicorn.*app.main"
+  if cluster.is-running "[u]vicorn.*app.main" && command -v curl >/dev/null 2>&1; then
+    echo "  URL: http://localhost:8000"
+    curl -sf http://localhost:8000/health 2>/dev/null && echo "" || echo "  (not responding)"
+  fi
+}
+
+# =============================================================================
 # FRONTEND (Vite)
 # =============================================================================
 
@@ -514,7 +516,7 @@ frontend.start() {
     ui.closer.ok:
   fi
 
-  nohup bash -c "cd '$frontend_dir' && VITE_API_BASE=http://127.0.0.1:10000 npm run dev" >/var/log/gomoku-frontend.log 2>&1 &
+  nohup bash -c "cd '$frontend_dir' && npm run dev" >/var/log/gomoku-frontend.log 2>&1 &
   sleep 2
 
   if cluster.is-running "[v]ite"; then
@@ -584,7 +586,6 @@ gomoku.stop() {
   "$SCRIPT_DIR/gomoku-httpd-ctl" stop
   sleep 2
 
-  # Force kill any survivors
   if cluster.is-running "[g]omoku-httpd" "gomoku-http-client"; then
     cluster.kill "[g]omoku-httpd" "gomoku-http-client"
     sleep 1
@@ -624,17 +625,16 @@ gomoku.status() {
 }
 
 # =============================================================================
-# Command dispatch — eliminates repetition in stop/restart/status
+# Command dispatch
 # =============================================================================
 
-# Route <action> to the right component function.
 component.dispatch() {
   local action="$1" component="$2"
   shift 2
   case "$component" in
   nginx) "nginx.${action}" "$@" ;;
-  haproxy) "haproxy.${action}" "$@" ;;
   envoy) "envoy.${action}" "$@" ;;
+  api) "api.${action}" "$@" ;;
   gomoku | gomoku-httpd) "gomoku.${action}" "$@" ;;
   frontend) "frontend.${action}" "$@" ;;
   *)
@@ -644,8 +644,6 @@ component.dispatch() {
   esac
 }
 
-# Parse -c flags and dispatch an action to each component.
-# Usage: cmd_for_each <action> <default-order-array-name> "$@"
 cmd_for_each() {
   local action="$1"
   shift
@@ -679,7 +677,6 @@ cmd_for_each() {
 # =============================================================================
 
 cmd_start() {
-  local proxy=${DEFAULT_PROXY}
   local -a components=()
   local workers=
 
@@ -695,11 +692,6 @@ cmd_start() {
         return 1
       }
       ;;
-    -p | --proxy)
-      proxy="$2"
-      shift 2
-      ;;
-
     *)
       if array.includes "$1" "${START_COMPONENTS[@]}"; then
         components+=("$1")
@@ -712,27 +704,16 @@ cmd_start() {
     esac
   done
 
-  [[ -n "$proxy" && "$proxy" != "haproxy" && "$proxy" != "envoy" ]] && {
-    error "Invalid proxy: $proxy. Must be 'haproxy' or 'envoy'"
-    return 1
-  }
-
   [[ -z "$workers" ]] && workers=${DEFAULT_WORKERS}
   cmd_configs "$workers"
 
   if [[ ${#components[@]} -eq 0 ]]; then
     nginx.start
-    if [[ "$proxy" == "haproxy" ]]; then haproxy.start; else envoy.start; fi
+    envoy.start
     gomoku.start "$workers"
+    api.start
     frontend.start
-
-    if [[ "$proxy" == "haproxy" ]]; then
-      local url
-      url=$(grep -A 3 stats "${BREW_HOME}/etc/haproxy.cfg" | grep bind | awk '{print $2}' | head -1)
-      if [[ -n "$url" ]]; then open "http://${url}/stats" 2>/dev/null || true; fi
-    else
-      open "http://127.0.0.1:9901" 2>/dev/null || true
-    fi
+    open "http://127.0.0.1:9901" 2>/dev/null || true
   else
     for c in "${components[@]}"; do
       component.dispatch start "$c" "$workers"
@@ -752,7 +733,7 @@ cmd_ps() {
   export GREP_COLOR='1;33'
   local output
   output=$(/bin/ps -eo pid,ppid,%cpu,rss,command |
-    /usr/bin/grep -E '[g]omoku|[h]aproxy|[e]nvoy|[n]ginx|[v]ite|PID' |
+    /usr/bin/grep -E '[g]omoku|[e]nvoy|[n]ginx|[v]ite|[u]vicorn|PID' |
     /usr/bin/grep -Ev 'gctl|grep')
 
   if [[ -n "$output" ]]; then
@@ -792,28 +773,24 @@ ${bldblu}DETAILS:${clr}
   which can start, stop, or examine the entire set of components that the cluster
   comprises. It can also start/stop individual components of the cluster.
 
-  We use nginx and either haproxy or envoy as the reverse proxy. Therefore 
-  we need to overrwrite the default nginx.conf and haproxy.cfg with symlinks into
-  this repo: sz./iac/config/nginx.conf and ./iac/config/haproxy.cfg.
-
-  Every time you start the cluster we overwrite the default nginx.conf and haproxy.cfg.
-
   ${bldcyn}The components:${clr}
 
   1. ${bldgrn}nginx${clr} (requires sudo to start/stop, because we bind to port 80 and 443).
      Nginx configuration sets up ${bldylw}dev.gomoku.games${clr} as the front, listening on
      ports 80 and 443 for that domain. The DNS points to 127.0.0.1.
 
-  2. ${bldgrn}Vite dev server${clr} provides the React frontend for development.
+  2. ${bldgrn}envoy${clr} reverse proxy routes traffic to a backend of gomoku-httpd worker
+     processes (defaults to CPU core count). Configurable via ${bldylw}-w${clr} flag.
 
-  3. ${bldgrn}A reverse proxy${clr} (default: envoy, but haproxy supported) routes traffic
-     to a backend of gomoku-httpd worker processes (defaults to CPU core count).
-
-  4. ${bldgrn}gomoku-httpd${clr} workers, configurable via the ${bldylw}-w${clr} flag. Each worker
-     listens on its own port, offering a secondary port for haproxy and
+  3. ${bldgrn}gomoku-httpd${clr} workers. Each worker listens on its own port, offering
      endpoints /health and /ready for envoy. Since gomoku-httpd is single-threaded,
-     each worker responds to one move at a time — proxies are signaled if busy.
-     The ${bldylw}-w${clr} flag also regenerates proxy configs from iac/templates/.
+     each worker responds to one move at a time — envoy signals if busy.
+
+  4. ${bldgrn}FastAPI${clr} (api/) handles authentication, game saving, leaderboard, and
+     proxies /game/play requests to gomoku-httpd via envoy.
+
+  5. ${bldgrn}Vite dev server${clr} provides the React frontend for development.
+     All API calls go through the vite proxy to FastAPI on port 8000.
 "
 }
 
@@ -829,9 +806,9 @@ ${bldblu}DESCRIPTION:${clr}
   ${bldylw}WARNING: ${bldred}This script manages the Gomoku Cluster in development mode.
            It is not intended for production use.${clr}
 
-  Proxy configs are auto-generated from templates in ${bldylw}iac/templates/${clr}
-  to match the number of workers (${bldylw}-w${clr} flag), point to the proper SSL 
-  certificates, and choose the appropriate event polling mechanism for 
+  Proxy configs are auto-generated from templates in ${bldylw}iac/local/templates/${clr}
+  to match the number of workers (${bldylw}-w${clr} flag), point to the proper SSL
+  certificates, and choose the appropriate event polling mechanism for
   the OS (epoll or kqueue).
 
 ${bldblu}COMMANDS:${clr}
@@ -841,14 +818,13 @@ ${bldblu}COMMANDS:${clr}
   ${c}# Generate SSL certificates for dev.gomoku.games.${clr}
   ${bldylw}${binary} certificates${clr}
 
-  ${c}# Generate haproxy, envoy and nginx configs into iac/config/ folder.${clr}
+  ${c}# Generate envoy and nginx configs.${clr}
   ${bldylw}${binary} configs${clr}
 
-  ${c}# Boot the entire cluster. Envoy is the default proxy. Components are listed below.${clr}
-  ${bldylw}${binary} start [ -p <haproxy|envoy> ] [ -w <workers> ] [ <component> ... ] ${clr}
+  ${c}# Boot the entire cluster. Components are listed below.${clr}
+  ${bldylw}${binary} start [ -w <workers> ] [ <component> ... ] ${clr}
 
 ${bldblu}START OPTIONS:${clr}
-  ${bldylw}-p, --proxy <haproxy|envoy>${clr}    Reverse proxy (default: envoy)
   ${bldylw}-w, --workers <N>${clr}              Number of workers (default: ${DEFAULT_WORKERS})
   ${bldylw}component${clr}                      Item(s) from the following component list:
                                  $(array.join ", " "${START_COMPONENTS[@]}")
@@ -870,18 +846,17 @@ ${bldblu}OTHER COMMANDS:${clr}
 
 ${bldblu}COMPONENTS:${clr}
   ${bldylw}nginx${clr}      Nginx web server (ports 80, 443)
-  ${bldylw}haproxy${clr}    HAProxy load balancer (frontend :10000, admin :8404)
   ${bldylw}envoy${clr}      Envoy proxy (frontend :10000, admin :9901)
   ${bldylw}gomoku${clr}     Gomoku-httpd worker cluster (ports 9500+)
+  ${bldylw}api${clr}        FastAPI server (http://localhost:8000)
   ${bldylw}frontend${clr}   Vite React dev server (http://localhost:5173)
 
 ${bldblu}EXAMPLES:${clr}
-  ${bldylw}${binary} start${clr}                          # Envoy, ${DEFAULT_WORKERS} workers
-  ${bldylw}${binary} start -w 16${clr}                    # Envoy, 16 workers
-  ${bldylw}${binary} start haproxy -w 8${clr}             # HAProxy, 8 workers
-  ${bldylw}${binary} start gomoku nginx${clr}             # Start only nginx and gomoku
+  ${bldylw}${binary} start${clr}                          # All components, ${DEFAULT_WORKERS} workers
+  ${bldylw}${binary} start -w 16${clr}                    # All components, 16 workers
+  ${bldylw}${binary} start gomoku api frontend${clr}       # Start specific components
   ${bldylw}${binary} stop${clr}                           # Stop the entire cluster
-  ${bldylw}${binary} stop envoy${clr}                     # Stop only envoy
+  ${bldylw}${binary} stop api${clr}                       # Stop only FastAPI
   ${bldylw}${binary} status${clr}                         # Show all component status
   ${bldylw}${binary} ps${clr}                             # Process table
   ${bldylw}${binary} observe btop${clr}                   # Launch btop

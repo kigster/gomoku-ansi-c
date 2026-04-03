@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Backend target: use port 10000 for Envoy proxy, or 9500 for direct backend
-const BACKEND = 'http://localhost:10000'
+// All API calls go through FastAPI
+const API = 'http://localhost:8000'
 
 export default defineConfig({
   root: '.',
@@ -12,26 +12,23 @@ export default defineConfig({
     host: '0.0.0.0',
     allowedHosts: [
       '0.0.0.0',
-      '172.16.10.89',
-      'macbook-pro-m3-kig.local'
     ],
     proxy: {
-      '/gomoku': {
-        target: BACKEND,
-        changeOrigin: true,
-      },
-      '/health': {
-        target: BACKEND,
-        changeOrigin: true,
-      },
-      '/ready': {
-        target: BACKEND,
-        changeOrigin: true,
-      },
+      '/auth': { target: API, changeOrigin: true },
+      '/game': { target: API, changeOrigin: true },
+      '/leaderboard': { target: API, changeOrigin: true },
+      '/user': { target: API, changeOrigin: true },
+      '/health': { target: API, changeOrigin: true },
     },
   },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/test-setup.ts',
+    css: true,
   },
 })

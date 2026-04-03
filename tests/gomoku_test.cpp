@@ -1021,6 +1021,65 @@ TEST_F(GomokuTest, OddDepthFindsWinEvenDepthMisses) {
       << best_y_d2;
 }
 
+/**
+ * Regression test from last-game.json: AI (O) creates its own open four
+ * instead of blocking X's closed four that becomes five-in-a-row.
+ *
+ * Position after move 13 (X plays J7 = [7][8]):
+ *   X has four in column 8: [7][8],[8][8],[9][8],[10][8] — [6][8] open.
+ *   O can play M8 = [8][11] for an open four on the anti-diagonal:
+ *     [8][11],[9][10],[10][9],[11][8] — both ends open (500000).
+ *
+ * AI plays M8 saying "checkmate", but X moves next and plays [6][8]
+ * for five in a row. The open four is worthless if the opponent wins first.
+ *
+ * Step 1 treats >= 500000 (open four) the same as >= 1000000 (actual five)
+ * and returns without checking if the opponent can win on their next turn.
+ */
+TEST_F(GomokuTest, AIBlocksBeforeCreatingOpenFour) {
+  // X stones (7 moves played)
+  game->board[7][8] = AI_CELL_CROSSES;   // J7 — move 13
+  game->board[8][8] = AI_CELL_CROSSES;   // J8 — move 5
+  game->board[8][9] = AI_CELL_CROSSES;   // K8 — move 1
+  game->board[8][10] = AI_CELL_CROSSES;  // L8 — move 7
+  game->board[9][8] = AI_CELL_CROSSES;   // J9 — move 11
+  game->board[9][9] = AI_CELL_CROSSES;   // K9 — move 3
+  game->board[10][8] = AI_CELL_CROSSES;  // J10 — move 9
+
+  // O stones (6 moves played)
+  game->board[8][7] = AI_CELL_NAUGHTS;   // H8 — move 8
+  game->board[9][10] = AI_CELL_NAUGHTS;  // L9 — move 2
+  game->board[10][9] = AI_CELL_NAUGHTS;  // K10 — move 4
+  game->board[10][10] = AI_CELL_NAUGHTS; // L10 — move 6
+  game->board[11][7] = AI_CELL_NAUGHTS;  // H11 — move 10
+  game->board[11][8] = AI_CELL_NAUGHTS;  // J11 — move 12
+
+  game->current_player = AI_CELL_NAUGHTS;
+  game->max_depth = 5;
+
+  // Verify: X at [6][8] completes five in column 8
+  int x_win_threat =
+      evaluate_threat_fast(game->board, 6, 8, AI_CELL_CROSSES, BOARD_SIZE);
+  EXPECT_GE(x_win_threat, 1000000)
+      << "X at [6][8] should be five-in-a-row (1,000,000)";
+
+  // Verify: O at [8][11] creates an open four on the anti-diagonal
+  int o_open_four =
+      evaluate_threat_fast(game->board, 8, 11, AI_CELL_NAUGHTS, BOARD_SIZE);
+  EXPECT_GE(o_open_four, 500000)
+      << "O at [8][11] should be an open four (500,000)";
+
+  int best_x = -1, best_y = -1;
+  find_best_ai_move(game, &best_x, &best_y, NULL);
+
+  // O MUST block at [6][8], not create an open four at [8][11].
+  // An open four takes two turns to win; X's closed four wins in one.
+  EXPECT_EQ(best_x, 6)
+      << "AI should block X's five-in-a-row at row 6, not play row " << best_x;
+  EXPECT_EQ(best_y, 8)
+      << "AI should block X's five-in-a-row at col 8, not play col " << best_y;
+}
+
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

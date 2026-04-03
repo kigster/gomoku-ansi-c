@@ -1,51 +1,83 @@
 # Gomoku Front-End
 
-This task is about creating the frontend for Gomoku game, that uses the backend on port 10000 (envoy proxy) and works similar to how gomoku-http-client works, EXCEPT instead of mirroring the JSON receivedfrom the server, the user will make a move, that move will be appended to the JSON move array, and sent back to the server until either the user wins or the AI.
+React + TypeScript + Vite + TailwindCSS single-page application for the Gomoku game.
 
-Put the files for this app inside `frontend` folder only.  
+## Architecture
 
-Let's use:
+The frontend talks exclusively to the **FastAPI server** (`api/`). It has no
+direct connection to `gomoku-httpd`. The API call flow is:
 
-* Vite
-* React
-* TypeScript
-* TailwindCSS
+```
+React App → FastAPI → gomoku-httpd (for AI moves)
+               ↓
+           PostgreSQL (for auth, scores, leaderboard)
+```
 
-When the user opens the site, the UI loads and at the center should be a 19x19 grid. The UI should be clean, modern, and use a consistent color palette.
+### API Endpoints Used
 
-Upon first loading this app, a modal pops up asking the user for their name (and in brackets explain, this is just so that we can address you properly, it's not saved anywhere).
+| Path | Purpose |
+|---|---|
+| `POST /auth/signup` | Create account |
+| `POST /auth/login` | Login, returns JWT |
+| `POST /auth/password-reset` | Request password reset email |
+| `POST /auth/password-reset/confirm` | Set new password with token |
+| `POST /game/play` | Send game state, get AI move back |
+| `POST /game/start` | Record that user started a game |
+| `POST /game/save` | Save completed game with score |
+| `GET /leaderboard` | Top 100 global scores |
+| `GET /user/me` | Current user profile + personal best |
+| `GET /health` | Health check |
 
-Once the user enters the name, the modal goes away, and the user can start the game by clicking a big and obvious [ Start Game ] button.
+### Environment Variables
 
-However, there should be a pretty visible panel (or a button called "settings" that opens up a settings modal). Settings panel has various controls arranged in a table.
+| Variable | Default | Purpose |
+|---|---|---|
+| `VITE_API_BASE` | `""` (same-origin) | API base URL. Leave empty for dev (vite proxy) and production (nginx proxy). |
 
-The following are the controls:
+## Development
 
-1. AI Search Depth: [ slider from 2 to 5 ]
-2. AI Search Radius: [ slider from 1 to 4 ]
-3. AI Timeout: [ none by default, a drop down with 30s, 60s, 120s, 300s ]
-4. Game Display: [ radio buttons: black & white stones OR crosses and naughts ]
-5. Which side do you want to play: [ X or O | or Black or White ] (depends on what they chose above).
+```bash
+npm install
+npm run dev          # Vite dev server on :5173, proxies API to :8000
+npm run build        # Production build to dist/
+npx vitest run       # Run tests
+npx tsc --noEmit     # Type check
+```
 
-The board itself should be at least 400px x 400px, with vertical and horizontal lines creating 19 squares vertically and 19 horizontally.
+Requires FastAPI running on port 8000 (`cd ../api && just serve`).
 
-If the user chose black and white stones, they should look like circular stones. 
+## Production (Docker)
 
-I placed the images representing the stones here: frontend/assets/images
+The Docker image serves the built React app via nginx and proxies all API
+routes to the FastAPI backend (configured via `API_URL` env var).
 
-There is a PNG file for white stone and black stone. If the user chooses stones, they must be placed on the intersection of the lines, not inside the squares. 
+```bash
+docker build -t gomoku-frontend:latest .
+docker run -p 80:80 -e API_URL=http://gomoku-api:8000 gomoku-frontend:latest
+```
 
-If the user chooses X and O they must be placed inside the square. You can either generate X and O images or use blown up unicode characters. Make X black and O white. 
+## Key Components
 
-If not difficult, it would be great if the settings panel had a dropdown for a "Theme" which would change colors of the background and other text. But this is not necessary. 
+- **AuthModal** — Login/Signup tabs, forgot password, reset password (from email link)
+- **AlertPanel** — Stackable red/green toast notifications, auto-dismiss
+- **LeaderboardModal** — Top 100 global players with scores and geo
+- **Board** — SVG-based 19x19 (or 15x15) game board with stone/XO display modes
+- **GameStatus** — Move counter, timers, player info, error display
+- **SettingsPanel** — AI depth, radius, timeout, display mode, side selection
 
-The most important part is that the board looks like it's made from wood. Someething like https://uat.www.lysol.com/content/dam/lysol-us/article-detail-pages/hard-wood.jpg
+## Auth Flow
 
-Once the user presses the "Start", the game begins. If the user is the first player the game waits for the first move. Once the move is made, it sends the same JSON that gomoku-httpd expects to receive, and waits for the answer. Once the answer is received, it renders the last move, and waits for the player to move again.
+1. First visit → AuthModal (Sign Up tab)
+2. User creates account → JWT stored in localStorage
+3. Subsequent visits → JWT read from localStorage, game UI loads
+4. `?token=...` in URL → password reset view
+5. Log Out → clears localStorage, shows AuthModal
 
-If the player chooses white or O, the game immediately sends the JSON to the server so the server can make the first move.
+## Game Flow
 
-
-
-
-
+1. User clicks Start Game → `POST /game/start` (increment counter)
+2. Human places stone → `POST /game/play` with full game JSON
+3. FastAPI proxies to gomoku-httpd → AI move returned
+4. Repeat until win/draw
+5. Game over → `POST /game/save` with game JSON → score calculated and stored
+6. Green/red alert shows result and score

@@ -1,565 +1,180 @@
-[![CI Ruby Validation](https://github.com/kigster/gomoku-ansi-c/actions/workflows/ruby.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/ruby.yml) [![C99 Test Suite](https://github.com/kigster/gomoku-ansi-c/actions/workflows/c99.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/c99.yml)
+[![C99 Test Suite](https://github.com/kigster/gomoku-ansi-c/actions/workflows/c99.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/c99.yml) [![API Tests](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-test.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-test.yml) [![API Lint](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-lint.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-lint.yml)
 
-# Gomoku (Five-in-a-Row) Game
+# Gomoku (Five-in-a-Row)
 
-Gomoku is an old Japanese game that is also popular in the Eastern Europe, where it's called "крестики и нолики". The game is simlar to "tic-tac-toe", but played on a board that's 15x15 or 19x19 squares. To win you must place five stones in a row horizontally, vertically, or diaganally.
+A full-stack Gomoku game with a C-based AI engine, FastAPI backend, React frontend, and global leaderboard. Play it online at **[gomoku.games](https://app.gomoku.games)**.
 
-This mono-repo contains sources for:
+<img src="doc/img/gomoku-web-version.png" width="700" border="1" style="border-radius: 10px"/>
 
-1. The terminal game played on a single computer. Once you build the sources, the executable called `./gomoku` is the one that plays in the Terminal. It accepts many CLI arguments, so run `./gomoku -h` to get a full picture.
+## Architecture
 
-2. The network server version, whose executable is `./gomoku-httpd`. While this program shares the majority of the algorithm with the terminal version, it's a bit simpler in fact due to it being completely stateless: it does not need to maintain any caches, it receives a game state, and responds with game state. This executable also accepts command line arguments that configure it, and it binds itself to a port on which it listens for `POST /gomoku/play` or `GET /health` and `GET /ready` HTTP requests. The `/gomoku/play` endpoint expects to receive JSON data structure completely describing the game initial parameters, and the current state. The daemon decides on the move, appends it to the JSON, and sends a reponse back, latest move added to the move list.
-
-   - This process also listens on an additional port used by `haproxy` to determine it's current status and stop sending it traffic while it's busy deciding on the move.
-   - In addition it supports `envoy` proxy, and provides health checks for it as well.
-   - The difference between `haproxy` and `envoy` is that if all backends are busy, haproxy will start returning HTTP 503, while envoy has a frontend queue that will queue up (to a point) incoming requests.
-
-3. There is a tiny utility `./gomoku-http-client` which is meant to play against a cluster of gomoku daemons behind a reverse proxy. It starts the game, sends JSON to the server, receives JSON back, and like in the game of ping-pong, sends the same exact JSON back for another server to pick up and respond to. So this client has no AI-playing logic. It merely exists for testing (and performance testing) the cluster of `gomoku-httpd` daemons.
-
-> [!TIP]
-> In our testing, with 10 `gomoku-httpd` services, `haproxy` started returning 503s when about 16 `./gomoku-http-clients` started playing simultaneously (all on the same MacBook Pro). However, when `envoy` was used not a single 503 showed up while the same cluster was being tested by 36 clients simultaneously.
-
-## Have Some Fun — Play the Game
-
-Below is the screenshot from the web version of this game:
-
-> [!IMPORTANT]
-> Note that unless running this cluster on Google Cloud became too expensive and I shut it down, you can play the game at the following URL:
->
-> [https://app.gomoku.games](https://app.gomoku.games)
->
-> This is running on Google Run Infrastructure which only boots frontend and backend containers when requested.
-
-<img src="doc/img/gomoku-web-version.png" width="700" border="1" style="border-radius: 10px" text-align="center"/>
-
-## Table of Contents
-
-1. In this document: Game Play, Single-User Terminal Usage, Building, CLI.
-2. [HTTPD Game Server and the Test Client](doc/HTTPD.md)
-3. [Implementation details, modules, and code organization](doc/DEVELOPER.md)
-4. [Cluster Management (local dev)](CLUSTER.md)
-
-### Deployment
-
-1. [Cluster Management (local dev with `gctl`)](CLUSTER.md)
-2. [Deployment to Production on GKE](doc/PRODUCTION.md)
-3. [Kubernetes manifests](iac/k8s/README.md)
-4. [SystemD Deployment](iac/systemd/README.md)
-5. [Envoy](iac/envoy/README.md)
-6. [Google Cloud Run](iac/cloud_run/README.md)
-
-## Introduction
-
-This game was popular in the former Soviet Union, but it was called "crosses and naughts" (крестики и нолики). Other variations exist called [Renju](https://en.wikipedia.org/wiki/Renju), which attempt to balance the well known fact of the first move advantage in Gomoku.
-
-In this implementation, the default first player is a human, so you will have a default advantage unless you swap with AI using `-x` and `-o` flags.
-
-> [!TIP]
-> This project was developed in collaboration with Claude Code, OpenAI Codex, while the original **evaluation function** was written and heavily tuned by the author as early as 2010.
-> Any mention of "playing against the AI" does not imply gameplay against LLMs, or any other form of 'true' artificial intelligence. Here, by "AI Player" we simply mean that a given player is the computer algorithm.
->
-> Also note that this is an ANSI-C implementation of the Gomoku (Five-in-a-Row) game featuring gameplay against an AI opponent, AI vs AI, or Human vs Human. The AI algorithm supports flexible search depth and utilizes MiniMax algorithm with Alpha-Beta pruning, and many additional optimizations.
->
-> If you are interested in a theory of Gomoku game-play and various approaches to algorithmic AI, we refer you to the [summary of various scientific publications on the subject](.artifacts/README.md).
-
-### The Few Versions of the Game
-
-This repo contains what can be thought of three separate versions of the game that share some core AI code, but are built into two separate executables:
-
-1. `gomoku` - the first is the single player (or two human players, or AI vs AI) for your terminal, works particularly well in iTerm. This game's binary is `gomoku` and running it with `-h` will provide you with all the info you need. Not to mention sections below. This game is written in ANSI C99, the process is single threaded, and can capture the game into a JSON file.
-
-2. Single `gomoku-httpd` daemon — is the second executable — a network daemon that shares some code with the Terminal version, except its completely stateless. It receives the game state via JSON that makes it clear whose move is next, so the daemon responds with a nearly identical JSON that includes one more move, and potentially game over status.
-   This games shares the AI engine with the terminal game, except the caches which are not thread safe and wont work for JSON requests representing different games.
-
-3. Gomoku Cluster behind nginx and haproxy (or envoy).  It's controlled with `bin/gomoku-cluster` script, or in short `gctl`.
-   - Since the `gomoku-httpd` daemon is single threaded, for running it as a backend on the web requires a swarm of processes, behind a reverse proxy such as `haproxy` or `envoy`.
-   - `gomoku-httpd` has separate health checks endpoints implemented for both `haproxy` and `envoy` to be able to probe the state of the backend process.
-   - Utility `gomoku-http-client` can be used to start a networked game against the port 10000 (haproxy and envoy's frontend). or via SSL to `nginx` listening on ports 80 and 443.
-   - Using this client you can play the networked game play against the cluster of `gomoku-httpd` processes. The client does not have any AI logic related to the gameplay, it simply mirrors back to the server what the previous server responded just before.  It does so until either a draw or one side wins.
-
-For details on running the local cluster (starting/stopping workers, proxy config generation, monitoring) see [CLUSTER.md](CLUSTER.md). For production Kubernetes deployment, see [doc/PRODUCTION.md](doc/PRODUCTION.md).
-
-## Game Play
-
-Gomoku, or "five in a row," is a traditional two-player strategy game played on a (15x15) or (19x19) board, where the goal is to be the first to align FIVE pieces (black or white, or crosses and naughts) horizontally, vertically, or diagonally.
-
-Black (X) goes first.
-
-> [!IMPORTANT]
-> Note that six in a row is NOT a win.
-
-### Completed Game Screenshot
-
-Here is the screenshot of a game where a human player prevailed against the "AI Player" on a "hard mode" (with depth of 6).
-
-#### Game Example: Human vs AI
-
-As you'll see down below, the default gameplay is for a human to start with X, and AI player to respond with a O.
-
-<img src="doc/img/gomoku-human-vs-ai.png" width="700" border="1" style="border-radius: 10px"/>
-
-#### Game Example: AI vs AI
-
-Using CLI flags you can make the game engine play against itself. Below is the screenshot of AI playing against itself, and both sides play on the same difficulty (i.e. they can scan the board into the same number of future possible moves — 6).
-
-<img src="doc/img/gomoku-ai-vs-ai.png" width="700" border="1" style="border-radius: 10px"/>
-
-#### Another Example: AI vs AI Resulting in a Draw
-
-<img src="doc/img/gomoku-draw.png" width="700" border="1" style="border-radius: 10px"/>
-
-## Compiling the Game
-
-It should be trivial to compile the game on any system with a `make` utility and a `C` compiler:
-
-```bash
-# Build the game
-make build -j 4
-# Install `gomoku` binary into /usr/local/bin
-make install
+```
+Browser → React/Vite (frontend) → FastAPI (api) → gomoku-httpd (C engine)
+                                       ↓
+                                  PostgreSQL 17
 ```
 
-<img src="doc/img/gomoku-build.png" width="700" border="1" style="border-radius: 10px"/>
+| Component | Language | Purpose |
+|---|---|---|
+| **gomoku** | C99 | Terminal game with AI opponent |
+| **gomoku-httpd** | C99 | Stateless HTTP game engine (single-threaded) |
+| **api/** | Python/FastAPI | Auth, scoring, leaderboard, game proxy |
+| **frontend/** | React/TypeScript | Web UI with auth, settings, board, leaderboard |
 
-### Running the Tests
+The React app talks exclusively to FastAPI. FastAPI proxies `/game/play` to gomoku-httpd and handles everything else (auth, game save, scoring, leaderboard) directly with PostgreSQL.
 
-```bash
-make test
-```
+## Play Online
 
-<img src="doc/img/gomoku-test.png" width="700" border="1" style="border-radius: 10px"/>
+> **[https://app.gomoku.games](https://app.gomoku.games)**
+>
+> Running on Google Cloud Run. Creates containers on demand.
 
-### Alternatively — Using `cmake`
+## Quick Start (Local)
 
-Using CMake:
-
-```bash
-make cmake-build cmake-test
-```
-
-## Game Features
-
-### Help Screen
+### Terminal Game
 
 ```bash
-gomoku -h
+make all
+./gomoku                    # Human (X) vs AI (O), depth 3
+./gomoku -d 5               # Harder AI
+./gomoku -x ai -o ai -d 4:6 # Watch AI vs AI
+./gomoku -h                 # All options
 ```
 
-See the following screenshot for an example:
+### Web Game
 
-<img src="doc/img/gomoku-help.png" width="700" border="1" style="border-radius: 10px"/>
+```bash
+# Start everything
+bin/gctl start
 
-### All Features
+# Or start individual components
+bin/gctl start gomoku api frontend
+```
 
-- **Interactive Console Interface**: Unicode-based board display with keyboard controls
-- **Choose Human vs Human, Human vs AI, AI vs AI, or AI vs Human** — any permutation is supported.
-- **AI Opponent**: Intelligent AI using MiniMax algorithm with Alpha-Beta pruning
-- **Configurable Difficulty**: Easy, Medium, and Hard levels with different search depths
-- **Timeout Support**: Optional move time limits for both human and AI players
-- **Undo Functionality**: Undo the last move pair (only works when at least one player is Human)
-- **Cross-platform**: Works on Linux, macOS, and other Unix-like systems
-- **Comprehensive Testing**: Full test suite using Google Test framework
-- **Save the Entire Game to a JSON file**: Complete information bout the game and its progress can be saved into a JSON file with `-j FILE` flag.
-- **Replay previously recorded game from a JSON file** which you can do by either manually advancing each move, or providing `-w SECS` (where SECS can be fractional) which is the delay between auto-playing of the moves.
-
-### Game Rules
-
-Gomoku is a strategy game where players take turns placing stones on a board. The goal is to be the first to get five stones in a row (horizontally, vertically, or diagonally).
-
-- **X plays first** (by default X is a human player). First player has a slight advantage.
-- **O plays next** (by default AI plays ○)
-- **Win condition**: First to get exactly 5 in a row wins
-- **Overline rule**: Six or more stones in a row do NOT count as a win
-
----
-
-## Getting Started
+This starts nginx, envoy (load balancer for gomoku-httpd workers), FastAPI, and the Vite dev server. Open http://localhost:5173.
 
 ### Prerequisites
 
-- **GCC compiler** (or any C compiler)
-- **Make** build system
-- **Git** (for downloading Google Test framework)
-- **CMake** (optional, for CMake-based builds)
+- C compiler (gcc/clang), Make, CMake
+- Python 3.12+ with [uv](https://docs.astral.sh/uv/)
+- Node.js 20+
+- PostgreSQL 17+
+- [just](https://github.com/casey/just) (optional, for convenience recipes)
 
-### Quick Setup
+## Game Rules
 
-For first-time setup, run the automated setup script that installs dependencies and sets up Google Test:
+- Two players alternate placing stones on a 19x19 (or 15x15) board
+- **X (Black) plays first** and has a slight advantage
+- First to get **exactly 5 in a row** wins (horizontal, vertical, or diagonal)
+- Six or more in a row does NOT count (overline rule)
+
+## AI Engine
+
+The AI uses **MiniMax with Alpha-Beta pruning**, enhanced with:
+
+- **VCT (Victory by Continuous Threats)** — finds forced-win sequences up to 10 plies deep
+- **Threat evaluation** — scores patterns (open fours, closed fours, compound threats, diamond forks)
+- **Transposition table** — Zobrist hashing for position caching
+- **Killer move heuristic** — prioritizes moves that caused beta cutoffs
+- **Smart move ordering** — evaluates offense vs defense with configurable radius
+
+### Threat Scoring
+
+| Pattern | Score | Description |
+|---|---|---|
+| Five in a row | 1,000,000 | Win |
+| Open four | 500,000 | Guaranteed win (two open ends) |
+| Closed four | 100,000 | Must block (one open end) |
+| Double four | 48,000 | Two fours — opponent can only block one |
+| Four + three | 45,000 | Nearly winning compound |
+| Double open three | 40,000 | Winning fork |
+| Diamond fork (2x open two) | 25,000 | One move from double open three |
+| Open three | 1,500 | Serious developing threat |
+
+## Scoring & Leaderboard
+
+When you win against the AI, your score is calculated as:
+
+```
+score = 1000 * depth + 50 * radius + f(time_seconds)
+```
+
+Where `f(x)` rewards fast wins (+1000 for instant, 0 at 2 minutes, -100 at 10 minutes). Higher depth = higher score tier — a depth-1 speed-run can never beat a depth-5 win.
+
+Scores are stored in PostgreSQL with UUID primary keys, player geo-location (async IP lookup), and a global leaderboard.
+
+## CLI Reference
+
+```
+gomoku [options]
+
+  -d, --depth N        Search depth 1-10 (or N:M for asymmetric)
+  -l, --level M        easy (2), medium (4), hard (6)
+  -b, --board 15|19    Board size
+  -r, --radius 1-5     Move generation radius
+  -t, --timeout T      Seconds per move
+  -x, --player-x TYPE  human or ai (default: human)
+  -o, --player-o TYPE  human or ai (default: ai)
+  -u, --undo           Enable undo (default: on, limit 5)
+  -i, --hints          Highlight threatening patterns
+  -j, --json FILE      Save game to JSON
+  -p, --replay FILE    Replay a saved game
+  -w, --wait SECS      Auto-advance replay delay
+  -q, --quiet          Headless mode (AI vs AI, JSON output only)
+  -s, --skip-welcome   Skip intro screen
+  -h, --help           Show help
+```
+
+## Project Structure
+
+```
+├── src/gomoku/         # C game engine (ai, board, game, ui, cli)
+├── src/net/            # C HTTP daemon (handlers, JSON API)
+├── api/                # FastAPI service (auth, scoring, proxy)
+│   ├── app/            # Python source
+│   └── tests/          # 43 integration tests
+├── frontend/           # React + TypeScript + Tailwind
+│   └── src/            # Components, hooks, analytics
+├── iac/                # Infrastructure (Cloud Run, Cloud SQL)
+├── tests/              # C test suite (Google Test) + AI evals
+├── bin/                # gctl cluster manager, helper scripts
+├── Makefile            # C compilation (incremental builds)
+└── justfile            # Everything else (docker, deploy, evals)
+```
+
+## Development
 
 ```bash
-# Clone the repository
-git clone \
-  https://github.com/kigster/gomoku-ansi-c.git
-cd gomoku-ansi-c
+just --list             # See all available recipes
+just build              # Build C binaries
+just test               # Run C tests (game + daemon)
+just docker-build-all   # Build all Docker images
 
-# Run the test setup script manually (not necessary)
-# This script is ran automatically via the Makefile
-./tests-setup
+# API
+cd api && just ci       # Run API tests + lint
+cd api && just serve    # Start FastAPI dev server
+
+# Frontend
+cd frontend && npm test # Run React tests
+cd frontend && npm run dev # Start Vite dev server
 ```
 
-### Building the Game
+## Deployment
 
-#### Using Make (Traditional)
+Deployed to Google Cloud Run with Terraform. See [iac/README.md](iac/README.md).
 
 ```bash
-# Clean build files if needed
-make clean
-
-# Build the game
-make build -j 4
+export TF_VAR_jwt_secret="$(openssl rand -base64 32)"
+just cr-init            # First-time deploy
+just cr-update          # Update all services
 ```
-
-#### Using CMake (Alternative)
-
-```bash
-# Build using CMake (creates build directory and runs cmake ..)
-make cmake-build
-
-# Run tests using CMake
-make cmake-test
-
-# Clean CMake build directory
-make cmake-clean
-
-# Rebuild from scratch
-make cmake-rebuild
-```
-
----
-
-## Game Play
-
-### Quick Start
-
-```bash
-# Run with default settings (Medium difficulty, 19x19 board)
-# Human is X, AI is O. 
-gomoku
-
-# Run with easy difficulty on a 15x15 board
-gomoku --level easy --board 15
-
-# Run with custom search depth and timeout
-gomoku --depth 6 --timeout 30
-
-# Show all available options
-gomoku --help
-```
-
-### Switching Players
-
-This game supports all four permitations of who is playing what:
-
-1. **(Default) Human starts as X, AI responds with O**
-1. **Human vs Human (taking turns controlling cursor)**
-1. **AI starts as X, human follows with O.**
-1. **AI plays as X, against AI as O**. In this mode its possible to set different depth levels for each AI using the following syntax: --depth N:M where N is the search depth of X, and M is the search depth of O.
-
-To choose a non default configuration, use the `-x` and `-o` flags which can each receive an argument of either `ai` or `human`.
-
-```bash
-# make AI go first, and use search depth of 5
-gomoku -x ai -o human -d 5
-
-# oh watch AI play against itself, but give second AI that
-# will play naughts a slightly more look ahead power
-gomoku -x ai -o ai -d 4:5 
-```
-
-### Other CLI Flags Explained
-
-#### Player Configuration
-
-**`-x, --player-x TYPE`** (default: `human`)
-Determines who plays as X (crosses). Use `human` for human player or `ai` for AI opponent.
-
-**`-o, --player-o TYPE`** (default: `ai`)
-Determines who plays as O (naughts). Use `human` for human player or `ai` for AI opponent.
-
-Examples:
-
-```bash
-gomoku -x human -o ai      # Human (X) vs AI (O) - default
-gomoku -x human -o human   # Human vs Human
-gomoku -x ai -o human      # AI (X) vs Human (O)
-gomoku -x ai -o ai         # AI vs AI
-```
-
-#### Difficulty & Search Depth
-
-**`-l, --level M`** (options: `easy`, `medium`, `hard`)
-
-> [!TIP]
-> Quick difficulty preset that sets the search depth.
->
-> - **easy**: Depth 2 - Very fast, suitable for beginners
-> - **medium**: Depth 4 - Balanced, default setting, moderately challenging
-> - **hard**: Depth 6 - Slow but very challenging gameplay
-
-```bash
-gomoku --level easy    # Quick, beginner-friendly
-gomoku --level hard    # Challenging for experienced players
-```
-
-> [!TIP]
-> **`-d, --depth N`** or **`-d, --depth N:M`**
-
-Manually set the search depth (overrides `--level` if both are specified).
-
-- Single value: Both players use the same depth
-- N:M format: X uses depth N, O uses depth M (asymmetric)
-- Valid range: 1-10 (higher = stronger AI but slower)
-
-```bash
-gomoku -d 4            # Both players search to depth 4
-gomoku -d 4:6          # X searches to depth 4, O to depth 6
-gomoku -d 6 --level hard  # Depth 6 (depth overrides level)
-```
-
-#### Time Management
-
-**`-t, --timeout T`**
-
-Set a maximum time limit (in seconds) for each move. Both human and AI players must make a move within this timeout. If the timeout is exceeded:
-
-- **AI**: Plays the best move found so far
-- **Human**: Loses the game (move is not made)
-
-Useful for preventing long wait times during deep AI searches.
-
-```bash
-gomoku -t 30           # 30-second time limit per move
-gomoku -d 6 -t 5       # Deep search (depth 6) with 5-second limit
-```
-
-#### Board Configuration
-
-**`-b, --board SIZE`** (options: `15`, `19`)
-
-Choose the board size. The standard Gomoku board is 19x19, but 15x15 is also available for faster games.
-
-```bash
-gomoku --board 15      # Smaller board, faster games
-gomoku --board 19      # Standard Gomoku board (default)
-```
-
-#### Features
-
-**`-u, --undo`**
-
-Enable the undo feature, allowing players to undo the last move pair (human move + AI response). Disabled by default.
-
-```bash
-gomoku -u              # Enable undo feature
-gomoku --level easy -u # Easy with undo enabled
-```
-
-**`-s, --skip-welcome`**
-
-Skip the welcome screen and start the game immediately.
-
-```bash
-gomoku -s              # Skip welcome screen
-gomoku -x ai -o ai -s  # AI vs AI without welcome
-```
-
-**`-h, --help`**
-
-Display the help message and exit.
-
-```bash
-gomoku --help          # Show this help
-```
-
-### Game Controls
-
-| Key           | Action                                 |
-| ------------- | -------------------------------------- |
-| **Arrow Keys**| Move cursor around the board           |
-| **Space**     | Place a stone at cursor position       |
-| **Enter**     | Place a stone at cursor position       |
-| **U**         | Undo last move pair (human + AI)       |
-| **?**         | Show detailed game rules               |
-| **ESC**       | Quit the game                          |
-
-### Difficulty Levels
-
-| Level            | Search Depth | Response Time   | Best For                   |
-| ---------------- | ------------ | --------------- | -------------------------- |
-| **Easy**         | 2            | < 0.1 seconds   | Beginners, casual play     |
-| **Intermediate** | 4            | 0.1-0.5 seconds | Default, balanced gameplay |
-| **Hard**         | 6            | 0.5-3 seconds   | Challenging, advanced play |
-
-### Common Usage Patterns
-
-**Beginner-friendly game:**
-
-```bash
-gomoku --level easy --board 15 -u
-```
-
-**Standard competitive game:**
-
-```bash
-gomoku --level medium
-```
-
-**Challenge mode:**
-
-```bash
-gomoku --level hard --depth 8
-```
-
-**AI vs AI demonstration:**
-
-```bash
-gomoku -x ai -o ai -d 4:6 --skip-welcome
-```
-
-**Testing with time constraints:**
-
-```bash
-gomoku -d 6 -t 10 --board 19
-```
-
-**Human vs Human game:**
-
-```bash
-gomoku -x human -o human -u --board 15
-```
-
----
-
-## Developer Information
-
-### Architecture Overview
-
-The project follows a modular architecture with clear separation of concerns:
-
-```
-src/
-├── main.c      # Simple orchestrator (105 lines)
-├── gomoku.c/.h # Core evaluation functions
-├── board.c/.h  # Board management and coordinate utilities
-├── game.c/.h   # Game logic and state management
-├── ai.c/.h     # AI module with minimax search
-├── ui.c/.h     # User interface and display
-└── cli.c/.h    # Command-line argument parsing
-```
-
-### AI Algorithm Implementation
-
-#### MiniMax with Alpha-Beta Pruning
-
-- **Search Algorithm**: MiniMax with alpha-beta pruning for optimal performance
-- **Evaluation Function**: Pattern-based position assessment using threat matrices
-- **Timeout Support**: Configurable time limits with graceful degradation
-- **Smart Move Ordering**: Prioritizes winning moves and threats for better pruning
-
-#### Pattern Recognition System
-
-The AI recognizes various threat patterns with weighted scoring:
-
-| Pattern             | Score     | Description                   |
-| ------------------- | --------- | ----------------------------- |
-| **Five in a row**   | 1,000,000 | Winning position              |
-| **Straight four**   | 50,000    | Immediate win threat          |
-| **Three in a row**  | 1,000     | Strong threat                 |
-| **Broken patterns** | 100-500   | Partial threats with gaps     |
-| **Combinations**    | Bonus     | Multiple simultaneous threats |
-
-#### Search Space Optimization
-
-- **Proximity-based Search**: Only considers moves within 3 cells of existing stones
-- **Early Game Optimization**: Focuses on center area when board is empty
-- **First Move Randomization**: AI's first move placed randomly 1-2 squares from human's move
-- **Performance Boost**: Reduces search space from 361 to ~20-50 moves per turn
-
-### Testing Framework
-
-The project includes a comprehensive test suite with 20 test cases using Google Test:
-
-```bash
-# Build and run all tests
-make test
-
-# Test categories covered:
-# - Board creation and coordinate utilities
-# - Move validation and game state management
-# - Win detection in all directions (horizontal, vertical, diagonal)
-# - Pattern recognition and threat analysis
-# - Evaluation function accuracy
-# - MiniMax algorithm functionality
-# - Undo functionality and edge cases
-```
-
-#### Test Results
-
-- ✅ **20/20 tests passing**
-- ✅ Board initialization and management
-- ✅ Win detection in all directions
-- ✅ Pattern recognition and threat analysis
-- ✅ Evaluation functions and AI logic
-- ✅ Game state management and undo functionality
-
-### Performance Metrics
-
-| Difficulty | Search Depth | Avg Response Time | Positions Evaluated |
-| ---------- | ------------ | ----------------- | ------------------- |
-| Easy       | 2            | < 0.1 seconds     | ~10-25              |
-| Medium     | 4            | 0.1-0.5 seconds   | ~50-200             |
-| Hard       | 6            | 0.5-3 seconds     | ~200-800            |
-
-**Key Optimizations:**
-
-- **Move Ordering**: 3-5x faster with intelligent priority sorting
-- **Incremental Evaluation**: Only evaluates positions near the last move
-- **Alpha-Beta Pruning**: Reduces effective branching factor significantly
-- **Early Termination**: Immediately selects winning moves
-
-### Core Functions
-
-#### Game Logic (`game.c`)
-
-- `init_game()`: Initialize game state and board
-- `make_move()`: Validate and execute player moves
-- `undo_last_moves()`: Undo functionality for move pairs
-- `start_move_timer()` / `end_move_timer()`: Timing system
-
-#### AI Engine (`ai.c`)
-
-- `find_best_ai_move()`: Main AI move selection with timeout support
-- `minimax_with_timeout()`: MiniMax algorithm with time limits
-- `get_move_priority()`: Move ordering for alpha-beta optimization
-- `is_winning_move()`: Immediate win detection
-
-#### Evaluation System (`gomoku.c`)
-
-- `evaluate_position()`: Main board evaluation function
-- `calc_score_at()`: Threat analysis for individual positions
-- `has_winner()`: Win condition detection in all directions
-- `populate_threat_matrix()`: Initialize pattern recognition system
-
-### Algorithm Complexity
-
-- **Time Complexity**: O(b^d) where b is branching factor and d is depth
-- **Space Complexity**: O(d) for recursion stack
-- **Optimization**: Alpha-beta pruning reduces effective branching factor from ~30 to ~5-10
-
----
 
 ## License & Copyright
 
-This project is © Konstantin Gredeskoul, 2025-2026. It is open source and can be distributed under the MIT License.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests.
+MIT License. Copyright 2025-2026, Konstantin Gredeskoul.
 
 ## Acknowledgments
 
-- Pattern recognition algorithms adapted from traditional Gomoku AI techniques
-- Google Test framework for comprehensive testing
-- Unicode characters for enhanced visual display
-- Claude (Sonet, Opus, Haiku) for being a great pair programmer.
-- OpenAI (codex) for fixing some performance bugs.
+- Pattern recognition algorithms adapted from traditional Gomoku AI research
+- [Claude](https://claude.ai) (Sonnet, Opus) — AI pair programming partner
+- Google Test framework for C++ testing

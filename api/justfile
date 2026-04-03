@@ -1,0 +1,35 @@
+set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+
+[no-exit-message]
+recipes:
+    @just --choose
+
+# Start dev server with auto-reload
+serve:
+    uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Run tests
+test:
+    ENVIRONMENT=test uv run --group test pytest tests/ -v
+
+# Run tests with coverage
+test-coverage *args:
+    ENVIRONMENT=test uv run --group test pytest --tb=short -q --cov --cov-branch {{args}}
+
+# Lint
+lint:
+    uv run ruff check app/ tests/
+
+# Format
+format:
+    uv run ruff format app/ tests/
+
+# Build Docker image
+docker-build:
+    docker build -t gomoku-api:latest .
+
+# Build for Cloud Run (linux/amd64)
+docker-build-amd64:
+    docker buildx build --platform linux/amd64 -t gomoku-api:latest --load .
+
+ci: test lint

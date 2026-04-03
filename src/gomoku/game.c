@@ -998,6 +998,9 @@ int load_game_json(const char *filename, replay_data_t *data) {
   // Initialize data
   memset(data, 0, sizeof(replay_data_t));
   strcpy(data->winner, "none");
+  data->depth_x = -1;
+  data->depth_o = -1;
+  data->radius = -1;
 
   // Read and parse JSON file
   json_object *root = json_object_from_file(filename);
@@ -1013,6 +1016,23 @@ int load_game_json(const char *filename, replay_data_t *data) {
     data->board_size = json_object_get_int(board_obj);
   } else {
     data->board_size = 19; // Default
+  }
+
+  // Get player depths from X/O config objects
+  json_object *x_obj, *o_obj, *depth_obj;
+  if (json_object_object_get_ex(root, "X", &x_obj) &&
+      json_object_object_get_ex(x_obj, "depth", &depth_obj)) {
+    data->depth_x = json_object_get_int(depth_obj);
+  }
+  if (json_object_object_get_ex(root, "O", &o_obj) &&
+      json_object_object_get_ex(o_obj, "depth", &depth_obj)) {
+    data->depth_o = json_object_get_int(depth_obj);
+  }
+
+  // Get radius
+  json_object *radius_obj;
+  if (json_object_object_get_ex(root, "radius", &radius_obj)) {
+    data->radius = json_object_get_int(radius_obj);
   }
 
   // Get winner

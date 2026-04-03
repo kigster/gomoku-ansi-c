@@ -42,6 +42,7 @@ typedef struct {
     int depth_o;                  // AI search depth for player O (-1 = use max_depth)
     int player_x_explicit;        // Was -x explicitly specified?
     int player_o_explicit;        // Was -o explicitly specified?
+    int hints_enabled;            // Highlight threatening patterns on the board
 } cli_config_t;
 
 //===============================================================================

@@ -1,35 +1,38 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-set +e
-
-[[ -d ~/.bashmatic ]] || bash -c "$(curl -fsSL https://bashmatic.re1.re); bashmatic-install -q" >/dev/null 2>&1
-# shellcheck disable=SC1090
-source ~/.bashmatic/init >/dev/null 2>&1
-
-# Default values
 REGION="us-central1"
 REPO_NAME="gomoku-repo"
-BACKEND_IMAGE_NAME="gomoku-httpd"
-FRONTEND_IMAGE_NAME="gomoku-frontend"
+export PROJECT_ID="${PROJECT_ID:-fine-booking-486503-k7}"
+REGISTRY="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME"
 
-export PROJECT_ID="${PROJECT_ID:-"fine-booking-486503-k7"}"
-if [[ -z "$PROJECT_ID" ]]; then 
-    error "PROJECT_ID environment variable is not set."
-    panel-info "USAGE: export PROJECT_ID=your-project-id && ./update.sh"
-    exit 1
+# Parse which services to update (default: all)
+SERVICES="${*:-httpd api frontend}"
+
+gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+
+if [[ "$SERVICES" == *"httpd"* ]]; then
+    IMAGE="$REGISTRY/gomoku-httpd:latest"
+    echo "Building and pushing gomoku-httpd..."
+    docker buildx build --platform linux/amd64 -t "$IMAGE" --load ../../
+    docker push "$IMAGE"
+    gcloud run services update gomoku-httpd --region="$REGION" --image="$IMAGE"
 fi
 
-set -e
+if [[ "$SERVICES" == *"api"* ]]; then
+    IMAGE="$REGISTRY/gomoku-api:latest"
+    echo "Building and pushing gomoku-api..."
+    docker buildx build --platform linux/amd64 -t "$IMAGE" --load ../../api/
+    docker push "$IMAGE"
+    gcloud run services update gomoku-api --region="$REGION" --image="$IMAGE"
+fi
 
-# Frontend only
-IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/gomoku-repo/gomoku-frontend:latest"
-docker buildx build --platform linux/amd64 -t "$IMAGE" --load ../../frontend/
-docker push "$IMAGE"
-gcloud run services update gomoku-frontend --region=$REGION --image=$IMAGE
+if [[ "$SERVICES" == *"frontend"* ]]; then
+    IMAGE="$REGISTRY/gomoku-frontend:latest"
+    echo "Building and pushing gomoku-frontend..."
+    docker buildx build --platform linux/amd64 -t "$IMAGE" --load ../../frontend/
+    docker push "$IMAGE"
+    gcloud run services update gomoku-frontend --region="$REGION" --image="$IMAGE"
+fi
 
-# Backend only
-IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/gomoku-repo/gomoku-httpd:latest"
-docker buildx build --platform linux/amd64 -t "$IMAGE" --load ../../
-docker push "$IMAGE"
-gcloud run services update gomoku-httpd --region=$REGION --image=$IMAGE
-
+echo "Update complete."

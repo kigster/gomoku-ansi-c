@@ -2,24 +2,11 @@
 # vim: tabstop=8
 # vim: shiftwidth=8
 # vim: noexpandtab
+#
+# This Makefile handles C/C++ compilation only.
+# For all other tasks (docker, deploy, evals, formatting, etc.) use: just --list
 
 OS              := $(shell uname -s | tr '[:upper:]' '[:lower:]')
-MAKEFILE_PATH   := $(abspath $(lastword $(MAKEFILE_LIST)))
-CURRENT_DIR     := $(shell ( cd .; pwd -P ) )
-VERSION         := $(shell grep VERSION src/gomoku/gomoku.h | awk '{print $$3}' | tr -d '"')
-TAG             := $(shell echo "v$(VERSION)")
-BRANCH          := $(shell git branch --show)
-
-SCRIPT          := $(shell dirname $(MAKEFILE_PATH))/bin/gomoku-httpd-ctl
-
-# installation prefix (can override)
-PREFIX 			?= /usr/local
-PACKAGE 		= gomoku
-DAEMON_PACKAGE  	= gomoku-httpd
-DAEMON_CLIENT  		= gomoku-http-client
-# directories	
-BINDIR 			= $(PREFIX)/bin
-BINS 			= $(PACKAGE) $(DAEMON_PACKAGE) $(DAEMON_CLIENT)
 
 CC               	= gcc
 CXX              	= g++
@@ -33,6 +20,10 @@ MACOS_CXX_INCLUDE	= $(shell [ "$(OS)" = darwin ] && sdk=$$(xcrun --show-sdk-path
 _CXXFLAGS        	= -Wall -Wunused-parameter -Wextra -std=c++17 -Isrc/gomoku -Isrc -Itests/googletest/googletest/include -I$(JSONC_BUILD) -I$(JSONC_DIR) -Wimplicit-function-declaration -O2 $(MACOS_CXX_INCLUDE)
 ALL_CXXFLAGS     	= $(_CXXFLAGS) $(CXXFLAGS)
 LDFLAGS          	= -lm $(JSONC_LIB)
+
+PACKAGE 		= gomoku
+DAEMON_PACKAGE  	= gomoku-httpd
+DAEMON_CLIENT  		= gomoku-http-client
 
 TARGET           	= $(PACKAGE)
 SOURCES          	= src/gomoku/main.c src/gomoku/gomoku.c src/gomoku/board.c src/gomoku/game.c src/gomoku/ai.c src/gomoku/ui.c src/gomoku/cli.c
@@ -69,18 +60,11 @@ DAEMON_TEST_CXXFLAGS = $(ALL_CXXFLAGS)
 # CMake build directory
 BUILD_DIR = build
 
-.PHONY: all clean test tag help cmake-build cmake-clean cmake-test install uninstall rebuild release json-c gomoku-httpd test-daemon test-gomoku-http test-client evals eval-tournament eval-tactical eval-llm docker-build docker-build-frontend docker-build-all docker-run k8s-deploy k8s-delete
+.PHONY: all clean test tests rebuild json-c gomoku-httpd googletest test-client test-daemon cmake-clean
 
-help:		## Prints help message auto-generated from the comments.
-		@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[32m%-20s\033[35m %s\033[0\n", $$1, $$2}' | sed '/^$$/d' | sort
+all: 		$(TARGET) $(DAEMON_TARGET) $(DAEMON_CLIENT_TARGET)
 
-version:        ## Prints the current version and tag
-	        @echo "Version is $(VERSION)"
-		@echo "The tag is $(TAG)"
-
-all: 		$(TARGET) $(DAEMON_TARGET) $(DAEMON_CLIENT_TARGET) ## Build both the game and HTTP daemon
-
-rebuild: 	clean $(TARGET) ## Clean and rebuild the game
+rebuild: 	clean $(TARGET)
 
 json-c: 	$(JSONC_LIB)
 
@@ -92,36 +76,36 @@ $(JSONC_LIB):
 			LDFLAGS="" $(MAKE) -C $(JSONC_BUILD) -j4; \
 		fi
 
-$(TARGET): $(JSONC_LIB) $(OBJECTS) ## Build the terminal game
+$(TARGET): $(JSONC_LIB) $(OBJECTS)
 		$(CC) $(OBJECTS) $(LDFLAGS) -o $(TARGET)
 
 # Daemon targets (must come before generic src/%.o rule)
-gomoku-httpd: $(JSONC_LIB) $(DAEMON_CORE) $(DAEMON_NET) ## Build the HTTP daemon
+gomoku-httpd: $(JSONC_LIB) $(DAEMON_CORE) $(DAEMON_NET)
 		$(CC) $(DAEMON_CORE) $(DAEMON_NET) $(LDFLAGS) -lpthread -o $(DAEMON_TARGET)
 
 src/net/%.o: src/net/%.c | $(JSONC_LIB)
 		$(CC) $(DAEMON_CFLAGS) -c $< -o $@
 
 # HTTP test client
-$(DAEMON_CLIENT_TARGET): $(TEST_HTTP_SRC) ## Build HTTP test client
+$(DAEMON_CLIENT_TARGET): $(TEST_HTTP_SRC)
 		$(CC) $(CFLAGS) $(TEST_HTTP_SRC) -o $(DAEMON_CLIENT_TARGET)
 
-test-client: 	$(DAEMON_CLIENT_TARGET) ## Alias for building the HTTP test client
+test-client: 	$(DAEMON_CLIENT_TARGET)
 
 # Generic src rules (net rule must come before gomoku rule)
 src/gomoku/%.o: src/gomoku/%.c | $(JSONC_LIB)
 		$(CC) $(CFLAGS) -c $< -o $@
 
-googletest: 	## Build GoogleTest framework (needed for running tests)
+googletest:
 		@bash -c "./tests/tests-setup"
 
-$(TEST_TARGET): googletest $(JSONC_LIB) tests/gomoku_test.o src/gomoku/gomoku.o src/gomoku/board.o src/gomoku/game.o src/gomoku/ai.o # Test targets
+$(TEST_TARGET): googletest $(JSONC_LIB) tests/gomoku_test.o src/gomoku/gomoku.o src/gomoku/board.o src/gomoku/game.o src/gomoku/ai.o
 		$(CXX) $(ALL_CXXFLAGS) tests/gomoku_test.o src/gomoku/gomoku.o src/gomoku/board.o src/gomoku/game.o src/gomoku/ai.o $(GTEST_LIB) $(GTEST_MAIN_LIB) $(JSONC_LIB) -pthread -o $(TEST_TARGET)
 
 tests/gomoku_test.o: googletest tests/gomoku_test.cpp src/gomoku/gomoku.h src/gomoku/board.h src/gomoku/game.h src/gomoku/ai.h
 		$(CXX) $(ALL_CXXFLAGS) -c tests/gomoku_test.cpp -o tests/gomoku_test.o
 
-test: 		$(TEST_TARGET) $(DAEMON_TEST_TARGET) $(TARGET) ## Run all unit tests (game + daemon)
+test: 		$(TEST_TARGET) $(DAEMON_TEST_TARGET) $(TARGET)
 		@echo "=== Running Game Tests ==="
 		@./$(TEST_TARGET) | GREP_COLOR=32 grep --color=always -E 'GomokuTest\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
 		@echo ""
@@ -137,137 +121,19 @@ $(DAEMON_TEST_TARGET): googletest $(JSONC_LIB) tests/daemon_test.o $(DAEMON_CORE
 tests/daemon_test.o: googletest tests/daemon_test.cpp src/net/cli.h src/net/json_api.h
 		$(CXX) $(DAEMON_TEST_CXXFLAGS) -c tests/daemon_test.cpp -o tests/daemon_test.o
 
-test-daemon: 	$(DAEMON_TEST_TARGET) ## Run daemon unit tests
+test-daemon: 	$(DAEMON_TEST_TARGET)
 		./$(DAEMON_TEST_TARGET) | GREP_COLOR=32 grep --color=always -E 'Daemon[A-Za-z]*Test\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
 
-# AI Evaluation targets
-EVAL_DIR 	= tests/evals
-
-evals: 		$(TARGET) $(DAEMON_TARGET) ## Run all AI evaluation scripts
-		@echo "=== Running Tactical Tests ==="
-		@chmod +x $(EVAL_DIR)/bash/run-tactical-tests
-		-@$(EVAL_DIR)/bash/run-tactical-tests
-		@echo ""
-		@echo "=== Running Depth Tournament ==="
-		@chmod +x $(EVAL_DIR)/bash/depth-tournament
-		@$(EVAL_DIR)/bash/depth-tournament --games 10 --depths "2,3,4"
-
-eval-tactical: 	$(TARGET) $(DAEMON_TARGET) ## Run tactical position tests
-		@echo "=== Running Tactical Tests ==="
-		@chmod +x $(EVAL_DIR)/bash/run-tactical-tests
-		-@$(EVAL_DIR)/bash/run-tactical-tests
-
-eval-tournament: $(TARGET) ## Run depth tournament (AI vs AI at different depths)
-		@echo "=== Running Depth Tournament ==="
-		@chmod +x $(EVAL_DIR)/bash/depth-tournament
-		@$(EVAL_DIR)/bash/depth-tournament --games 10 --depths "2,3,4"
-
-eval-llm: 	$(TARGET) ## Run LLM-based game evaluation (requires ANTHROPIC_API_KEY)
-		@echo "=== Running LLM Evaluation ==="
-		@uv run $(EVAL_DIR)/python/llm_eval.py
-
-clean:  	cmake-clean ## Clean up all the intermediate objects
+clean:  	cmake-clean
 		rm -f $(TARGET) $(TEST_TARGET) $(OBJECTS) tests/gomoku_test.o
 		rm -f $(DAEMON_TARGET) $(DAEMON_TEST_TARGET) $(DAEMON_CORE) $(DAEMON_NET) src/net/test_client_utils.o tests/daemon_test.o
 		rm -f $(DAEMON_CLIENT_TARGET)
 		rm -rf tests/googletest
 		find . -name '*.a' -type f -delete || true
 
-tag:    	## Tag the current git version with the tag equal to the VERSION constant
-		@(git tag -f $(TAG) -m $(TAG) && git push --tags --force) || true
-
-release:  	tag ## Update current VERSION tag to this SHA, and publish a new Github Release
-		gh release create $(TAG) --generate-notes
-
-bundle:		## Install Ruby Dependencies
-		@/usr/bin/env bash -c " \
-			if [ -d ~/.rbenv/plugins/ruby-build ];  then \
-				cd ~/.rbenv/plugins/ruby-build; \
-				git pull --rebase || true; \
-		        fi \
-		"
-		command -v rbenv >/dev/null && rbenv install -s `cat .ruby-version | tr -d '\n'`
-		bundle install -j 4
-
-validate-json: 	## Validates config/sample-game.json agains the JSON scheme in config/
-		@bundle check >/dev/null || bundle install -j 8
-		@TERM=xterm-256color bundle exec bin/schema-validator validate-json
-
-# CMake targets
-cmake-build: 	## Build using CMake (creates build directory and runs cmake ..)
-		mkdir -p $(BUILD_DIR)
-		cd $(BUILD_DIR) && cmake .. && make
-
-cmake-clean: 	## Clean CMake build directory
+cmake-clean:
 		rm -rf $(BUILD_DIR)
 		find . -name CMakeCache.txt -delete || true
 		find . -name CMakeFiles -type d -exec rm -rf {} \; || true
 		find . -name cmake_install.cmake -type d -exec rm -rf {} \; || true
 		true
-
-cmake-test: 	cmake-build ## Run tests using CMake
-		cd $(BUILD_DIR) && ctest --verbose
-
-cmake-rebuild: 	cmake-clean cmake-build ## Clean and rebuild using CMake
-
-install: 	all ## Install the binaries to the prefix
-		@echo "Installing to $(PREFIX)"
-		install -d $(BINDIR)
-		install -m 755 $(BINS) $(SCRIPT) $(BINDIR)
-
-uninstall: 	## Uninstall the binary from the prefix
-		-rm -f $(BINDIR)/$(PACKAGE)
-
-format: 	## Format all source and test files using clang-format
-		find src/gomoku src/net -maxdepth 1 -name '*.c**' | xargs clang-format -i
-		find tests -maxdepth 1 -name '*.c**' | xargs clang-format -i
-	 	find bin -type f -exec bash -c 'file {} | grep -Eqvi ruby' \; -print | xargs shfmt -i 2 -w
-
-docker-build: 	## Builds the gomoku-httpd docker container
-		docker build -t gomoku-httpd:latest .
-
-docker-build-frontend: ## Builds the gomoku-frontend docker container
-		docker build -t gomoku-frontend:latest frontend/
-
-docker-build-all: docker-build docker-build-frontend ## Builds all docker containers
-
-docker-build-amd64: ## Builds gomoku-httpd for linux/amd64 (for GCP/GKE)
-		docker buildx build --platform linux/amd64 -t gomoku-httpd:latest --load .
-
-docker-build-frontend-amd64: ## Builds gomoku-frontend for linux/amd64 (for GCP/GKE)
-		docker buildx build --platform linux/amd64 -t gomoku-frontend:latest --load frontend/
-
-docker-build-all-amd64: docker-build-amd64 docker-build-frontend-amd64 ## Builds all containers for linux/amd64
-
-docker-run: 	## Runs the gomoku-httpd docker container
-		docker run -p 8787:8787 gomoku-httpd:latest
-
-k8s-deploy: 	## Deploy all K8s resources with kustomize
-		kubectl apply -k iac/k8s/
-
-k8s-delete: 	## Delete all K8s resources
-		kubectl delete -k iac/k8s/
-
-cr-init: 	docker-build-all-amd64 ## Deploy to Cloud Run for the first time
-		@echo "Initial deploy..."
-		@echo "First we must authenticate you against Google Cloud..."
-	  	@gcloud auth application-default login
-		@cd ./iac/cloud_run && bash deploy.sh
-
-cr-update: 	docker-build-all-amd64 ## Update Cloud Run with the latest code
-		@echo "First we must authenticate you against Google Cloud..."
-	  	@gcloud auth application-default login
-		@cd ./iac/cloud_run && bash update.sh
-
-evals-bash: 	## Runs tournamets comparing win ratios of various depth and radii using BASH
-		tests/evals/bash/depth-tournament -d 1,2,3,4,5 -r 3,4 --games 10
-
-evals-ruby: 	## Runs tournamets against a gomoku-httpd cluster behind envoy (gctl start)
-		echo "Starting gomoku-httpd cluster behind envoy..."
-		( gctl ps | grep -q -E 'gomoku-httpd' && gctl ps | grep -q -E 'envoy') && \
-			echo "Cluster is already up :)" || gctl start -p envoy
-		@cd tests/evals/ruby && (bundle check || bundle install -j 12) && \
-			ln -nfs ../../../gomoku-http-client . && \
-			bundle exec depth-tournament tournament -d 1,2,3,4 -r 2,3 --games 5 --verbose;  
-		@cd $(CURRENT_DiR)
-

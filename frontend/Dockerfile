@@ -12,12 +12,12 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Serve with nginx
-FROM nginx:1.25-alpine
+FROM nginx:1.27-alpine
 
 # Remove default nginx config
 RUN rm /etc/nginx/conf.d/default.conf
 
-# Copy nginx config as a template (envsubst replaces ${BACKEND_URL} at startup)
+# Copy nginx config as a template (envsubst replaces ${API_URL} at startup)
 COPY nginx.conf /etc/nginx/conf.d/gomoku.conf.template
 
 # Copy entrypoint script
