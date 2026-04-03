@@ -119,7 +119,7 @@ void handle_input(game_state_t *game) {
 // HINT MODE — THREAT PATTERN DETECTION
 //===============================================================================
 
-#define HINT_NONE   0
+#define HINT_NONE 0
 #define HINT_THREAT 1
 #define MAX_BOARD_DIM 19
 
@@ -141,7 +141,7 @@ static void compute_hint_map(int **board, int board_size,
     int player;
   } pattern_t;
 
-  #define MAX_PATTERNS 200
+#define MAX_PATTERNS 200
   pattern_t fours[MAX_PATTERNS];
   int four_count = 0;
   pattern_t open_threes[MAX_PATTERNS];
@@ -176,12 +176,10 @@ static void compute_hint_map(int **board, int board_size,
         }
 
         // Check openness of each end
-        int before_open =
-            (pi >= 0 && pi < board_size && pj >= 0 && pj < board_size &&
-             board[pi][pj] == AI_CELL_EMPTY);
-        int after_open =
-            (cx >= 0 && cx < board_size && cy >= 0 && cy < board_size &&
-             board[cx][cy] == AI_CELL_EMPTY);
+        int before_open = (pi >= 0 && pi < board_size && pj >= 0 &&
+                           pj < board_size && board[pi][pj] == AI_CELL_EMPTY);
+        int after_open = (cx >= 0 && cx < board_size && cy >= 0 &&
+                          cy < board_size && board[cx][cy] == AI_CELL_EMPTY);
         int open_ends = before_open + after_open;
 
         if (len == 4 && open_ends > 0 && four_count < MAX_PATTERNS) {
@@ -230,14 +228,14 @@ static void compute_hint_map(int **board, int board_size,
       for (int t = 0; t < open_three_count; t++) {
         if (open_threes[t].player == player) {
           for (int k = 0; k < open_threes[t].length; k++) {
-            hint_map[open_threes[t].cells[k][0]]
-                    [open_threes[t].cells[k][1]] = HINT_THREAT;
+            hint_map[open_threes[t].cells[k][0]][open_threes[t].cells[k][1]] =
+                HINT_THREAT;
           }
         }
       }
     }
   }
-  #undef MAX_PATTERNS
+#undef MAX_PATTERNS
 }
 
 //===============================================================================

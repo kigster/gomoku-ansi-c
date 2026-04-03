@@ -76,9 +76,8 @@ const char *get_coordinate_unicode(int index) {
 
 const char *get_column_letter_unicode(int index) {
   // Negative circled capital letters A–T, skipping I (matches JSON notation)
-  static const char *cols[] = {"🅐", "🅑", "🅒", "🅓", "🅔", "🅕", "🅖",
-                               "🅗", "🅙", "🅚", "🅛", "🅜", "🅝", "🅞",
-                               "🅟", "🅠", "🅡", "🅢", "🅣"};
+  static const char *cols[] = {"🅐", "🅑", "🅒", "🅓", "🅔", "🅕", "🅖", "🅗", "🅙", "🅚",
+                               "🅛", "🅜", "🅝", "🅞", "🅟", "🅠", "🅡", "🅢", "🅣"};
 
   if (index >= 0 && index < 19) {
     return cols[index];

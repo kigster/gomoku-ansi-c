@@ -66,14 +66,17 @@ static int run_replay_mode(cli_config_t *config) {
   game_config.board_size = replay.board_size;
   game_config.player_x_type = PLAYER_TYPE_HUMAN; // Doesn't matter for replay
   game_config.player_o_type = PLAYER_TYPE_HUMAN;
-  if (replay.depth_x > 0) game_config.depth_x = replay.depth_x;
-  if (replay.depth_o > 0) game_config.depth_o = replay.depth_o;
+  if (replay.depth_x > 0)
+    game_config.depth_x = replay.depth_x;
+  if (replay.depth_o > 0)
+    game_config.depth_o = replay.depth_o;
   if (replay.depth_x > 0 || replay.depth_o > 0) {
     int dx = (replay.depth_x > 0) ? replay.depth_x : game_config.max_depth;
     int do_ = (replay.depth_o > 0) ? replay.depth_o : game_config.max_depth;
     game_config.max_depth = (dx > do_) ? dx : do_;
   }
-  if (replay.radius > 0) game_config.search_radius = replay.radius;
+  if (replay.radius > 0)
+    game_config.search_radius = replay.radius;
 
   // Initialize game state
   game_state_t *game = init_game(game_config);

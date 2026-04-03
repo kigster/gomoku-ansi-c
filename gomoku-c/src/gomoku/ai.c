@@ -363,9 +363,10 @@ int evaluate_threat_fast(int **board, int x, int y, int player,
   if (num_open_threes >= 1 && num_threes >= 2) {
     max_threat = max(max_threat, 30000);
   }
-  // Two or more intersecting open twos = one move from double open three (40000).
-  // This is a fork setup (diamond pattern): each two is harmless alone, but the
-  // pivot cell creates two open threes simultaneously — a forced win in 5 moves.
+  // Two or more intersecting open twos = one move from double open three
+  // (40000). This is a fork setup (diamond pattern): each two is harmless
+  // alone, but the pivot cell creates two open threes simultaneously — a forced
+  // win in 5 moves.
   if (num_open_twos >= 2) {
     max_threat = max(max_threat, 25000);
   }

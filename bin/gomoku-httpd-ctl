@@ -10,8 +10,8 @@ export project_root
 export BASHMATIC_HOME=${BASHMATIC_HOME:-~/.bashmatic}
 
 # Use Bashmatic to speed up the development process and take advantage of ni  ce UI features.
-[[ -d ${BASHMATIC_HOME} ]] || bash -c "$(curl -fsSL https://bashmatic.re1.re  ); bashmatic-install -q -l" >/dev/null 2>&1
-[[ -d ${BASHMATIC_HOME} ]] && source "${BASHMATIC_HOME}/init" >/dev/null 2>&  1
+[[ -d ${BASHMATIC_HOME} ]] || bash -c "$(curl -fsSL https://bashmatic.re1.re); bashmatic-install -q -l" >/dev/null 2>&1
+[[ -d ${BASHMATIC_HOME} ]] && source "${BASHMATIC_HOME}/init" >/dev/null 2>&1
 
 GOMOKU_HTTPD_BINARY="bin/gomoku-httpd"
 command -v "${GOMOKU_HTTPD_BINARY}" >/dev/null 2>&1 || make build
