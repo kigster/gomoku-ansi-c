@@ -24,18 +24,20 @@ async def test_user_me_unauthenticated(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_user_me_invalid_token(client: AsyncClient):
-    resp = await client.get("/user/me", headers={
-        "Authorization": "Bearer invalid.token.here"
-    })
+    resp = await client.get("/user/me", headers={"Authorization": "Bearer invalid.token.here"})
     assert resp.status_code == 401
 
 
 @pytest.mark.asyncio
 async def test_user_me_with_personal_best(client: AsyncClient, auth_headers):
     # Save a winning game
-    await client.post("/game/save", headers=auth_headers, json={
-        "game_json": SAMPLE_GAME_JSON,
-    })
+    await client.post(
+        "/game/save",
+        headers=auth_headers,
+        json={
+            "game_json": SAMPLE_GAME_JSON,
+        },
+    )
 
     resp = await client.get("/user/me", headers=auth_headers)
     assert resp.status_code == 200

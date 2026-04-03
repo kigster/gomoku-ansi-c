@@ -32,8 +32,7 @@ class Settings(BaseSettings):
         password_part = f":{self.db_password}" if self.db_password else ""
         if self.db_socket:
             return (
-                f"postgresql://{self.db_user}{password_part}"
-                f"@/{self.db_name}?host={self.db_socket}"
+                f"postgresql://{self.db_user}{password_part}@/{self.db_name}?host={self.db_socket}"
             )
         return f"postgresql://{self.db_user}{password_part}@localhost/{self.db_name}"
 

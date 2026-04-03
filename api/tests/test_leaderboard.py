@@ -14,9 +14,13 @@ async def test_leaderboard_empty(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_leaderboard_with_scores(client: AsyncClient, auth_headers):
     # Save a winning game
-    await client.post("/game/save", headers=auth_headers, json={
-        "game_json": SAMPLE_GAME_JSON,
-    })
+    await client.post(
+        "/game/save",
+        headers=auth_headers,
+        json={
+            "game_json": SAMPLE_GAME_JSON,
+        },
+    )
 
     resp = await client.get("/leaderboard")
     assert resp.status_code == 200
@@ -32,9 +36,13 @@ async def test_leaderboard_with_scores(client: AsyncClient, auth_headers):
 async def test_leaderboard_excludes_losses(client: AsyncClient, auth_headers):
     # Save a losing game (score = 0)
     game = {**SAMPLE_GAME_JSON, "winner": "O"}
-    await client.post("/game/save", headers=auth_headers, json={
-        "game_json": game,
-    })
+    await client.post(
+        "/game/save",
+        headers=auth_headers,
+        json={
+            "game_json": game,
+        },
+    )
 
     resp = await client.get("/leaderboard")
     assert resp.status_code == 200

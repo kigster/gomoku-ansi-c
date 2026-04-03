@@ -30,9 +30,13 @@ async def test_game_start_increments_counter(client: AsyncClient, auth_headers):
 
 @pytest.mark.asyncio
 async def test_game_save_human_wins(client: AsyncClient, auth_headers):
-    resp = await client.post("/game/save", headers=auth_headers, json={
-        "game_json": SAMPLE_GAME_JSON,
-    })
+    resp = await client.post(
+        "/game/save",
+        headers=auth_headers,
+        json={
+            "game_json": SAMPLE_GAME_JSON,
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert "id" in data
@@ -47,9 +51,13 @@ async def test_game_save_human_wins(client: AsyncClient, auth_headers):
 @pytest.mark.asyncio
 async def test_game_save_human_loses(client: AsyncClient, auth_headers):
     game = {**SAMPLE_GAME_JSON, "winner": "O"}
-    resp = await client.post("/game/save", headers=auth_headers, json={
-        "game_json": game,
-    })
+    resp = await client.post(
+        "/game/save",
+        headers=auth_headers,
+        json={
+            "game_json": game,
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["score"] == 0
@@ -59,9 +67,13 @@ async def test_game_save_human_loses(client: AsyncClient, auth_headers):
 @pytest.mark.asyncio
 async def test_game_save_unfinished_game(client: AsyncClient, auth_headers):
     game = {**SAMPLE_GAME_JSON, "winner": "none"}
-    resp = await client.post("/game/save", headers=auth_headers, json={
-        "game_json": game,
-    })
+    resp = await client.post(
+        "/game/save",
+        headers=auth_headers,
+        json={
+            "game_json": game,
+        },
+    )
     assert resp.status_code == 400
 
 
@@ -74,14 +86,17 @@ async def test_game_save_unauthenticated(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_game_play_proxy_returns_503_when_engine_down(client: AsyncClient):
     """game/play proxies to gomoku-httpd which isn't running in tests."""
-    resp = await client.post("/game/play", json={
-        "X": {"player": "human", "time_ms": 0},
-        "O": {"player": "AI", "depth": 3, "time_ms": 0},
-        "board_size": 19,
-        "radius": 2,
-        "timeout": "none",
-        "winner": "none",
-        "board_state": [],
-        "moves": [{"X (human)": "J9", "time_ms": 500}],
-    })
+    resp = await client.post(
+        "/game/play",
+        json={
+            "X": {"player": "human", "time_ms": 0},
+            "O": {"player": "AI", "depth": 3, "time_ms": 0},
+            "board_size": 19,
+            "radius": 2,
+            "timeout": "none",
+            "winner": "none",
+            "board_state": [],
+            "moves": [{"X (human)": "J9", "time_ms": 500}],
+        },
+    )
     assert resp.status_code == 503

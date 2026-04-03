@@ -18,7 +18,8 @@ async def play(request: Request):
     client: AsyncClient = request.app.state.httpx_client
     try:
         resp = await client.post(
-            "/gomoku/play", content=body,
+            "/gomoku/play",
+            content=body,
             headers={"Content-Type": "application/json"},
         )
     except Exception:

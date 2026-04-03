@@ -22,6 +22,7 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "public"
 
 print(STATIC_DIR)
 
+
 @asynccontextmanager
 async def lifespan(fastapi_app: FastAPI):
     fastapi_app.state.db_pool = await create_pool()
@@ -47,6 +48,7 @@ fastapi_app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 @fastapi_app.exception_handler(RequestValidationError)
 async def validation_error_handler(request: Request, exc: RequestValidationError):

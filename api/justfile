@@ -1,45 +1,38 @@
-set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+set dotenv-load
 
 [no-exit-message]
 recipes:
     @just --choose
 
-build-production:
-    @cd ../frontend && just build-production
+install:
+    @uv sync --all-extras
 
-sync:
-    @uv sync
+# Run all python linters
+lint *args:
+    uv run --group dev ruff check --fix {{args}}
+    uv run --group dev ruff format {{args}}
 
-run: sync
-    ENVIRONMENT=production uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Run all tests
+test *args:
+    uv run --group test pytest {{args}}
 
-# Start dev server with auto-reload
-dev: sync
-    uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Run tests
-test:
-    ENVIRONMENT=test uv run --group test pytest tests/ -v
-
-# Run tests with coverage
+# Run all tests with coverage and show it at the end
 test-coverage *args:
-    ENVIRONMENT=test uv run --group test pytest --tb=short -q --cov --cov-branch {{args}}
+    uv run --group test pytest --cov --cov-branch {{args}}
 
-# Lint
-lint:
-    uv run ruff check app/ tests/
+# Run type checking linter on Python code
+typecheck *args:
+    uv run --group dev ty check {{args}}
 
-# Format
-format:
-    uv run ruff format app/ tests/
-    uv-sort
+update-secrets:
+    uv run --group dev detect-secrets scan --baseline .secrets.baseline
 
-# Build Docker image
-docker-build:
-    docker build -t gomoku-api:latest .
+# Run all Python checks and linters + tests
+ci:
+    @uv run --group dev ty check
+    @uv run --group dev mdformat --check
+    @uv run --group dev ruff format
 
-# Build for Cloud Run (linux/amd64)
-docker-build-amd64:
-    docker buildx build --platform linux/amd64 -t gomoku-api:latest --load .
-
-ci: test lint
+# Clean Python caches and various other temp files
+clean:
+    uv cache clean --force

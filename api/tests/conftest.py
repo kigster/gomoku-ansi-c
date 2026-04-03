@@ -36,9 +36,7 @@ async def _ensure_initialized():
     conn = await asyncpg.connect(_admin_dsn)
     try:
         db_name = TEST_DSN.rsplit("/", 1)[-1].split("?")[0]
-        exists = await conn.fetchval(
-            "SELECT 1 FROM pg_database WHERE datname = $1", db_name
-        )
+        exists = await conn.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", db_name)
         if not exists:
             await conn.execute(f'CREATE DATABASE "{db_name}"')
     finally:
@@ -84,11 +82,14 @@ async def client():
 @pytest.fixture
 async def registered_user(client: AsyncClient):
     """Create a user and return (username, token)."""
-    resp = await client.post("/auth/signup", json={
-        "username": "testplayer",
-        "password": "testpass123",
-        "email": "test@example.com",
-    })
+    resp = await client.post(
+        "/auth/signup",
+        json={
+            "username": "testplayer",
+            "password": "testpass123",
+            "email": "test@example.com",
+        },
+    )
     assert resp.status_code == 200, resp.text
     data = resp.json()
     return data["username"], data["access_token"]

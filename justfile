@@ -48,7 +48,7 @@ test-daemon:
 
 # Run API tests
 test-api:
-    cd api && uv run python -m pytest tests/ -v
+    cd api && just install && just test
 
 # Run frontend tests
 test-frontend:

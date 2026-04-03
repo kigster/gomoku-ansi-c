@@ -10,11 +10,11 @@ async def send_password_reset_email(to_email: str, token: str) -> None:
 
     if settings.email_provider == "stdout":
         logger.info(f"[DEV] Password reset email to {to_email}: {reset_url}")
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("PASSWORD RESET EMAIL")
         print(f"To: {to_email}")
         print(f"Reset URL: {reset_url}")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
         return
 
     if settings.email_provider == "sendgrid":
