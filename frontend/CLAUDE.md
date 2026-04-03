@@ -59,7 +59,7 @@ docker run -p 80:80 -e API_URL=http://gomoku-api:8000 gomoku-frontend:latest
 ## Key Components
 
 - **AuthModal** — Login/Signup tabs, forgot password, reset password (from email link)
-- **AlertPanel** — Stackable red/green toast notifications, auto-dismiss
+- **AlertPanel** — Centered notifications with fade-in/out, three types (error/info/warning), expandable error details
 - **LeaderboardModal** — Top 100 global players with scores and geo
 - **Board** — SVG-based 19x19 (or 15x15) game board with stone/XO display modes
 - **GameStatus** — Move counter, timers, player info, error display

@@ -12,7 +12,11 @@ recipes:
 
 # ─── Build ────────────────────────────────────────────────────────────────────
 
-# Build C game engine binaries
+# Build terminal game only (no frontend/API dependencies)
+build-game:
+    make -C gomoku-c all install
+
+# Build everything: C engine + frontend + copy assets to api/public
 build: install-frontend
     make -C gomoku-c all install
 

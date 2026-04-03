@@ -2,9 +2,6 @@
 
 A stateless HTTP server that provides a REST API for playing Gomoku games. The daemon accepts game state via JSON, makes an AI move, and returns the updated state.
 
-> [!CAUTION]
-> This documentation is slightly behind the actual source code. We have since added the [`iac`](../iac) folder, with haproxy config, K8S setup, and deployment, and more.
-
 ## Table of Contents
 
 - [Gomoku HTTP Daemon](#gomoku-http-daemon)
@@ -45,15 +42,21 @@ A stateless HTTP server that provides a REST API for playing Gomoku games. The d
 Build both the daemon and test client:
 
 ```bash
-make all                    # Build gomoku and gomoku-httpd
-make gomoku-httpd           # Build only the HTTP daemon
-make test-client            # Build the test client (gomoku-http-client)
+make -C gomoku-c all              # Build gomoku and gomoku-httpd
+make -C gomoku-c gomoku-httpd     # Build only the HTTP daemon
+make -C gomoku-c test-client      # Build the test client (gomoku-http-client)
+```
+
+Or using just:
+
+```bash
+just build                        # Build all targets
 ```
 
 Clean build artifacts:
 
 ```bash
-make clean
+make -C gomoku-c clean
 ```
 
 ---
@@ -84,19 +87,19 @@ The daemon runs as a foreground process by default. Use `-d` to daemonize.
 Start daemon on localhost port 3000:
 
 ```bash
-./gomoku-httpd -b 127.0.0.1:3000
+bin/gomoku-httpd -b 127.0.0.1:3000
 ```
 
 Start daemon on all interfaces with debug logging:
 
 ```bash
-./gomoku-httpd -b 0.0.0.0:8080 -L DEBUG
+bin/gomoku-httpd -b 0.0.0.0:8080 -L DEBUG
 ```
 
 Run as background daemon with log file:
 
 ```bash
-./gomoku-httpd -d -b 0.0.0.0:3000 -l /var/log/gomoku.log
+bin/gomoku-httpd -d -b 0.0.0.0:3000 -l /var/log/gomoku.log
 ```
 
 Stop the daemon:
@@ -122,10 +125,10 @@ HAProxy comes with a built-in web dashboard which is very easy to read. You can 
 ![haproxy](img/haproxy-admin.png)
 
 > [!TIP]
-> If you use `iac/config/haproxy.cfg` configuration file, you can run a cluster of 10 gomoku-httpd instances with a single HAProxy process locally and test it with `./gomoku-http-client -p 10000`. 
-> 
-> To start the cluster, run `make install`, then `gomoku-httpd-ctl start`. Use brew to install `haproxy` on macOS, start it as a service via `brew services start haproxy`. Then go to `/opt/homebrew/etc` folder and create a symlink to `iac/config/haproxy.cfg` file in this repo. After that restart the haproxy service via `brew services restart haproxy`. Note that `gomoku-ctl start` starts gomoku-httpd services listening on ports 9500, 9501, ... while the agent status check ports are 9600, 9601, ...
-> 
+> Use `bin/gctl start` to run a local cluster of gomoku-httpd instances behind a reverse proxy. The `gctl` script handles config generation, process management, and proxy setup automatically. Test with `bin/gomoku-http-client -p 10000`.
+>
+> The cluster starts gomoku-httpd services listening on ports 9500, 9501, ... while the agent status check ports are 9600, 9601, ...
+>
 > You should be able to monitor haproxy connection pool via [http://localhost:8404/stats](http://localhost:8404/stats) (no password for localhost access).
 
 
@@ -135,7 +138,7 @@ For load-balanced deployments, the daemon can run an agent-check server that rep
 
 ```bash
 # Start with agent-check on port 8788
-./gomoku-httpd -b 0.0.0.0:8787 -a 8788
+bin/gomoku-httpd -b 0.0.0.0:8787 -a 8788
 ```
 
 The agent-check port responds with:
@@ -234,10 +237,13 @@ flowchart LR
 
 ```bash
 # Start the full stack (nginx + envoy + gomoku daemons)
-bin/gomoku-cluster start --proxy envoy
+bin/gctl start
 
-# Or start components individually
-bin/gomoku-cluster start -c nginx -c envoy -c gomoku
+# Or start with HAProxy instead of Envoy
+bin/gctl start -p haproxy
+
+# Start specific components
+bin/gctl start nginx gomoku
 ```
 
 The Envoy admin interface is available at [http://127.0.0.1:9901](http://127.0.0.1:9901). See [`iac/envoy/README.md`](../iac/envoy/README.md) for detailed configuration documentation.
@@ -480,31 +486,31 @@ The client plays as X (human) using a simple spiral strategy while the server's 
 Play a game with default settings (connects to 127.0.0.1:9900):
 
 ```bash
-./gomoku-http-client
+bin/gomoku-http-client
 ```
 
 Connect to a server on a different port:
 
 ```bash
-./gomoku-http-client -p 3000
+bin/gomoku-http-client -p 3000
 ```
 
 Play with stronger AI (depth 4):
 
 ```bash
-./gomoku-http-client -d 4 -r 3
+bin/gomoku-http-client -d 4 -r 3
 ```
 
 Play on 19x19 board and save result:
 
 ```bash
-./gomoku-http-client -b 19 -j game_result.json
+bin/gomoku-http-client -b 19 -j game_result.json
 ```
 
 Play with verbose output to see full game state:
 
 ```bash
-./gomoku-http-client -v
+bin/gomoku-http-client -v
 ```
 
 ### Sample Output
@@ -560,8 +566,8 @@ The daemon logs each HTTP request at INFO level with:
 ### Log Format
 
 ```
-2026-01-29 18:47:51 INFO  src/net/handlers.c:80: 127.0.0.1 /gomoku/play 200 0.792ms
-2026-01-29 18:47:51 INFO  src/net/handlers.c:80: 127.0.0.1 /health 200 0.037ms
+2026-01-29 18:47:51 INFO  gomoku-c/src/net/handlers.c:80: 127.0.0.1 /gomoku/play 200 0.792ms
+2026-01-29 18:47:51 INFO  gomoku-c/src/net/handlers.c:80: 127.0.0.1 /health 200 0.037ms
 ```
 
 ### Log Levels

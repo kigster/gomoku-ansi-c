@@ -1,45 +1,14 @@
-# Gomoku & Renju — Complete Rules Reference
+# Game Rules and Variant Support
+
+---
+
+## Part 1: Gomoku and Renju Rules
 
 > **Sources**: [VCPR Gomoku Rules](http://www.vcpr.cz/en/help-and-rules/gomoku-rules/) | [VCPR Renju Rules](http://www.vcpr.cz/en/help-and-rules/renju-rules/) | [RenjuNet — What is Renju?](https://www.renju.net/rules/) | [RenjuNet — International Rules](https://www.renju.net/rifrules/) | [RenjuNet — Advanced Tutorial](https://www.renju.net/advanced/) | [RenjuNet — Starting the Game](https://www.renju.net/starting/) | [RenjuNet — 26 Openings](https://www.renju.net/openings/) | [Gambiter — Gomoku](https://gambiter.com/renju/Gomoku.html)
 
 ---
 
-## Table of Contents
-
-1. [Overview](#1-overview)
-2. [Equipment](#2-equipment)
-3. [Basic Concepts](#3-basic-concepts)
-   - [Rows, Threes, Fours, and Forks](#rows-threes-fours-and-forks)
-4. [Gomoku Variants](#4-gomoku-variants)
-   - [Freestyle Gomoku](#41-freestyle-gomoku)
-   - [Standard Gomoku](#42-standard-gomoku)
-   - [Gomoku Pro](#43-gomoku-pro)
-   - [Gomoku Swap](#44-gomoku-swap)
-   - [Gomoku Swap2](#45-gomoku-swap2)
-   - [Caro (Gomoku+)](#46-caro-gomoku)
-   - [Omok](#47-omok)
-   - [Ninuki-Renju / Pente](#48-ninuki-renju--pente)
-   - [Connect6](#49-connect6)
-5. [Renju](#5-renju)
-   - [How Renju Differs from Gomoku](#51-how-renju-differs-from-gomoku)
-   - [Forbidden Moves for Black](#52-forbidden-moves-for-black)
-   - [Advanced Forbidden Move Analysis](#53-advanced-forbidden-move-analysis)
-   - [Win Conditions](#54-win-conditions)
-   - [Draw Conditions](#55-draw-conditions)
-6. [Opening Procedures](#6-opening-procedures)
-   - [Gomoku Openings](#61-gomoku-openings)
-   - [Renju Openings — The 26 Canonical Patterns](#62-renju-openings--the-26-canonical-patterns)
-   - [RIF Opening Rule (Classic)](#63-rif-opening-rule-classic)
-   - [Yamaguchi Opening Rule (2009–2015)](#64-yamaguchi-opening-rule-20092015)
-   - [Soosyrv-8 Opening Rule (2017–2023)](#65-soosyrv-8-opening-rule-20172023)
-   - [Taraguchi-10 Opening Rule (2024–present)](#66-taraguchi-10-opening-rule-2024present)
-7. [Time Control and Tournament Rules](#7-time-control-and-tournament-rules)
-8. [First-Player Advantage](#8-first-player-advantage)
-9. [Glossary](#9-glossary)
-
----
-
-## 1. Overview
+### 1. Overview
 
 **Gomoku** (五目並べ, *gomokunarabe*) is an abstract strategy board game for two players, also known as "Five in a Row." Originating in China as **Wu Zi Qi** (五子棋), the game spread to Japan, Korea (where it is called **Omok**, 오목), and eventually worldwide. In some countries it is informally known as "crosses and noughts."
 
@@ -49,9 +18,9 @@ Both games share the same fundamental objective: **be the first to form an unbro
 
 ---
 
-## 2. Equipment
+### 2. Equipment
 
-### Board
+#### Board
 
 | Property       | Standard          | Notes                              |
 |----------------|-------------------|------------------------------------|
@@ -61,7 +30,7 @@ Both games share the same fundamental objective: **be the first to form an unbro
 | Reference points| 5 marked intersections | Center + 4 star points        |
 | Color          | Must differ from stone colors | Typically light wood      |
 
-### Stones
+#### Stones
 
 | Property | Description                                    |
 |----------|------------------------------------------------|
@@ -69,33 +38,33 @@ Both games share the same fundamental objective: **be the first to form an unbro
 | Material | Plastic, glass, or ceramic (traditional: slate & clamshell) |
 | Placement| **On intersections**, not inside squares        |
 
-### Time Control
+#### Time Control
 
 - Chess clocks are used in tournament play
 - Standard tournament time: **10 minutes per player per game**
-- See [Section 7](#7-time-control-and-tournament-rules) for detailed rules
+- See [Time Control and Tournament Rules](#7-time-control-and-tournament-rules) for detailed rules
 
 ---
 
-## 3. Basic Concepts
+### 3. Basic Concepts
 
-### Rows, Threes, Fours, and Forks
+#### Rows, Threes, Fours, and Forks
 
 Understanding these structures is essential for both Gomoku and Renju.
 
-#### Row
+##### Row
 
 A combination of same-colored stones on a diagonal, vertical, or horizontal line, bounded by board edges, opponent stones, or empty intersections, with no opponent stones interspersed.
 
-#### Unbroken Row
+##### Unbroken Row
 
 A row where there are no empty intersections between any of the stones.
 
-#### Five in a Row
+##### Five in a Row
 
 An unbroken row of exactly five stones. This is the **winning condition**.
 
-#### Overline
+##### Overline
 
 An unbroken row of **six or more** stones. Treatment varies by variant:
 
@@ -106,7 +75,7 @@ An unbroken row of **six or more** stones. Treatment varies by variant:
 | Renju (Black)    | **Forbidden** — Black loses            |
 | Renju (White)    | Counts as a win                        |
 
-#### Four
+##### Four
 
 A row of four stones where one more stone can be added to make five in a row.
 
@@ -119,7 +88,7 @@ An **open four** (also called a **straight four**) can become five from **either
 
 A **half-open four** can become five from only **one** end and can be defended.
 
-#### Three
+##### Three
 
 A row of three stones that can, in one move, become a **straight four** (open four) without simultaneously creating a five.
 
@@ -130,7 +99,7 @@ A row of three stones that can, in one move, become a **straight four** (open fo
 
 An **open three** is dangerous because it leads to an open four, which is effectively a guaranteed win if left unblocked.
 
-#### Forks (Double Attacks)
+##### Forks (Double Attacks)
 
 A **fork** is a single move that creates two simultaneous threats. Fork types:
 
@@ -140,15 +109,15 @@ A **fork** is a single move that creates two simultaneous threats. Fork types:
 | Four-Three    | 4×3 | Creates one four and one open three    | Yes — must block the four, three becomes open four |
 | Double Three  | 3×3 | Creates two open threes simultaneously | Yes — blocking one leaves the other |
 
-**In Renju**, Black's only legal winning fork is the **4×3 fork**. The 4×4 and 3×3 forks are forbidden for Black (see [Section 5.2](#52-forbidden-moves-for-black)).
+**In Renju**, Black's only legal winning fork is the **4×3 fork**. The 4×4 and 3×3 forks are forbidden for Black (see [Forbidden Moves for Black](#52-forbidden-moves-for-black)).
 
 Complex forks with more than two lines (e.g., 3×3×3, 4×4×4, 4×4×3, 4×3×3) are all **forbidden for Black** in Renju. The only legal fork for Black is exactly one four and one open three.
 
 ---
 
-## 4. Gomoku Variants
+### 4. Gomoku Variants
 
-### 4.1 Freestyle Gomoku
+#### 4.1 Freestyle Gomoku
 
 The simplest form with **no restrictions** on either player.
 
@@ -165,7 +134,7 @@ The simplest form with **no restrictions** on either player.
 
 ---
 
-### 4.2 Standard Gomoku
+#### 4.2 Standard Gomoku
 
 Adds the overline restriction to Freestyle.
 
@@ -180,7 +149,7 @@ Adds the overline restriction to Freestyle.
 
 ---
 
-### 4.3 Gomoku Pro
+#### 4.3 Gomoku Pro
 
 An opening rule that restricts the first three moves to reduce Black's advantage.
 
@@ -193,7 +162,7 @@ An opening rule that restricts the first three moves to reduce Black's advantage
 | Move 3 (Black)      | **Must** be at least **3 intersections** from the center |
 | After move 3        | Normal alternating play, no restrictions  |
 
-#### Opening Moves — Gomoku Pro
+##### Opening Moves — Gomoku Pro
 
 The PRO opening constrains the first three moves to balance the game:
 
@@ -222,7 +191,7 @@ The PRO opening constrains the first three moves to balance the game:
 
 ---
 
-### 4.4 Gomoku Swap
+#### 4.4 Gomoku Swap
 
 Uses the "pie rule" to balance the opening.
 
@@ -232,7 +201,7 @@ Uses the "pie rule" to balance the opening.
 | Win condition       | Exactly five in a row (overlines don't count) |
 | Opening             | See procedure below                       |
 
-#### Opening Procedure — Swap
+##### Opening Procedure — Swap
 
 1. The first player places **three stones** (2 Black, 1 White) anywhere on the board.
 2. The second player **chooses which color** they want to play for the rest of the game.
@@ -263,7 +232,7 @@ The first player is incentivized to create a **balanced** position with the thre
 
 ---
 
-### 4.5 Gomoku Swap2
+#### 4.5 Gomoku Swap2
 
 The **official tournament rule** for Gomoku World Championships since 2009. An extension of Swap with more options for the second player.
 
@@ -273,7 +242,7 @@ The **official tournament rule** for Gomoku World Championships since 2009. An e
 | Win condition       | Exactly five in a row (overlines don't count) |
 | Opening             | See procedure below                       |
 
-#### Opening Procedure — Swap2
+##### Opening Procedure — Swap2
 
 1. The first player places **three stones** (2 Black, 1 White) anywhere on the board.
 2. The second player chooses **one of three options**:
@@ -306,7 +275,7 @@ This gives the second player more flexibility and further incentivizes the first
 
 ---
 
-### 4.6 Caro (Gomoku+)
+#### 4.6 Caro (Gomoku+)
 
 A variant popular in Vietnam, also known as **Gomoku+**.
 
@@ -328,7 +297,7 @@ The key difference: a row of exactly five stones only wins if **at least one end
 
 ---
 
-### 4.7 Omok
+#### 4.7 Omok
 
 The Korean variant of Standard Gomoku.
 
@@ -341,7 +310,7 @@ The Korean variant of Standard Gomoku.
 
 ---
 
-### 4.8 Ninuki-Renju / Pente
+#### 4.8 Ninuki-Renju / Pente
 
 A variant that adds **capturing** to the game. Published in the USA as **Pente**.
 
@@ -353,7 +322,7 @@ A variant that adds **capturing** to the game. Published in the USA as **Pente**
 | Restrictions (Pente)| None (no three-and-three or overline rules) |
 | Restrictions (Ninuki-Renju) | May include Renju-style forbidden moves |
 
-#### Capturing Example
+##### Capturing Example
 
 ```
   Before:  ● ○ ○ .     Black plays at the end:
@@ -364,7 +333,7 @@ A player wins by either forming five in a row or accumulating **5 captures** (10
 
 ---
 
-### 4.9 Connect6
+#### 4.9 Connect6
 
 A modern variant designed for better balance.
 
@@ -380,9 +349,9 @@ Connect6 achieves balance through the two-stones-per-turn mechanic rather than o
 
 ---
 
-## 5. Renju
+### 5. Renju
 
-### 5.1 How Renju Differs from Gomoku
+#### 5.1 How Renju Differs from Gomoku
 
 Renju was developed from Gomoku by Japanese masters approximately 100 years ago to address the proven first-player (Black) advantage. It adds **three restrictions on Black only**, while White plays without restrictions.
 
@@ -394,13 +363,13 @@ Renju was developed from Gomoku by Japanese masters approximately 100 years ago 
 | Opening rules | Varies (Pro/Swap)  | Formal opening procedures required |
 | Board         | 15×15              | 15×15                              |
 
-### 5.2 Forbidden Moves for Black
+#### 5.2 Forbidden Moves for Black
 
 In Renju, **Black is prohibited from making the following moves**. If Black makes one of these — whether accidentally or by being forced to — **Black loses the game**.
 
 White has **no restrictions** and may freely make double-threes, double-fours, and overlines. An overline by White counts as a win.
 
-#### 1. Overline
+##### 1. Overline
 
 An unbroken row of **six or more** black stones.
 
@@ -410,7 +379,7 @@ An unbroken row of **six or more** black stones.
   Legal:      ● ● ● ● ●           Five in a row — Black wins!
 ```
 
-#### 2. Double-Four (4×4)
+##### 2. Double-Four (4×4)
 
 Placing a stone that simultaneously creates **two or more fours** meeting at that intersection.
 
@@ -425,7 +394,7 @@ Placing a stone that simultaneously creates **two or more fours** meeting at tha
        .
 ```
 
-#### 3. Double-Three (3×3)
+##### 3. Double-Three (3×3)
 
 Placing a stone that simultaneously creates **two or more open threes** meeting at that intersection.
 
@@ -446,7 +415,7 @@ Placing a stone that simultaneously creates **two or more open threes** meeting 
 
 In practice: if one of the "threes" is actually a dead three (blocked by forbidden-move rules from becoming an open four), then the double-three is not truly a double-three and is **legal**.
 
-#### Black's Only Legal Winning Fork
+##### Black's Only Legal Winning Fork
 
 Black's only permitted fork is the **4×3 fork** — a move that creates exactly one four and one open three simultaneously.
 
@@ -461,17 +430,17 @@ Black's only permitted fork is the **4×3 fork** — a move that creates exactly
 
 ---
 
-### 5.3 Advanced Forbidden Move Analysis
+#### 5.3 Advanced Forbidden Move Analysis
 
 The interplay between forbidden moves creates deep tactical complexity. Key principles:
 
-#### Dead Lines and Legal Moves
+##### Dead Lines and Legal Moves
 
 A three is only an "open three" if it can become an **open four**. If extending a three would create an overline or land on another forbidden point, that three is a **dead three** and doesn't count toward the fork.
 
 **Example**: If Black has a diagonal three, and extending it in either direction would create an overline (6+ stones), that diagonal is a dead line. A "double-three" involving this dead line is actually legal.
 
-#### White's Trapping Tactic
+##### White's Trapping Tactic
 
 White can **exploit** forbidden moves as a weapon. By manipulating the board to create a situation where Black's only defensive move would be a forbidden point, White forces Black into an impossible position:
 
@@ -483,13 +452,13 @@ White can **exploit** forbidden moves as a weapon. By manipulating the board to 
 
 This trapping tactic is unique to Renju and adds an entire dimension of strategy absent from Gomoku.
 
-#### Black's Counter-Tactic: Artificial Blocking
+##### Black's Counter-Tactic: Artificial Blocking
 
 Skilled Black players can preemptively **"kill" one of their own lines** by placing a stone that converts a potential open three into a dead three, thereby removing a forbidden point. This allows Black to safely play on what would otherwise be a forbidden intersection.
 
 ---
 
-### 5.4 Win Conditions
+#### 5.4 Win Conditions
 
 | Condition | Black | White |
 |-----------|-------|-------|
@@ -506,7 +475,7 @@ Skilled Black players can preemptively **"kill" one of their own lines** by plac
 - If Black makes a forbidden double-three or double-four and White doesn't notice and continues playing, White **cannot** later claim a win based on that specific forbidden move.
 - **Exception**: If Black makes a forbidden **overline** and White doesn't notice immediately, White can still claim it later as long as the game hasn't ended by other means.
 
-### 5.5 Draw Conditions
+#### 5.5 Draw Conditions
 
 The game is drawn when:
 
@@ -519,31 +488,31 @@ A draw offer can only be made simultaneously with making a move. The opponent ma
 
 ---
 
-## 6. Opening Procedures
+### 6. Opening Procedures
 
-### 6.1 Gomoku Openings
+#### 6.1 Gomoku Openings
 
-#### Pro Opening
+##### Pro Opening
 
 See [Section 4.3](#43-gomoku-pro).
 
-#### Swap Opening
+##### Swap Opening
 
 See [Section 4.4](#44-gomoku-swap).
 
-#### Swap2 Opening
+##### Swap2 Opening
 
 See [Section 4.5](#45-gomoku-swap2). This is the **current standard** for Gomoku World Championships.
 
 ---
 
-### 6.2 Renju Openings — The 26 Canonical Patterns
+#### 6.2 Renju Openings — The 26 Canonical Patterns
 
 In Renju, the first three moves define the **opening**. There are exactly **26 possible openings**, divided into two families based on the placement of the second stone (White) relative to the first (Black at center).
 
 The second move has two standard positions: **diagonal** or **vertical** relative to center.
 
-#### Indirect Openings (Diagonal — 13 patterns)
+##### Indirect Openings (Diagonal — 13 patterns)
 
 The second stone (White) is placed **diagonally** from the center stone.
 
@@ -565,7 +534,7 @@ The second stone (White) is placed **diagonally** from the center stone.
 | 6 | **Ungetsu**  | 13 | **Suisei**   |
 | 7 | **Hogetsu**  |    |              |
 
-#### Direct Openings (Vertical — 13 patterns)
+##### Direct Openings (Vertical — 13 patterns)
 
 The second stone (White) is placed **vertically** (or horizontally) adjacent to the center stone.
 
@@ -591,7 +560,7 @@ Each opening is determined by the position of the **third stone** (Black) relati
 
 ---
 
-### 6.3 RIF Opening Rule (Classic)
+#### 6.3 RIF Opening Rule (Classic)
 
 The original opening procedure defined by the Renju International Federation (1996):
 
@@ -609,13 +578,13 @@ Passing is **not allowed** during the first three moves.
 
 ---
 
-### 6.4 Yamaguchi Opening Rule (2009–2015)
+#### 6.4 Yamaguchi Opening Rule (2009-2015)
 
 Developed by Japanese player Yusui Yamaguchi (~2008). Used for RIF World Championships from 2009 to 2015.
 
 | Step | Action |
 |------|--------|
-| 1 | Black selects one of the 26 openings and **declares** how many 5th-move options will be offered (typically 1–3). |
+| 1 | Black selects one of the 26 openings and **declares** how many 5th-move options will be offered (typically 1-3). |
 | 2 | White may **swap colors**. |
 | 3 | White places the 4th stone freely anywhere on the board. |
 | 4 | Black places the declared number of candidate 5th-move positions on the board (no symmetrical duplicates). |
@@ -626,9 +595,9 @@ Developed by Japanese player Yusui Yamaguchi (~2008). Used for RIF World Champio
 
 ---
 
-### 6.5 Soosyrv-8 Opening Rule (2017–2023)
+#### 6.5 Soosyrv-8 Opening Rule (2017-2023)
 
-Named after Estonian village Soosyrv. Official for RIF World Championships 2017–2023.
+Named after Estonian village Soosyrv. Official for RIF World Championships 2017-2023.
 
 | Step | Action |
 |------|--------|
@@ -644,7 +613,7 @@ Named after Estonian village Soosyrv. Official for RIF World Championships 2017�
 
 ---
 
-### 6.6 Taraguchi-10 Opening Rule (2024–present)
+#### 6.6 Taraguchi-10 Opening Rule (2024-present)
 
 The current official rule for RIF World Championships as of 2024.
 
@@ -662,7 +631,7 @@ The current official rule for RIF World Championships as of 2024.
 |   | **Path B**: Black places **10** candidate 5th-move positions anywhere (no symmetrical moves) → White selects one and plays the 6th move anywhere. |
 | 9 | Normal Renju play continues. |
 
-#### Opening Moves — Taraguchi-10
+##### Opening Moves — Taraguchi-10
 
 ```
 Move 1: Black at center                Move 2: White in 3×3
@@ -698,20 +667,20 @@ Move 3: Black in 5×5                   Move 4: White in 7×7
 
 ---
 
-### Opening Rules Summary Timeline
+#### Opening Rules Summary Timeline
 
 | Period     | Gomoku Championship Rule | Renju Championship Rule |
 |------------|--------------------------|-------------------------|
-| 1989–2007  | Various / Swap           | RIF Classic              |
-| 2009–2015  | Swap2                    | Yamaguchi                |
-| 2017–2023  | Swap2                    | Soosyrv-8                |
-| 2024–      | Swap2                    | Taraguchi-10             |
+| 1989-2007  | Various / Swap           | RIF Classic              |
+| 2009-2015  | Swap2                    | Yamaguchi                |
+| 2017-2023  | Swap2                    | Soosyrv-8                |
+| 2024-      | Swap2                    | Taraguchi-10             |
 
 ---
 
-## 7. Time Control and Tournament Rules
+### 7. Time Control and Tournament Rules
 
-### Clock Usage (RIF Rules)
+#### Clock Usage (RIF Rules)
 
 - Both players must make a certain number of moves within a stipulated time.
 - Black's clock starts when the game begins.
@@ -719,12 +688,12 @@ Move 3: Black in 5×5                   Move 4: White in 7×7
 - A player forgetting to press their clock is not pointed out by the opponent.
 - Standard tournament time: **10 minutes per player** (varies by tournament).
 
-### Record Keeping
+#### Record Keeping
 
 - Both players must record every move legibly during the game.
 - **Exception**: If a player has 5 minutes or less remaining, they may stop recording until the time pressure ends.
 
-### Player Conduct
+#### Player Conduct
 
 - No written or printed aids during play.
 - No analysis on other boards during ongoing games.
@@ -732,9 +701,9 @@ Move 3: Black in 5×5                   Move 4: White in 7×7
 
 ---
 
-## 8. First-Player Advantage
+### 8. First-Player Advantage
 
-Research by **L. Victor Allis** (1994) proved computationally that **Black wins with perfect play** in standard Gomoku on a 15×15 board. Expert-level forcing sequences of 20–40 moves are typical.
+Research by **L. Victor Allis** (1994) proved computationally that **Black wins with perfect play** in standard Gomoku on a 15×15 board. Expert-level forcing sequences of 20-40 moves are typical.
 
 This fundamental imbalance is the reason all serious variants employ opening restrictions:
 
@@ -751,7 +720,7 @@ Even with Renju's forbidden moves alone, Black retains a slight advantage, which
 
 ---
 
-## 9. Glossary
+### 9. Glossary
 
 | Term | Definition |
 |------|------------|
@@ -778,3 +747,243 @@ Even with Renju's forbidden moves alone, Black retains a slight advantage, which
 ---
 
 *Document generated from authoritative sources. For official tournament rules, consult the [Renju International Federation](https://www.renju.net/rifrules/).*
+
+---
+
+## Part 2: Variant Support — Design Proposal
+
+### Recommended Variants
+
+Based on popularity, tournament use, and implementation complexity, here are the variants ranked by priority:
+
+| Priority | Variant ID       | Name                    | Rationale |
+|----------|------------------|-------------------------|-----------|
+| 1        | `standard`       | Standard Gomoku         | **Default.** Exactly 5 wins, overlines don't count. This is what the engine already does. Most widely played casual variant worldwide. |
+| 2        | `freestyle`      | Freestyle Gomoku        | Simplest change — 5+ in a row wins. Very popular online. |
+| 3        | `renju`          | Renju                   | Professional tournament variant. Adds forbidden moves (3×3, 4×4, overline) for Black only. High complexity to implement but highly prestigious. |
+| 4        | `caro`           | Caro (Gomoku+)          | Popular in Vietnam. Five in a row must have at least one open end. Moderate complexity. |
+| 5        | `omok`           | Omok                    | Korean variant. Overlines don't count + three-and-three restriction for both players. |
+| 6        | `ninuki`         | Ninuki-Renju / Pente    | Capture variant. Major engine changes needed (stone removal). Lower priority. |
+
+#### Why `standard` Should Be the Default
+
+1. **Already implemented** — the current engine uses `count == 5` (exact five), which is standard gomoku.
+2. **Most widely recognized** — when people say "gomoku" without qualification, they mean standard.
+3. **Good balance** — overline restriction adds strategic depth without the complexity of forbidden moves.
+4. **Backward compatible** — existing saved games and API clients continue to work unchanged.
+
+---
+
+### CLI Flag Design
+
+#### New Flag: `-g | --game-type`
+
+```
+-g, --game-type TYPE    Game variant (default: standard)
+                        Variants: standard, freestyle, renju, caro, omok, ninuki
+```
+
+#### Full CLI Integration
+
+```bash
+# Default (standard gomoku, exactly as current behavior)
+./gomoku
+
+# Freestyle — 5+ in a row counts
+./gomoku -g freestyle
+
+# Renju — forbidden moves for Black
+./gomoku -g renju
+
+# Caro — blocked five doesn't count
+./gomoku -g caro
+
+# Can combine with all existing flags
+./gomoku -g renju -d 4 -b 15 -r 3 -x human -o ai -j game.json
+```
+
+#### CLI Config Extension
+
+```c
+// Add to cli_config_t in gomoku-c/src/gomoku/cli.h
+typedef enum {
+    GAME_STANDARD = 0,   // Exactly 5 wins, overline doesn't count (default)
+    GAME_FREESTYLE,       // 5+ wins
+    GAME_RENJU,           // Forbidden moves for Black (3x3, 4x4, overline)
+    GAME_CARO,            // 5 must have at least one open end
+    GAME_OMOK,            // Standard + 3x3 forbidden for both
+    GAME_NINUKI,          // Capture variant
+} game_type_t;
+
+typedef struct {
+    // ... existing fields ...
+    game_type_t game_type;  // NEW: Game variant
+} cli_config_t;
+```
+
+#### Long-option Registration
+
+```c
+// Add to the getopt_long options array in gomoku-c/src/gomoku/cli.c
+{"game-type", required_argument, 0, 'g'},
+```
+
+Option string changes from `"d:l:t:b:r:j:p:w:uU:sqx:o:h"` to `"d:l:t:b:r:j:p:w:uU:sqx:o:g:h"`.
+
+---
+
+### JSON Schema Extension
+
+#### New Field: `game_type`
+
+Add to the root properties in `config/gomoku-json-schema.json`:
+
+```json
+"game_type": {
+  "type": "string",
+  "enum": ["standard", "freestyle", "renju", "caro", "omok", "ninuki"],
+  "default": "standard",
+  "description": "Game variant determining win conditions and move restrictions. Defaults to 'standard' if omitted."
+}
+```
+
+#### Complete JSON Example
+
+```json
+{
+  "X": { "player": "human" },
+  "O": { "player": "AI", "depth": 4 },
+  "board_size": 15,
+  "game_type": "renju",
+  "radius": 2,
+  "timeout": "none",
+  "winner": "none",
+  "moves": [
+    { "X (human)": "H8", "time_ms": 1200.0 }
+  ]
+}
+```
+
+#### Backward Compatibility
+
+When `game_type` is absent from the JSON, the engine treats it as `"standard"`. All existing saved games and API clients continue to work unchanged.
+
+---
+
+### Rule Matrix by Variant
+
+| Rule                      | standard | freestyle | renju       | caro     | omok     | ninuki   |
+|---------------------------|----------|-----------|-------------|----------|----------|----------|
+| Board size                | 15/19    | 15/19     | 15          | 15/19    | 15       | 15/19    |
+| Win count                 | =5       | >=5       | =5          | =5       | =5       | =5 or capture |
+| Overline counts           | No       | Yes       | Black: lose, White: win | No | No | No |
+| 3×3 forbidden             | No       | No        | Black only  | No       | Both     | No       |
+| 4×4 forbidden             | No       | No        | Black only  | No       | No       | No       |
+| Blocked-five rule         | No       | No        | No          | Yes      | No       | No       |
+| Custodial capture         | No       | No        | No          | No       | No       | Yes      |
+| Opening rules             | Any      | Any       | Tournament  | Any      | Any      | Any      |
+
+---
+
+### Implementation Strategy
+
+#### Phase 1: Core Infrastructure (Low Risk)
+
+1. Add `game_type_t` enum and field to `cli_config_t` and `game_state_t`
+2. Add `-g | --game-type` CLI flag parsing
+3. Add `game_type` to JSON serialization/deserialization (both `game.c` and `json_api.c`)
+4. Add `game_type` to the JSON schema
+5. Wire `game_type` through to the existing `has_winner()` function
+
+#### Phase 2: Freestyle (Trivial)
+
+Change `has_winner()` to accept `>=5` when `game_type == GAME_FREESTYLE`:
+
+```c
+if (game_type == GAME_FREESTYLE) {
+    if (count >= 5) return 1;
+} else {
+    if (count == 5) return 1;
+}
+```
+
+#### Phase 3: Caro (Moderate)
+
+Add open-end check to `has_winner()`:
+
+```c
+if (game_type == GAME_CARO && count == 5) {
+    // Check if at least one end is open (not blocked by opponent or edge)
+    int open_ends = 0;
+    if (pos_end is empty) open_ends++;
+    if (neg_end is empty) open_ends++;
+    if (open_ends == 0) continue; // Both blocked — not a win
+}
+```
+
+#### Phase 4: Renju (Complex)
+
+Requires new functions for forbidden move detection:
+
+```c
+// New functions needed in gomoku-c/src/gomoku/gomoku.c or a new renju.c module:
+int is_overline(int **board, int size, int row, int col, int player);
+int count_open_threes_at(int **board, int size, int row, int col, int player);
+int count_fours_at(int **board, int size, int row, int col, int player);
+int is_forbidden_move(int **board, int size, int row, int col, int player, game_type_t type);
+
+// Modify has_winner for Renju:
+// - Black wins only with exactly 5
+// - White wins with 5 or overline
+// - If Black plays a forbidden move, White wins
+
+// Modify AI to exclude forbidden moves from candidate list
+// Modify move validation to reject forbidden moves for human Black
+```
+
+The forbidden-move detection for Renju is the most complex part because of the recursive nature of the rules (a 3×3 might not be forbidden if one of the threes can't become an open four due to _another_ forbidden point).
+
+#### Phase 5: Omok (Moderate)
+
+Similar to Renju but simpler — only the 3×3 restriction, applied to both players.
+
+#### Phase 6: Ninuki (Major)
+
+Requires engine-level changes for stone removal:
+- Add capture detection after each move
+- Add stone removal from board
+- Track capture count per player
+- Add alternative win condition (5 captures = win)
+
+---
+
+### Files Requiring Changes
+
+| File | Change |
+|------|--------|
+| `gomoku-c/src/gomoku/gomoku.h`  | Add `game_type_t` enum |
+| `gomoku-c/src/gomoku/cli.h`     | Add `game_type` to `cli_config_t` |
+| `gomoku-c/src/gomoku/cli.c`     | Parse `-g` flag, add to help text |
+| `gomoku-c/src/gomoku/game.h`    | Add `game_type` to `game_state_t` |
+| `gomoku-c/src/gomoku/game.c`    | Serialize/deserialize `game_type` in JSON |
+| `gomoku-c/src/gomoku/gomoku.c`  | Make `has_winner()` variant-aware, add forbidden-move checks |
+| `gomoku-c/src/gomoku/ai.c`      | Filter forbidden moves from AI candidates (Renju) |
+| `gomoku-c/src/net/json_api.c`   | Parse/serialize `game_type` in HTTP JSON |
+| `gomoku-c/src/net/json_api.h`   | (if needed for type defs) |
+| `config/gomoku-json-schema.json` | Add `game_type` field |
+| `frontend/src/...`     | Add variant selector to settings panel |
+
+---
+
+### Schema Fixes Applied in This Session
+
+Two bugs were found and fixed in `gomoku-c/src/gomoku/game.c`:
+
+| Bug | Before | After |
+|-----|--------|-------|
+| Field name mismatch | `"board": 15` | `"board_size": 15` (matches schema) |
+| Type mismatch | `"undo": "on"` (string) | `"undo": true` (boolean, matches schema) |
+
+The deserialization was also updated to accept both `"board_size"` and legacy `"board"` for backward compatibility.
+
+The old `config/sample-game.json` (225-move draw, old field names) was replaced with a fresh 31-move AI-vs-AI game that validates cleanly against the schema.
