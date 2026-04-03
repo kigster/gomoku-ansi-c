@@ -4,7 +4,14 @@
   "title": "Gomoku Game State JSON Schema",
   "description": "JSON schema for Gomoku game state, used for saving games and client-server communication with gomoku-httpd",
   "type": "object",
-  "required": ["X", "O", "moves"],
+  "required": [
+    "X",
+    "O",
+    "moves",
+    "board_size",
+    "radius",
+    "board_state"
+  ],
   "properties": {
     "X": {
       "$ref": "#/$defs/player",
@@ -16,26 +23,42 @@
     },
     "board_size": {
       "type": "integer",
-      "enum": [15, 19],
+      "enum": [
+        15,
+        19
+      ],
       "default": 19,
       "description": "Size of the game board (15x15 or 19x19). Defaults to 19 if not specified."
     },
     "game_type": {
       "type": "string",
-      "enum": ["standard", "freestyle", "renju", "caro", "omok", "ninuki"],
+      "enum": [
+        "standard",
+        "freestyle",
+        "renju",
+        "caro",
+        "omok",
+        "ninuki"
+      ],
       "default": "standard",
       "description": "Game variant determining win conditions and move restrictions. 'standard' = exactly 5 wins (overlines don't count). 'freestyle' = 5+ wins. 'renju' = forbidden moves for Black (3x3, 4x4, overline). 'caro' = five must have at least one open end. 'omok' = standard + 3x3 forbidden for both. 'ninuki' = capture variant. Defaults to 'standard' if omitted."
     },
     "radius": {
       "type": "integer",
       "minimum": 1,
-      "maximum": 10,
+      "maximum": 3,
       "description": "Search radius around existing stones for AI move generation"
     },
     "timeout": {
       "oneOf": [
-        { "type": "string", "const": "none" },
-        { "type": "integer", "minimum": 0 }
+        {
+          "type": "string",
+          "const": "none"
+        },
+        {
+          "type": "integer",
+          "minimum": 0
+        }
       ],
       "description": "Move timeout: 'none' for unlimited, or seconds as integer"
     },
@@ -50,7 +73,12 @@
     },
     "winner": {
       "type": "string",
-      "enum": ["none", "X", "O", "draw"],
+      "enum": [
+        "none",
+        "X",
+        "O",
+        "draw"
+      ],
       "description": "Winner of the game: 'X', 'O', 'draw', or 'none' if still in progress"
     },
     "board_state": {
@@ -68,50 +96,80 @@
         "$ref": "#/$defs/move"
       }
     },
-    "name": {
-      "type": "string",
-      "description": "Name identifier for tactical test scenarios"
-    },
-    "description": {
-      "type": "string",
-      "description": "Human-readable description of the game or test scenario"
-    },
-    "category": {
-      "type": "string",
-      "enum": ["offense", "defense"],
-      "description": "Category for tactical test scenarios"
-    },
-    "difficulty": {
-      "type": "string",
-      "enum": ["trivial", "easy", "medium", "hard"],
-      "description": "Difficulty level for tactical test scenarios"
-    },
-    "expected_moves": {
+    "test_scenarios": {
       "type": "array",
-      "description": "List of acceptable correct moves for tactical tests",
       "items": {
-        "$ref": "#/$defs/coordinate"
+        "$ref": "#/$defs/test_scenario"
       }
-    },
-    "explanation": {
-      "type": "string",
-      "description": "Explanation of the expected move for tactical tests"
     }
   },
   "$defs": {
+    "test_scenario": {
+      "type": "object",
+      "description": "A test scenario for the game",
+      "required": [
+        "name",
+        "description",
+        "moves"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the test scenario"
+        },
+        "description": {
+          "type": "string",
+          "description": "The description of the test scenario"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "offense",
+            "defense"
+          ],
+          "description": "Category for tactical test scenarios"
+        },
+        "difficulty": {
+          "type": "string",
+          "enum": [
+            "trivial",
+            "easy",
+            "medium",
+            "hard"
+          ],
+          "description": "Difficulty level for tactical test scenarios"
+        },
+        "expected_moves": {
+          "type": "array",
+          "description": "List of acceptable correct moves for tactical tests",
+          "items": {
+            "$ref": "#/$defs/coordinate"
+          }
+        },
+        "explanation": {
+          "type": "string",
+          "description": "Explanation of the expected move for tactical tests"
+        }
+      }
+    },
     "player": {
       "type": "object",
-      "required": ["player"],
+      "required": [
+        "player"
+      ],
       "properties": {
         "player": {
           "type": "string",
-          "enum": ["human", "AI"],
+          "enum": [
+            "human",
+            "AI"
+          ],
           "description": "Type of player controlling this side"
         },
         "depth": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 20,
+          "maximum": 10,
           "description": "Search depth for AI players (required if player is 'AI')"
         },
         "time_ms": {
@@ -121,10 +179,16 @@
         }
       },
       "if": {
-        "properties": { "player": { "const": "AI" } }
+        "properties": {
+          "player": {
+            "const": "AI"
+          }
+        }
       },
       "then": {
-        "required": ["depth"]
+        "required": [
+          "depth"
+        ]
       }
     },
     "coordinate": {
@@ -153,24 +217,46 @@
     },
     "position": {
       "anyOf": [
-        { "$ref": "#/$defs/coordinate" },
-        { "$ref": "#/$defs/notation" }
+        {
+          "$ref": "#/$defs/coordinate"
+        },
+        {
+          "$ref": "#/$defs/notation"
+        }
       ],
       "description": "Move position: either [row, col] 0-indexed array or notation string (e.g. \"A2\", \"J10\")."
     },
     "scoring_entry": {
       "type": "object",
       "description": "Result from a single evaluator step during AI move selection",
-      "required": ["player", "evaluator", "evaluated_moves", "score", "time_ms"],
+      "required": [
+        "player",
+        "evaluator",
+        "evaluated_moves",
+        "score",
+        "time_ms"
+      ],
       "properties": {
         "player": {
           "type": "string",
-          "enum": ["current", "opponent"],
+          "enum": [
+            "current",
+            "opponent"
+          ],
           "description": "Whose perspective this evaluator checked: 'current' (AI to move) or 'opponent'"
         },
         "evaluator": {
           "type": "string",
-          "enum": ["have_win", "block_threat", "compound_three", "have_vct", "block_vct", "block_open_three", "forcing_four", "minimax"],
+          "enum": [
+            "have_win",
+            "block_threat",
+            "compound_three",
+            "have_vct",
+            "block_vct",
+            "block_open_three",
+            "forcing_four",
+            "minimax"
+          ],
           "description": "Name of the evaluator step"
         },
         "evaluated_moves": {

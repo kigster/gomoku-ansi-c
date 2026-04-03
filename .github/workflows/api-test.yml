@@ -1,0 +1,57 @@
+name: API Tests
+
+on:
+  push:
+    branches: ['**']
+    paths: ['api/**', 'iac/cloud_sql/setup.sql']
+  pull_request:
+    branches: [main]
+    paths: ['api/**', 'iac/cloud_sql/setup.sql']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: gomoku_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U testuser -d gomoku_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      ENVIRONMENT: ci
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Apply database schema
+        env:
+          PGPASSWORD: testpass
+        run: >
+          psql -h localhost -U testuser -d gomoku_test
+          -f ../iac/cloud_sql/setup.sql
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --group test
+
+      - name: Run tests
+        run: uv run python -m pytest tests/ -v

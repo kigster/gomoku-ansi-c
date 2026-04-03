@@ -1,20 +1,22 @@
 #!/bin/bash
 set -e
 
-# Default values
 REGION="us-central1"
 REPO_NAME="gomoku-repo"
-BACKEND_IMAGE_NAME="gomoku-httpd"
-FRONTEND_IMAGE_NAME="gomoku-frontend"
-
-export PROJECT_ID="fine-booking-486503-k7"
-
+export PROJECT_ID="${PROJECT_ID:-fine-booking-486503-k7}"
 
 if [ -z "$PROJECT_ID" ]; then
     echo "Error: PROJECT_ID environment variable is not set."
-    echo "Usage: export PROJECT_ID=your-project-id && ./deploy.sh"
     exit 1
 fi
+
+if [ -z "$TF_VAR_jwt_secret" ]; then
+    echo "Error: TF_VAR_jwt_secret must be set for the API service."
+    echo "Usage: export TF_VAR_jwt_secret='your-secret' && ./deploy.sh"
+    exit 1
+fi
+
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 echo "Starting deployment for Project: $PROJECT_ID, Region: $REGION"
 
@@ -23,47 +25,45 @@ echo "Initializing Terraform..."
 terraform init -upgrade
 
 # 2. Create Artifact Registry Repository (and enable APIs)
-echo "Ensuring Artifact Registry Repository exists..."
+echo "Ensuring APIs and registry exist..."
 terraform apply -target=google_project_service.run_api \
     -target=google_project_service.artifact_registry_api \
     -target=google_project_service.cloudbuild_api \
+    -target=google_project_service.sqladmin_api \
     -target=google_artifact_registry_repository.repo \
     -var="project_id=$PROJECT_ID" \
     -var="region=$REGION" \
     -var="container_image=placeholder" \
+    -var="jwt_secret=$TF_VAR_jwt_secret" \
     -auto-approve
 
-# 3. Configure Docker auth for Artifact Registry
+# 3. Configure Docker auth
 gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
 
-# 4. Build and Push Backend Image
-BACKEND_FULL_IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$BACKEND_IMAGE_NAME:latest"
-echo "Building backend Docker image for linux/amd64..."
-docker buildx build --platform linux/amd64 -t "$BACKEND_FULL_IMAGE" --load ../../
+# 4. Build and Push all images
+REGISTRY="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME"
 
-echo "Pushing backend image to $BACKEND_FULL_IMAGE..."
-docker push "$BACKEND_FULL_IMAGE"
+HTTPD_IMAGE="$REGISTRY/gomoku-httpd:latest"
+echo "Building gomoku-httpd for linux/amd64..."
+docker buildx build --platform linux/amd64 -t "$HTTPD_IMAGE" --load "$REPO_ROOT/gomoku-c/"
+docker push "$HTTPD_IMAGE"
 
-# 5. Build and Push Frontend Image
-FRONTEND_FULL_IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$FRONTEND_IMAGE_NAME:latest"
-echo "Building frontend Docker image for linux/amd64..."
-docker buildx build --platform linux/amd64 -t "$FRONTEND_FULL_IMAGE" --load ../../frontend/
+API_IMAGE="$REGISTRY/gomoku-api:latest"
+echo "Building gomoku-api for linux/amd64 (includes frontend)..."
+docker buildx build --platform linux/amd64 -t "$API_IMAGE" --load "$REPO_ROOT/api/"
+docker push "$API_IMAGE"
 
-echo "Pushing frontend image to $FRONTEND_FULL_IMAGE..."
-docker push "$FRONTEND_FULL_IMAGE"
-
-# 6. Deploy both Cloud Run Services
+# 5. Deploy all Cloud Run Services
 echo "Deploying Cloud Run Services..."
 terraform apply \
     -var="project_id=$PROJECT_ID" \
     -var="region=$REGION" \
-    -var="container_image=$BACKEND_FULL_IMAGE" \
-    -var="frontend_image=$FRONTEND_FULL_IMAGE" \
+    -var="container_image=$HTTPD_IMAGE" \
+    -var="api_image=$API_IMAGE" \
+    -var="jwt_secret=$TF_VAR_jwt_secret" \
     -auto-approve
 
 echo ""
 echo "Deployment Complete!"
-echo "Backend URL:"
-terraform output service_url
-echo "Frontend URL:"
-terraform output frontend_url
+echo "Backend (internal):  $(terraform output -raw httpd_url)"
+echo "API (public):        $(terraform output -raw api_url)"

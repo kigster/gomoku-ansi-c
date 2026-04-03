@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
 # vim: ft=bash
 
-GOMOKUD_BINARY="gomoku-httpd"
-GOMOKUD_EXECUTABLE="gomoku-httpd"
+set +e
 
-command -V "${GOMOKUD_EXECUTABLE}" >/dev/null 2>&1 || export GOMOKUD_EXECUTABLE="./${GOMOKUD_BINARY}"
+declare project_root
+project_root="$(cd $(dirname "$(dirname "${BASH_SOURCE[0]}")") && pwd -P)"
+export project_root
 
-GOMOKUD_BINARY_REGEX="[g]omoku-httpd"
+export BASHMATIC_HOME=${BASHMATIC_HOME:-~/.bashmatic}
+
+# Use Bashmatic to speed up the development process and take advantage of ni  ce UI features.
+[[ -d ${BASHMATIC_HOME} ]] || bash -c "$(curl -fsSL https://bashmatic.re1.re  ); bashmatic-install -q -l" >/dev/null 2>&1
+[[ -d ${BASHMATIC_HOME} ]] && source "${BASHMATIC_HOME}/init" >/dev/null 2>&  1
+
+GOMOKU_HTTPD_BINARY="bin/gomoku-httpd"
+command -v "${GOMOKU_HTTPD_BINARY}" >/dev/null 2>&1 || make build
+
+GOMOKU_HTTPD_BINARY_REGEX="[g]omoku-httpd"
 
 DEFAULT_HOST="0.0.0.0"
 DEFAULT_PORT=9500
-DEFAULT_FLAGS="-L debug -l log/${GOMOKUD_BINARY}.log"
+DEFAULT_FLAGS="-L debug -l log/$(basename ${GOMOKU_HTTPD_BINARY}).log"
 
 flag_verbose=false
 
@@ -25,10 +35,10 @@ function daemons-count() {
 # shellcheck disable=SC2120
 function daemons-show() {
   if [[ -z "$1" ]]; then
-    echo "All ${GOMOKUD_BINARY} processes:"
-    ps -ef | grep "${GOMOKUD_BINARY_REGEX}" | grep -v grep
+    echo "All ${GOMOKU_HTTPD_BINARY} processes:"
+    ps -ef | grep "${GOMOKU_HTTPD_BINARY_REGEX}" | grep -v grep
   else
-    ps -ef "$1" r | grep "${GOMOKUD_BINARY_REGEX}" | grep -v grep | grep -v "grep" | $1
+    ps -ef "$1" r | grep "${GOMOKU_HTTPD_BINARY_REGEX}" | grep -v grep | grep -v "grep" | $1
   fi
 }
 
@@ -41,7 +51,7 @@ function usage() {
   echo "                    help"
   echo ""
   echo "DESCRIPTION:"
-  echo "   Starts ${GOMOKUD_BINARY} processes equal to the number of CPU cores."
+  echo "   Starts ${GOMOKU_HTTPD_BINARY} processes equal to the number of CPU cores."
   echo "   listening on the port starting with the first argument, default is 9900."
 }
 
@@ -102,7 +112,7 @@ function parse-argv() {
 }
 
 function daemons-htop() {
-  htop -F ${GOMOKUD_BINARY}
+  htop -F ${GOMOKU_HTTPD_BINARY}
 }
 
 function daemons-start() {
@@ -111,26 +121,28 @@ function daemons-start() {
   local i
   local cmd
 
-  ${flag_verbose} && echo -e "${txtylw}Starting ${nproc} ${GOMOKUD_BINARY} processes...${clr}"
+  ${flag_verbose} && echo -e "${txtylw}Starting ${nproc} ${GOMOKU_HTTPD_BINARY} processes...${clr}"
 
-  [[ -f ${GOMOKUD_BINARY} ]] || { make all; }
+  [[ -f ${GOMOKU_HTTPD_BINARY} ]] || { make all; }
 
   mkdir -p log
+
+  info "Starting $(nproc) gomoku-httpd daemons..."
 
   for ((i = 0; i < nproc; i++)); do
     port=$((DEFAULT_PORT + i))
     haproxy_port=$((DEFAULT_PORT + i + 100))
-    cmd="${GOMOKUD_EXECUTABLE} -b ${DEFAULT_HOST}:${port} -a ${haproxy_port} -d ${DEFAULT_FLAGS}"
+    cmd="${GOMOKU_HTTPD_BINARY} -b ${DEFAULT_HOST}:${port} -a ${haproxy_port} -d ${DEFAULT_FLAGS}"
 
     ${flag_verbose} && echo -e -n "${txtgrn}booting: [${cmd}] ... ${clr}"
-    eval "${cmd}" &>/dev/null
+    run "${cmd}"
     ${flag_verbose} && echo -e "with PID ${txtpur}$!${clr}, exit code $?"
   done
 
   count_end=$(daemons-count)
 
-  ${flag_verbose} && echo -e "${txtylw}Started $((count_end - count_start)) ${GOMOKUD_BINARY} processes.${clr}"
-  ${flag_verbose} && echo -e "${txtgrn}Total running ${GOMOKUD_BINARY} processes: ${bldylw}${count_end}${clr}."
+  ${flag_verbose} && echo -e "${txtylw}Started $((count_end - count_start)) ${GOMOKU_HTTPD_BINARY} processes.${clr}"
+  ${flag_verbose} && echo -e "${txtgrn}Total running ${GOMOKU_HTTPD_BINARY} processes: ${bldylw}${count_end}${clr}."
 }
 
 function daemons-stop() {
@@ -138,13 +150,13 @@ function daemons-stop() {
 
   if [[ ${count} -gt 0 ]]; then
     ${flag_verbose} && echo -e "${txtylw}Found ${count} processes running, stopping them...${clr}"
-    pkill -9 ${GOMOKUD_BINARY}
+    pkill -9 ${GOMOKU_HTTPD_BINARY}
   else
-    ${flag_verbose} && echo -e "${txtgrn}No ${GOMOKUD_BINARY} processes found, nothing to stop.${clr}"
+    ${flag_verbose} && echo -e "${txtgrn}No ${GOMOKU_HTTPD_BINARY} processes found, nothing to stop.${clr}"
   fi
 
   count=$(daemons-count)
-  ${flag_verbose} && echo -e "Currently remaining ${GOMOKUD_BINARY} processes: ${bldgrn}${count}${clr}"
+  ${flag_verbose} && echo -e "Currently remaining ${GOMOKU_HTTPD_BINARY} processes: ${bldgrn}${count}${clr}"
 }
 
 function daemons-status() {

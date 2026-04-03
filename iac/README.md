@@ -1,245 +1,141 @@
-# Infrastructure as Code for Gomoku AI Platform
+# Infrastructure — Gomoku
 
-This directory contains configuration files and Kubernetes manifests for deploying the Gomoku AI backend as a highly available, scalable service across multiple availability zones.
+Deployment configuration for Google Cloud Run and Cloud SQL.
 
-## Architecture Overview
+## Architecture
 
-```mermaid
----
-config:
-  theme: base
-  layout: dagre
----
-flowchart LR
- subgraph AZA["Availability Zone A"]
-        LBA["Load Balancer A<br>nginx + haproxy"]
-        WAA1["Worker A1"]
-        WAA2["Worker A2"]
-        WAA3["Worker A3"]
-  end
- subgraph AZB["Availability Zone B"]
-        LBB["Load Balancer B<br>nginx + haproxy"]
-        WBB1["Worker B1"]
-        WBB2["Worker B2"]
-        WBB3["Worker B3"]
-  end
-    DNS["DNS Round Robin"] --> LBA & LBB
-    LBA --> WAA1 & WAA2 & WAA3
-    LBB --> WBB1 & WBB2 & WBB3
-    LBA -. primary .-> WAA1 & WAA2 & WAA3
-    LBA -. backup .-> WBB1 & WBB2 & WBB3
-    LBB -. primary .-> WBB1 & WBB2 & WBB3
-    LBB -. backup .-> WAA1 & WAA2 & WAA3
+```
+Internet → Cloud Run (frontend/nginx) → Cloud Run (FastAPI) → Cloud Run (gomoku-httpd)
+                                              ↓
+                                         Cloud SQL (PostgreSQL 17)
 ```
 
-### Key Design Principles
+- **gomoku-frontend** — nginx serving React SPA, proxies API calls to FastAPI. Public-facing.
+- **gomoku-api** — FastAPI handling auth, game save, scoring, leaderboard. Proxies `/game/play` to gomoku-httpd. Internal only.
+- **gomoku-httpd** — C game engine, stateless, single-threaded. Internal only.
+- **Cloud SQL** — PostgreSQL 17 (`gomoku-db`), private IP, IAM auth.
 
-1. **Zone Affinity**: Each load balancer routes primarily to workers in its own AZ to minimize latency and cross-AZ data transfer costs.
-
-2. **Automatic Overflow**: When the primary zone is overloaded, traffic automatically overflows to the backup zone.
-
-3. **HAProxy Agent-Check**: The `gomoku-httpd` daemon exposes a separate TCP port (8788) that responds with `ready` or `drain` based on whether it's currently processing a request. This enables intelligent routing to idle servers.
-
-4. **Single-Threaded Optimization**: Each worker pod is allocated exactly 1 CPU core, matching the single-threaded nature of the minimax AI algorithm.
+All three Cloud Run services scale independently. The frontend and API handle
+many concurrent connections; gomoku-httpd is limited to 1 request per instance
+(single-threaded) and auto-scales to match demand.
 
 ## Directory Structure
 
 ```
 iac/
-├── README.md                     # This file
-├── config/                       # Raw configuration files for nginx and haproxy
-│   ├── nginx.conf                # nginx config for SSL termination and routing
-│   ├── haproxy-az-a.cfg          # HAProxy config for AZ-a (primary: zone-a workers)
-│   └── haproxy-az-b.cfg          # HAProxy config for AZ-b (primary: zone-b workers)
-├── k8s/                          # Kubernetes manifests
-│   ├── kustomization.yaml        # Kustomize configuration
-│   ├── namespace.yaml            # Namespace definition
-│   ├── configmaps.yaml           # ConfigMaps for nginx/haproxy
-│   ├── gomoku-workers-az-a.yaml  # Worker deployment for AZ-a
-│   ├── gomoku-workers-az-b.yaml  # Worker deployment for AZ-b
-│   ├── loadbalancer-az-a.yaml    # Load balancer for AZ-a
-│   └── loadbalancer-az-b.yaml    # Load balancer for AZ-b
-└── (legacy files)
-    ├── gomoku-deployment.yaml    # Legacy single-zone deployment
-    ├── gomoku-service.yaml       # Legacy service
-    └── haproxy.yaml              # Legacy HAProxy config
+├── cloud_run/           # Terraform + deploy scripts for Cloud Run
+│   ├── main.tf          # Three Cloud Run services + IAM
+│   ├── variables.tf     # Project ID, region, images, JWT secret
+│   ├── outputs.tf       # Service URLs
+│   ├── deploy.sh        # First-time deploy (terraform init + apply)
+│   └── update.sh        # Update one or all services (build + push + gcloud)
+├── cloud_sql/           # Database setup
+│   ├── setup.sql        # Schema: users, games, views, functions
+│   ├── create-instance.sh  # Create Cloud SQL instance
+│   └── resolve-geo.sh   # Backfill IP geolocation data
+├── local/               # Local development configs (used by bin/gctl)
+│   ├── envoy/           # Envoy proxy config for local perf testing
+│   └── templates/       # Config templates (envoy, nginx)
+└── README.md            # This file
 ```
 
-## Deployment Instructions
+## First-Time Setup
 
-### Prerequisites
-
-- A Kubernetes cluster with nodes in at least two availability zones
-- `kubectl` configured to connect to your cluster
-- Docker image `gomoku-httpd:latest` available in your registry
-
-### Quick Start with Kustomize
+### 1. Create Cloud SQL Instance
 
 ```bash
-# Deploy all resources
-kubectl apply -k iac/k8s/
-
-# Verify deployment
-kubectl get all -n gomoku
-
-# Check worker pods
-kubectl get pods -n gomoku -l app.kubernetes.io/component=worker
-
-# Check load balancer services
-kubectl get svc -n gomoku -l app.kubernetes.io/component=loadbalancer
+cd iac/cloud_sql
+./create-instance.sh
 ```
 
-### Customizing the Deployment
+This creates a PostgreSQL 17 instance (`gomoku-db`) with no public IP,
+applies the schema, and connects it to the Cloud Run services.
 
-1. **Change replica count**: Edit `spec.replicas` in `gomoku-workers-az-*.yaml`
-
-2. **Change image**: Update `kustomization.yaml`:
-
-   ```yaml
-   images:
-     - name: gomoku-httpd
-       newName: your-registry/gomoku-httpd
-       newTag: v1.0.0
-   ```
-
-3. **Add TLS certificates**: Create a secret:
-
-   ```bash
-   kubectl create secret tls gomoku-tls-cert \
-     --cert=path/to/cert.pem \
-     --key=path/to/key.pem \
-     -n gomoku
-   ```
-
-### Manual Deployment (without Kustomize)
+### 2. Deploy to Cloud Run
 
 ```bash
-cd iac/k8s/
-kubectl apply -f namespace.yaml
-kubectl apply -f configmaps.yaml
-kubectl apply -f gomoku-workers-az-a.yaml
-kubectl apply -f gomoku-workers-az-b.yaml
-kubectl apply -f loadbalancer-az-a.yaml
-kubectl apply -f loadbalancer-az-b.yaml
+# Set the JWT secret (generate a strong one for production)
+export TF_VAR_jwt_secret="$(openssl rand -base64 32)"
+
+# Build all Docker images and deploy
+cd iac/cloud_run
+./deploy.sh
 ```
 
-## Non-Kubernetes Deployment
-
-For bare-metal or VM-based deployments:
-
-### Load Balancer Box Setup (per AZ)
-
-1. **Install nginx and haproxy**:
-
-   ```bash
-   apt-get install nginx haproxy
-   ```
-
-2. **Copy configuration**:
-
-   ```bash
-   # For AZ-a load balancer:
-   cp iac/config/nginx.conf /etc/nginx/nginx.conf
-   cp iac/config/haproxy-az-a.cfg /etc/haproxy/haproxy.cfg
-
-   # For AZ-b load balancer:
-   cp iac/config/nginx.conf /etc/nginx/nginx.conf
-   cp iac/config/haproxy-az-b.cfg /etc/haproxy/haproxy.cfg
-   ```
-
-3. **Edit IP addresses** in haproxy config to match your worker IPs
-
-4. **Start services**:
-
-   ```bash
-   systemctl restart nginx
-   systemctl restart haproxy
-   ```
-
-### Worker Setup
-
-1. **Run gomoku-httpd with agent-check**:
-
-   ```bash
-   ./gomoku-httpd -b 0.0.0.0:8787 -a 8788 -d -l /var/log/gomoku.log
-   ```
-
-   Or with Docker:
-
-   ```bash
-   docker run -d -p 8787:8787 -p 8788:8788 gomoku-httpd:latest
-   ```
-
-## HAProxy Agent-Check Protocol
-
-The `gomoku-httpd` daemon implements HAProxy's agent-check protocol on port 8788:
-
-| Response | Meaning |
-|----------|---------|
-| `ready`  | Server is idle, can accept new requests |
-| `drain`  | Server is busy computing a move, don't send new requests |
-
-This allows HAProxy to make intelligent routing decisions based on actual server availability, not just whether the process is running.
-
-### Testing Agent-Check Manually
+Or from the project root:
 
 ```bash
-# Connect to agent port
-nc localhost 8788
-# Server responds with "ready" or "drain"
+export TF_VAR_jwt_secret="$(openssl rand -base64 32)"
+just cr-init
 ```
 
-## Monitoring
+### 3. Point DNS
 
-### HAProxy Statistics
+Point `gomoku.games` (or `app.gomoku.games`) to the frontend service URL
+shown in the deploy output.
 
-Access HAProxy stats at `http://localhost:8404/stats` on each load balancer.
+## Updating Services
 
-### Useful kubectl Commands
+Update all services:
 
 ```bash
-# Watch pod status
-kubectl get pods -n gomoku -w
-
-# Check logs
-kubectl logs -n gomoku -l app.kubernetes.io/component=worker --tail=100
-
-# Get worker endpoints
-kubectl get endpoints -n gomoku gomoku-workers-az-a
-
-# Scale workers
-kubectl scale deployment gomoku-workers-az-a -n gomoku --replicas=10
+just cr-update
 ```
 
-## Cleanup
+Update individual services:
 
 ```bash
-# Delete all resources
-kubectl delete -k iac/k8s/
-
-# Or delete namespace (removes everything)
-kubectl delete namespace gomoku
+cd iac/cloud_run
+./update.sh frontend       # Frontend only
+./update.sh api            # API only
+./update.sh httpd          # Game engine only
+./update.sh api frontend   # Multiple services
 ```
 
-## Interacting with the Service
+## Database Schema
+
+The schema is in `cloud_sql/setup.sql`. Key tables:
+
+- **users** — UUID PK, username, email, password hash, game counters
+- **games** — UUID PK, player name, winner, depth, radius, score, game JSON, IP, geo
+- **password_reset_tokens** — UUID PK, token, expiry
+
+Score formula: `1000 * depth + 50 * radius + f(human_time_seconds)`
+where `f(x)` rewards fast wins and penalizes slow ones.
+
+Views: `leaderboard` (best per player), `top_scores` (global top 100).
+
+## Environment Variables
+
+### FastAPI (`gomoku-api`)
+
+| Variable | Source | Purpose |
+|---|---|---|
+| `GOMOKU_HTTPD_URL` | Terraform (from httpd service URL) | Upstream game engine |
+| `DB_SOCKET` | Terraform (Cloud SQL proxy path) | Database connection |
+| `DB_NAME` | Terraform (`gomoku`) | Database name |
+| `DB_USER` | Terraform (`postgres`) | Database user |
+| `JWT_SECRET` | `TF_VAR_jwt_secret` | JWT signing key |
+
+### Frontend (`gomoku-frontend`)
+
+| Variable | Source | Purpose |
+|---|---|---|
+| `API_URL` | Terraform (from api service host:443) | nginx proxy target |
+
+### Game Engine (`gomoku-httpd`)
+
+No environment variables — all config via CLI args (`-b 0.0.0.0:8787`).
+
+## Local Development
+
+Use `bin/gctl` instead of Cloud Run:
 
 ```bash
-# Health check
-curl http://<LOAD_BALANCER_IP>/health
-
-# Start a new game (X plays first at center)
-curl -X POST http://<LOAD_BALANCER_IP>/gomoku/play \
-  -H "Content-Type: application/json" \
-  -d '{
-    "X": { "player": "AI", "depth": 4 },
-    "O": { "player": "AI", "depth": 4 },
-    "board_size": 15,
-    "radius": 2,
-    "timeout": "none",
-    "winner": "none",
-    "board_state": [],
-    "moves": []
-  }'
+bin/gctl start              # Start nginx, envoy, gomoku-httpd, API, frontend
+bin/gctl start api frontend # Start specific components
+bin/gctl status             # Check what's running
+bin/gctl stop               # Stop everything
 ```
 
-See [doc/HTTPD.md](../doc/HTTPD.md) for complete API documentation and JSON format reference.
+See `bin/gctl -h` for full usage.

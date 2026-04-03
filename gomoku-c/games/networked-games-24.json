@@ -1,0 +1,490 @@
+{
+  "X":{
+    "player":"AI",
+    "depth":5,
+    "time_ms":52133.983
+  },
+  "O":{
+    "player":"AI",
+    "depth":5,
+    "time_ms":17067.113
+  },
+  "board_size":15,
+  "radius":2,
+  "timeout":"none",
+  "undo":true,
+  "undo_limit":5,
+  "winner":"X",
+  "board_state":[
+    ". . . . . . . . . . . . . . .",
+    ". . . X X X X X . . . . . . .",
+    ". . . . . O O O O . . . . . .",
+    ". . . . . X O . X X X O . . .",
+    ". . . X O X O O O O X . . . .",
+    ". X O O O X O . O X . . . . .",
+    ". . O X X O X O O X O . . . .",
+    ". O . X X O X X X X O . . . .",
+    "X . X O X X X O O X . . . . .",
+    ". O . . X O X X O O . . . . .",
+    ". . . X O X O O . . . . . . .",
+    ". . O . . . . . . . . . . . .",
+    ". . . . . . . . . . . . . . .",
+    ". . . . . . . . . . . . . . .",
+    ". . . . . . . . . . . . . . ."
+  ],
+  "moves":[
+    {
+      "X (AI)":"H7",
+      "moves_evaluated":2,
+      "time_ms":0.000
+    },
+    {
+      "O (AI)":"J8",
+      "opponent":100,
+      "time_ms":0.000
+    },
+    {
+      "X (AI)":"G8",
+      "moves_evaluated":160,
+      "score":100,
+      "time_ms":527.819
+    },
+    {
+      "O (AI)":"J6",
+      "moves_evaluated":2,
+      "opponent":1500,
+      "time_ms":0.023
+    },
+    {
+      "X (AI)":"H9",
+      "moves_evaluated":210,
+      "score":100,
+      "opponent":100,
+      "time_ms":1009.348
+    },
+    {
+      "O (AI)":"F7",
+      "moves_evaluated":3,
+      "opponent":1500,
+      "time_ms":0.027
+    },
+    {
+      "X (AI)":"G9",
+      "moves_evaluated":255,
+      "score":2000,
+      "time_ms":1496.220
+    },
+    {
+      "O (AI)":"J9",
+      "moves_evaluated":51,
+      "score":100,
+      "opponent":1500,
+      "time_ms":0.399
+    },
+    {
+      "X (AI)":"J7",
+      "moves_evaluated":1,
+      "score":100,
+      "opponent":500000,
+      "time_ms":0.011
+    },
+    {
+      "O (AI)":"H8",
+      "moves_evaluated":1,
+      "score":100,
+      "opponent":40000,
+      "time_ms":0.009
+    },
+    {
+      "X (AI)":"G7",
+      "moves_evaluated":1,
+      "score":30000,
+      "opponent":1500,
+      "time_ms":0.020
+    },
+    {
+      "O (AI)":"G10",
+      "moves_evaluated":3,
+      "opponent":500000,
+      "time_ms":0.011
+    },
+    {
+      "X (AI)":"G6",
+      "moves_evaluated":1,
+      "score":100000,
+      "opponent":100,
+      "time_ms":0.017
+    },
+    {
+      "O (AI)":"G5",
+      "moves_evaluated":2,
+      "opponent":1000000,
+      "time_ms":0.010
+    },
+    {
+      "X (AI)":"K7",
+      "moves_evaluated":1,
+      "score":100000,
+      "opponent":100,
+      "time_ms":0.019
+    },
+    {
+      "O (AI)":"L7",
+      "moves_evaluated":1,
+      "opponent":1000000,
+      "time_ms":0.016
+    },
+    {
+      "X (AI)":"K8",
+      "moves_evaluated":65,
+      "score":2000,
+      "opponent":30000,
+      "time_ms":0.616
+    },
+    {
+      "O (AI)":"F6",
+      "moves_evaluated":325,
+      "score":2000,
+      "opponent":100,
+      "time_ms":5117.066
+    },
+    {
+      "X (AI)":"E9",
+      "moves_evaluated":325,
+      "time_ms":4142.644
+    },
+    {
+      "O (AI)":"F9",
+      "moves_evaluated":1,
+      "score":100,
+      "opponent":100000,
+      "time_ms":0.017
+    },
+    {
+      "X (AI)":"F8",
+      "moves_evaluated":1,
+      "score":3000,
+      "opponent":500000,
+      "time_ms":0.017
+    },
+    {
+      "O (AI)":"H6",
+      "moves_evaluated":2,
+      "opponent":500000,
+      "time_ms":0.017
+    },
+    {
+      "X (AI)":"D10",
+      "moves_evaluated":1,
+      "score":100000,
+      "time_ms":0.023
+    },
+    {
+      "O (AI)":"C11",
+      "moves_evaluated":1,
+      "opponent":1000000,
+      "time_ms":0.018
+    },
+    {
+      "X (AI)":"E7",
+      "moves_evaluated":410,
+      "score":1500,
+      "opponent":1500,
+      "time_ms":8277.893
+    },
+    {
+      "O (AI)":"H10",
+      "moves_evaluated":2,
+      "score":100,
+      "opponent":500000,
+      "time_ms":0.021
+    },
+    {
+      "X (AI)":"D6",
+      "moves_evaluated":1,
+      "score":100000,
+      "time_ms":0.027
+    },
+    {
+      "O (AI)":"C5",
+      "moves_evaluated":1,
+      "opponent":1000000,
+      "time_ms":0.021
+    },
+    {
+      "X (AI)":"E8",
+      "moves_evaluated":1,
+      "score":30000,
+      "opponent":1500,
+      "time_ms":0.037
+    },
+    {
+      "O (AI)":"E10",
+      "moves_evaluated":3,
+      "score":400,
+      "opponent":500000,
+      "time_ms":0.021
+    },
+    {
+      "X (AI)":"F10",
+      "moves_evaluated":1,
+      "score":100,
+      "opponent":100000,
+      "time_ms":0.021
+    },
+    {
+      "O (AI)":"D8",
+      "moves_evaluated":2,
+      "opponent":100000,
+      "time_ms":0.020
+    },
+    {
+      "X (AI)":"E6",
+      "moves_evaluated":1,
+      "score":100000,
+      "time_ms":0.027
+    },
+    {
+      "O (AI)":"E5",
+      "moves_evaluated":1,
+      "opponent":1000000,
+      "time_ms":0.019
+    },
+    {
+      "X (AI)":"F5",
+      "moves_evaluated":88,
+      "score":500,
+      "opponent":30000,
+      "time_ms":0.933
+    },
+    {
+      "O (AI)":"E4",
+      "moves_evaluated":1,
+      "opponent":100000,
+      "time_ms":0.021
+    },
+    {
+      "X (AI)":"D7",
+      "moves_evaluated":455,
+      "score":1500,
+      "time_ms":13183.381
+    },
+    {
+      "O (AI)":"G4",
+      "moves_evaluated":2,
+      "opponent":500000,
+      "time_ms":0.044
+    },
+    {
+      "X (AI)":"C8",
+      "moves_evaluated":1,
+      "score":100000,
+      "time_ms":0.036
+    },
+    {
+      "O (AI)":"B9",
+      "moves_evaluated":1,
+      "opponent":1000000,
+      "time_ms":0.025
+    },
+    {
+      "X (AI)":"D4",
+      "moves_evaluated":90,
+      "opponent":2000,
+      "time_ms":1.000
+    },
+    {
+      "O (AI)":"D5",
+      "moves_evaluated":1,
+      "score":500,
+      "opponent":100000,
+      "time_ms":0.024
+    },
+    {
+      "X (AI)":"B5",
+      "moves_evaluated":1,
+      "opponent":100000,
+      "time_ms":0.024
+    },
+    {
+      "O (AI)":"C6",
+      "moves_evaluated":1,
+      "score":3000,
+      "opponent":100000,
+      "time_ms":0.023
+    },
+    {
+      "X (AI)":"F3",
+      "moves_evaluated":2,
+      "opponent":500000,
+      "time_ms":0.025
+    },
+    {
+      "O (AI)":"B7",
+      "moves_evaluated":1,
+      "score":100000,
+      "opponent":100,
+      "time_ms":0.036
+    },
+    {
+      "X (AI)":"A8",
+      "moves_evaluated":1,
+      "opponent":1000000,
+      "time_ms":0.025
+    },
+    {
+      "O (AI)":"H4",
+      "moves_evaluated":445,
+      "score":500,
+      "time_ms":11947.604
+    },
+    {
+      "X (AI)":"F4",
+      "moves_evaluated":2,
+      "score":500,
+      "opponent":100000,
+      "time_ms":0.024
+    },
+    {
+      "O (AI)":"F2",
+      "moves_evaluated":1,
+      "opponent":100000,
+      "time_ms":0.025
+    },
+    {
+      "X (AI)":"J3",
+      "moves_evaluated":1,
+      "opponent":100000,
+      "time_ms":0.026
+    },
+    {
+      "O (AI)":"G3",
+      "moves_evaluated":1,
+      "score":30000,
+      "opponent":100,
+      "time_ms":0.044
+    },
+    {
+      "X (AI)":"E1",
+      "moves_evaluated":3,
+      "opponent":500000,
+      "time_ms":0.027
+    },
+    {
+      "O (AI)":"G2",
+      "moves_evaluated":1,
+      "score":100000,
+      "time_ms":0.037
+    },
+    {
+      "X (AI)":"G1",
+      "moves_evaluated":2,
+      "opponent":1000000,
+      "time_ms":0.028
+    },
+    {
+      "O (AI)":"J5",
+      "moves_evaluated":1,
+      "score":100000,
+      "time_ms":0.039
+    },
+    {
+      "X (AI)":"K6",
+      "moves_evaluated":1,
+      "score":1500,
+      "opponent":1000000,
+      "time_ms":0.027
+    },
+    {
+      "O (AI)":"K9",
+      "moves_evaluated":2,
+      "opponent":500000,
+      "time_ms":0.028
+    },
+    {
+      "X (AI)":"K5",
+      "moves_evaluated":1,
+      "score":100000,
+      "time_ms":0.039
+    },
+    {
+      "O (AI)":"K4",
+      "moves_evaluated":1,
+      "score":500,
+      "opponent":1000000,
+      "time_ms":0.019
+    },
+    {
+      "X (AI)":"L3",
+      "moves_evaluated":2,
+      "opponent":100000,
+      "time_ms":0.027
+    },
+    {
+      "O (AI)":"J4",
+      "moves_evaluated":1,
+      "score":100000,
+      "opponent":100,
+      "time_ms":0.045
+    },
+    {
+      "X (AI)":"L4",
+      "moves_evaluated":1,
+      "score":100,
+      "opponent":1000000,
+      "time_ms":0.032
+    },
+    {
+      "O (AI)":"L6",
+      "moves_evaluated":97,
+      "score":100,
+      "opponent":400,
+      "time_ms":1.307
+    },
+    {
+      "X (AI)":"K3",
+      "moves_evaluated":480,
+      "score":3000,
+      "opponent":100,
+      "time_ms":17097.094
+    },
+    {
+      "O (AI)":"M3",
+      "moves_evaluated":2,
+      "opponent":500000,
+      "time_ms":0.027
+    },
+    {
+      "X (AI)":"H1",
+      "moves_evaluated":423,
+      "score":100,
+      "time_ms":6396.426
+    },
+    {
+      "O (AI)":"J2",
+      "moves_evaluated":2,
+      "opponent":500000,
+      "time_ms":0.029
+    },
+    {
+      "X (AI)":"F1",
+      "moves_evaluated":1,
+      "score":500000,
+      "time_ms":0.025
+    },
+    {
+      "O (AI)":"H2",
+      "moves_evaluated":1,
+      "score":500000,
+      "opponent":500,
+      "time_ms":0.021
+    },
+    {
+      "X (AI)":"D1",
+      "moves_evaluated":2,
+      "score":1000000,
+      "time_ms":0.025,
+      "winner":true
+    }
+  ]
+}

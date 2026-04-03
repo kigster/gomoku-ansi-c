@@ -1,0 +1,58 @@
+{
+  "enabledPlugins": {
+    "frontend-design@claude-code-plugins": true,
+    "ruby-skills@ruby-skills": true,
+    "ruby-lsp@ruby-skills": true,
+    "rspec@claude-ruby-marketplace": true,
+    "activerecord@claude-ruby-marketplace": true,
+    "iac-terraform@devops-skills": true,
+    "ci-cd@devops-skills": true,
+    "pr-review-toolkit@claude-code-plugins": true,
+    "justfile@motlin-claude-code-plugins": true,
+    "git@motlin-claude-code-plugins": true,
+    "build@motlin-claude-code-plugins": true,
+    "chrome-devtools-mcp@chrome-devtools-plugins": true,
+    "security-guidance@claude-code-plugins": true,
+    "claude-opus-4-5-migration@claude-code-plugins": true,
+    "github@motlin-claude-code-plugins": true,
+    "gitops-workflows@devops-skills": true,
+    "markdown-tasks@motlin-claude-code-plugins": true,
+    "mcp@claude-ruby-marketplace": true,
+    "ruby-lsp@claude-ruby-marketplace": true,
+    "agent-sdk-dev@claude-code-plugins": true
+  },
+  "extraKnownMarketplaces": {
+    "ruby-skills": {
+      "source": {
+        "source": "github",
+        "repo": "st0012/ruby-skills"
+      }
+    },
+    "claude-ruby-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "hoblin/claude-ruby-marketplace"
+      }
+    },
+    "devops-skills": {
+      "source": {
+        "source": "github",
+        "repo": "ahmedasmar/devops-claude-skills"
+      }
+    },
+    "motlin-claude-code-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "motlin/claude-code-plugins"
+      }
+    },
+    "chrome-devtools-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "ChromeDevTools/chrome-devtools-mcp"
+      }
+    }
+  },
+  "effortLevel": "high",
+  "skipDangerousModePermissionPrompt": true
+}

@@ -2,8 +2,13 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import type { GameSettings } from './types'
 import { DEFAULT_SETTINGS } from './constants'
 import { useGameState } from './hooks/useGameState'
-import { trackGameStart, trackGameFinish } from './analytics'
-import NameModal from './components/NameModal'
+import {
+  trackGameStart, trackGameFinish, trackGameAbort, trackUndo,
+  trackModalOpen, trackModalClose, trackLogin, trackLogout,
+  setAnalyticsUser,
+} from './analytics'
+import AlertPanel, { showInfo, showError } from './components/AlertPanel'
+import AuthModal from './components/AuthModal'
 import SettingsPanel from './components/SettingsPanel'
 import Board from './components/Board'
 import GameStatus from './components/GameStatus'
@@ -12,97 +17,80 @@ import PreviousGames from './components/PreviousGames'
 import JsonDebugModal from './components/JsonDebugModal'
 import RulesModal from './components/RulesModal'
 import AboutModal from './components/AboutModal'
+import LeaderboardModal from './components/LeaderboardModal'
 import logo from '../assets/images/logo.png'
 
 const STORAGE_KEY = 'gomoku_player_name'
-const STATS_KEY = 'gomoku_player_stats'
-const HISTORY_KEY = 'gomoku_game_history'
-
-interface PlayerStats {
-  [name: string]: { won: number; lost: number }
-}
-
-export interface GameRecord {
-  name: string
-  result: 'won' | 'lost'
-  humanTimeSec: number
-  date: string
-  depth: number
-  radius: number
-  gameJson?: object
-}
-
-function loadStats(): PlayerStats {
-  try {
-    return JSON.parse(localStorage.getItem(STATS_KEY) || '{}')
-  } catch {
-    return {}
-  }
-}
-
-function loadHistory(): GameRecord[] {
-  try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]')
-  } catch {
-    return []
-  }
-}
-
-interface RecordResultOpts {
-  name: string
-  won: boolean
-  humanTimeMs: number
-  depth: number
-  radius: number
-  gameJson?: object
-}
-
-function recordResult({ name, won, humanTimeMs, depth, radius, gameJson }: RecordResultOpts) {
-  const stats = loadStats()
-  if (!stats[name]) stats[name] = { won: 0, lost: 0 }
-  if (won) stats[name].won++
-  else stats[name].lost++
-  localStorage.setItem(STATS_KEY, JSON.stringify(stats))
-
-  const history = loadHistory()
-  history.push({
-    name,
-    result: won ? 'won' : 'lost',
-    humanTimeSec: Math.round(humanTimeMs / 1000),
-    date: new Date().toLocaleDateString(),
-    depth,
-    radius,
-    gameJson,
-  })
-  // Keep only the last 100 games
-  const trimmed = history.slice(-100)
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed))
-
-  return { stats: stats[name], history: trimmed }
-}
+const TOKEN_KEY = 'gomoku_auth_token'
+const API_BASE = import.meta.env.VITE_API_BASE || ''
 
 export default function App() {
   const [playerName, setPlayerName] = useState<string | null>(
-    () => localStorage.getItem(STORAGE_KEY)
+    () => sessionStorage.getItem(STORAGE_KEY)
+  )
+  const [authToken, setAuthToken] = useState<string | null>(
+    () => sessionStorage.getItem(TOKEN_KEY)
   )
 
-  const handleNameSubmit = useCallback((name: string) => {
-    localStorage.setItem(STORAGE_KEY, name)
-    setPlayerName(name)
-    setStats(loadStats()[name] ?? null)
-    setGameHistory(loadHistory())
+  // Set analytics user from persisted session
+  if (playerName) setAnalyticsUser(playerName)
+
+  // Compute once: does the URL contain a password reset token?
+  const [hasResetToken, setHasResetToken] = useState(
+    () => new URLSearchParams(window.location.search).has('token')
+  )
+
+  const handleAuth = useCallback((username: string, token: string) => {
+    window.history.replaceState({}, '', window.location.pathname)
+    sessionStorage.setItem(STORAGE_KEY, username)
+    sessionStorage.setItem(TOKEN_KEY, token)
+    setPlayerName(username)
+    setAuthToken(token)
+    setHasResetToken(false)
+    setAnalyticsUser(username)
+    trackLogin(username)
+    showInfo(`Welcome, ${username}!`)
+
+    fetch(`${API_BASE}/user/me`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) setStats({ won: data.games_won ?? 0, lost: data.games_lost ?? 0 })
+      })
+      .catch(() => {})
   }, [])
+
+  const handleSessionExpired = useCallback(() => {
+    sessionStorage.removeItem(TOKEN_KEY)
+    setAuthToken(null)
+    showError('Session expired. Please log in again.')
+  }, [])
+
   const [settings, setSettings] = useState<GameSettings>(DEFAULT_SETTINGS)
   const [showSettings, setShowSettings] = useState(false)
-  const [stats, setStats] = useState<{ won: number; lost: number } | null>(
-    () => {
-      const name = localStorage.getItem(STORAGE_KEY)
-      if (!name) return null
-      return loadStats()[name] ?? null
-    }
-  )
-  const [gameHistory, setGameHistory] = useState<GameRecord[]>(() => loadHistory())
+  const [stats, setStats] = useState<{ won: number; lost: number } | null>(null)
   const prevPhaseRef = useRef<string>('idle')
+
+  // Fetch win/loss stats from API on mount
+  useEffect(() => {
+    const token = sessionStorage.getItem(TOKEN_KEY)
+    if (!token) return
+    fetch(`${API_BASE}/user/me`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+      .then(r => {
+        if (r.status === 401) {
+          handleSessionExpired()
+          return null
+        }
+        return r.ok ? r.json() : null
+      })
+      .then(data => {
+        if (data) setStats({ won: data.games_won ?? 0, lost: data.games_lost ?? 0 })
+      })
+      .catch(() => {})
+  }, [handleSessionExpired])
 
   const {
     board,
@@ -128,31 +116,64 @@ export default function App() {
 
   // Record win/loss when game ends
   useEffect(() => {
-    if (prevPhaseRef.current !== 'gameover' && phase === 'gameover' && playerName && winner !== 'draw') {
-      const youWon = winner === settings.playerSide
-      const { stats: updated, history } = recordResult({
-        name: playerName,
-        won: youWon,
-        humanTimeMs,
-        depth: settings.aiDepth,
-        radius: settings.aiRadius,
-        gameJson: gameState ?? undefined,
-      })
-      setStats(updated)
-      setGameHistory(history)
+    if (prevPhaseRef.current !== 'gameover' && phase === 'gameover' && playerName) {
+      if (winner === 'draw') {
+        showInfo('The game ended in a draw!')
+      } else if (winner !== 'none') {
+        const youWon = winner === settings.playerSide
 
-      if (winner === 'X' || winner === 'O') {
+        setStats(prev => {
+          if (!prev) return { won: youWon ? 1 : 0, lost: youWon ? 0 : 1 }
+          return {
+            won: prev.won + (youWon ? 1 : 0),
+            lost: prev.lost + (youWon ? 0 : 1),
+          }
+        })
+
+        if (youWon) {
+          showInfo(`Congratulations ${playerName}! You won!`)
+        } else {
+          showError(`The AI won this round. Better luck next time, ${playerName}!`)
+        }
+
+        // Save game to API
+        if (authToken && gameState) {
+          fetch(`${API_BASE}/game/save`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authToken}`,
+            },
+            body: JSON.stringify({ game_json: gameState }),
+          })
+            .then(r => {
+              if (r.status === 401) {
+                handleSessionExpired()
+                return Promise.reject(r)
+              }
+              return r.ok ? r.json() : Promise.reject(r)
+            })
+            .then(data => {
+              if (data.score > 0) {
+                showInfo(`Score: ${data.score} (Rating: ${data.rating}/100)`)
+              }
+            })
+            .catch(() => {})
+        }
+
         trackGameFinish(
           winner,
           settings.playerSide,
           playerName,
           Math.round(humanTimeMs / 1000),
           Math.round(aiTimeMs / 1000),
+          moveCount,
+          settings.aiDepth,
         )
       }
     }
     prevPhaseRef.current = phase
-  }, [phase, winner, playerName, settings.playerSide, settings.aiDepth, settings.aiRadius, humanTimeMs, aiTimeMs, gameState])
+  }, [phase, winner, playerName, authToken, settings.playerSide, settings.aiDepth, settings.aiRadius, humanTimeMs, aiTimeMs, gameState, handleSessionExpired])
 
   const boardRef = useRef<HTMLDivElement>(null)
   const footerRef = useRef<HTMLElement>(null)
@@ -178,18 +199,28 @@ export default function App() {
     }
   }, [])
 
+  const handleAbort = useCallback(() => { trackGameAbort(); resetGame(); scrollToTop() }, [resetGame, scrollToTop])
+  const handleUndo = useCallback(() => { trackUndo(); undoMove() }, [undoMove])
+
   const [showHistoryModal, setShowHistoryModal] = useState(false)
-  const [showRenameModal, setShowRenameModal] = useState(false)
   const [showRulesModal, setShowRulesModal] = useState(false)
   const [showAboutModal, setShowAboutModal] = useState(false)
+  const [showLeaderboardModal, setShowLeaderboardModal] = useState(false)
   const [showNavMenu, setShowNavMenu] = useState(false)
   const isActive = phase === 'playing' || phase === 'thinking'
 
-  if (!playerName) {
-    return <NameModal onSubmit={handleNameSubmit} />
-  }
+  const needsAuth = !playerName || !authToken || hasResetToken
 
   return (
+    <>
+      <AlertPanel />
+      {needsAuth ? (
+        <AuthModal
+          onAuth={handleAuth}
+          apiBase={API_BASE}
+          initialView={hasResetToken ? 'reset' : undefined}
+        />
+      ) : (
     <div className="min-h-screen relative z-10">
       {/* Navigation Bar */}
       <nav className="bg-neutral-900/95 backdrop-blur-sm border-b border-neutral-800 shadow-lg sticky top-0 z-40">
@@ -203,13 +234,19 @@ export default function App() {
           <div className="hidden md:flex items-center gap-4">
             <JsonDebugModal />
             <button
-              onClick={() => { setShowRulesModal(true); window.scrollTo(0, 0) }}
+              onClick={() => { trackModalOpen('leaderboard'); setShowLeaderboardModal(true); window.scrollTo(0, 0) }}
+              className="text-neutral-400 hover:text-neutral-200 transition-colors px-2 py-1 cursor-pointer"
+            >
+              Leaderboard
+            </button>
+            <button
+              onClick={() => { trackModalOpen('rules'); setShowRulesModal(true); window.scrollTo(0, 0) }}
               className="text-neutral-400 hover:text-neutral-200 transition-colors px-2 py-1 cursor-pointer"
             >
               Rules
             </button>
             <button
-              onClick={() => { setShowAboutModal(true); window.scrollTo(0, 0) }}
+              onClick={() => { trackModalOpen('about'); setShowAboutModal(true); window.scrollTo(0, 0) }}
               className="text-neutral-400 hover:text-neutral-200 transition-colors px-2 py-1 cursor-pointer"
             >
               About
@@ -222,11 +259,18 @@ export default function App() {
               Hello, <span className="text-neutral-200 font-medium">{playerName}</span>
             </button>
             <button
-              onClick={() => { setShowRenameModal(true); window.scrollTo(0, 0) }}
+              onClick={() => {
+                if (playerName) trackLogout(playerName)
+                sessionStorage.removeItem(TOKEN_KEY)
+                sessionStorage.removeItem(STORAGE_KEY)
+                setAnalyticsUser(null)
+                setAuthToken(null)
+                setPlayerName(null)
+              }}
               className="text-neutral-400 hover:text-neutral-200 transition-colors px-2 py-1 cursor-pointer"
-              title="Change your player name"
+              title="Log out and switch accounts"
             >
-              New Player
+              Log Out
             </button>
           </div>
 
@@ -263,6 +307,13 @@ export default function App() {
                             bg-neutral-900 border-b border-neutral-800 shadow-xl">
               <div className="max-w-6xl mx-auto px-4 py-2 flex flex-col font-semibold text-base">
                 <button
+                  onClick={() => { setShowNavMenu(false); setShowLeaderboardModal(true); window.scrollTo(0, 0) }}
+                  className="text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800
+                             transition-colors px-3 py-2.5 text-left rounded cursor-pointer"
+                >
+                  Leaderboard
+                </button>
+                <button
                   onClick={() => { setShowNavMenu(false); setShowRulesModal(true); window.scrollTo(0, 0) }}
                   className="text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800
                              transition-colors px-3 py-2.5 text-left rounded cursor-pointer"
@@ -287,16 +338,21 @@ export default function App() {
                              transition-colors px-3 py-2.5 text-left rounded cursor-pointer"
                 >
                   Game History
-                  {gameHistory.length > 0 && (
-                    <span className="ml-1 text-neutral-500 text-xs">({gameHistory.length})</span>
-                  )}
                 </button>
                 <button
-                  onClick={() => { setShowNavMenu(false); setShowRenameModal(true); window.scrollTo(0, 0) }}
+                  onClick={() => {
+                    setShowNavMenu(false)
+                    if (playerName) trackLogout(playerName)
+                    sessionStorage.removeItem(TOKEN_KEY)
+                    sessionStorage.removeItem(STORAGE_KEY)
+                    setAnalyticsUser(null)
+                    setAuthToken(null)
+                    setPlayerName(null)
+                  }}
                   className="text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800
                              transition-colors px-3 py-2.5 text-left rounded cursor-pointer"
                 >
-                  New Player
+                  Log Out
                 </button>
               </div>
             </div>
@@ -329,7 +385,18 @@ export default function App() {
               <div className="mt-5">
                 {phase === 'idle' && (
                   <button
-                    onClick={() => { setShowSettings(false); trackGameStart(settings); startGame(); scrollToBottom(); }}
+                    onClick={() => {
+                      setShowSettings(false)
+                      trackGameStart(settings)
+                      if (authToken) {
+                        fetch(`${API_BASE}/game/start`, {
+                          method: 'POST',
+                          headers: { 'Authorization': `Bearer ${authToken}` },
+                        }).catch(() => {})
+                      }
+                      startGame()
+                      scrollToBottom()
+                    }}
                     className="w-full py-4 rounded-xl text-xl font-bold font-heading
                                bg-amber-600 hover:bg-amber-500 active:bg-amber-700
                                shadow-lg shadow-amber-900/30 transition-all
@@ -340,7 +407,7 @@ export default function App() {
                 )}
                 {phase === 'gameover' && (
                   <button
-                    onClick={() => { resetGame(); scrollToTop(); }}
+                    onClick={handleAbort}
                     className="w-full py-3 rounded-xl text-lg font-semibold font-heading
                                bg-neutral-700 hover:bg-neutral-600 transition-colors"
                   >
@@ -354,7 +421,7 @@ export default function App() {
                 <div className="hidden lg:block mt-auto pt-5">
                   {settings.undoEnabled && (
                     <button
-                      onClick={undoMove}
+                      onClick={handleUndo}
                       disabled={phase !== 'playing' || moveCount < 2}
                       className="w-full py-3 rounded-xl text-lg font-bold font-heading
                                  bg-amber-600 hover:bg-amber-500 active:bg-amber-700
@@ -366,7 +433,7 @@ export default function App() {
                   )}
                   <ThinkingTimer phase={phase} playerName={playerName} />
                   <button
-                    onClick={() => { resetGame(); scrollToTop(); }}
+                    onClick={handleAbort}
                     className="w-full mt-3 py-3 rounded-xl text-lg font-bold font-heading
                                bg-amber-600 hover:bg-amber-500 active:bg-amber-700
                                shadow-lg shadow-amber-900/30 transition-all"
@@ -402,7 +469,7 @@ export default function App() {
                   <ThinkingTimer phase={phase} playerName={playerName} />
                   <div className="flex justify-between mt-1">
                     <button
-                      onClick={() => { resetGame(); scrollToTop(); }}
+                      onClick={handleAbort}
                       className="w-[30%] py-2 rounded-xl text-sm font-bold font-heading
                                  bg-amber-600 hover:bg-amber-500 active:bg-amber-700
                                  shadow-lg shadow-amber-900/30 transition-all"
@@ -411,7 +478,7 @@ export default function App() {
                     </button>
                     {settings.undoEnabled && (
                       <button
-                        onClick={undoMove}
+                        onClick={handleUndo}
                         disabled={phase !== 'playing' || moveCount < 2}
                         className="w-[30%] py-2 rounded-xl text-sm font-bold font-heading
                                    bg-amber-600 hover:bg-amber-500 active:bg-amber-700
@@ -464,19 +531,12 @@ export default function App() {
       </footer>
 
       {/* Overlay Modals */}
-      {showRenameModal && (
-        <NameModal
-          currentName={playerName}
-          onSubmit={(name) => {
-            handleNameSubmit(name)
-            setShowRenameModal(false)
-          }}
-          onClose={() => setShowRenameModal(false)}
-        />
-      )}
-      {showHistoryModal && <PreviousGames history={gameHistory} onClose={() => setShowHistoryModal(false)} />}
-      {showRulesModal && <RulesModal onClose={() => setShowRulesModal(false)} />}
-      {showAboutModal && <AboutModal onClose={() => setShowAboutModal(false)} />}
+      {showHistoryModal && <PreviousGames authToken={authToken!} apiBase={API_BASE} onClose={() => { trackModalClose('history'); setShowHistoryModal(false) }} />}
+      {showRulesModal && <RulesModal onClose={() => { trackModalClose('rules'); setShowRulesModal(false) }} />}
+      {showAboutModal && <AboutModal onClose={() => { trackModalClose('about'); setShowAboutModal(false) }} />}
+      {showLeaderboardModal && <LeaderboardModal apiBase={API_BASE} onClose={() => { trackModalClose('leaderboard'); setShowLeaderboardModal(false) }} />}
     </div>
+      )}
+    </>
   )
 }

@@ -1,0 +1,31 @@
+# Gomoku Monorepo
+# C engine: gomoku-c/Makefile — API: api/ — Frontend: frontend/
+
+set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+
+[no-exit-message]
+recipes:
+    @just --choose
+
+# Build C game engine binaries
+build: install
+    @npm run build
+
+# Clean and rebuild the game binary
+install:
+    npm install
+
+# Clean all build artifacts
+clean:
+    rm -rf node_modules
+
+# Run frontend tests
+test:
+    npm test
+
+# Copy frontend dist into API public directory
+build-production: build
+    rm -rf ../api/public
+    mkdir -p ../api/public
+    cp -rpv dist ../api/public
+

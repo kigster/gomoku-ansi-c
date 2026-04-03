@@ -70,7 +70,7 @@ The codebase follows a clean modular design with clear separation of concerns. E
 > This excludes the network/httpd part of this project. You can find the documentation about that in [this document](HTTPD.md).
 
 ```
-src/
+gomoku-c/src/
 ├── main.c     - Entry point and main game loop orchestration
 ├── gomoku.c/h - Core game rules, pattern recognition, evaluation
 ├── board.c/h  - Board state management and memory allocation
@@ -369,13 +369,13 @@ The test suite uses Google Test (C++) to validate all components:
 
 ```bash
 # Setup (first time only)
-make googletest
+make -C gomoku-c googletest
 
 # Run all tests
-make test
+make -C gomoku-c test
 
 # Alternative: CMake build
-make cmake-test
+make -C gomoku-c cmake-test
 ```
 
 **Test Coverage**: Core game logic, AI algorithms, edge cases, and integration scenarios.
@@ -385,10 +385,10 @@ make cmake-test
 ### Make Build (Traditional)
 
 ```bash
-make build        # Build game executable
-make test         # Build and run tests
-make clean        # Remove build artifacts
-make rebuild      # Clean + build
+make -C gomoku-c all       # Build game executable
+make -C gomoku-c test      # Build and run tests
+make -C gomoku-c clean     # Remove build artifacts
+make -C gomoku-c rebuild   # Clean + build
 ```
 
 **Compiler Flags**:
@@ -400,9 +400,9 @@ make rebuild      # Clean + build
 ### CMake Build (Modern)
 
 ```bash
-make cmake-build  # Build with CMake
-make cmake-test   # Test with CMake
-make cmake-clean  # Clean CMake build
+make -C gomoku-c cmake-build  # Build with CMake
+make -C gomoku-c cmake-test   # Test with CMake
+make -C gomoku-c cmake-clean  # Clean CMake build
 ```
 
 **Features**:
@@ -552,14 +552,14 @@ The modular design provides clear extension points for new features:
 # Clone and build
 git clone https://github.com/kigster/gomoku-ansi-c
 cd gomoku-ansi-c
-make build
+make -C gomoku-c all    # or: just build
 
 # Run game
-gomoku
+bin/gomoku
 
 # Run tests
-./tests/setup  # First time only
-make test
+gomoku-c/tests/tests-setup  # First time only
+make -C gomoku-c test
 ```
 
 ### Common Development Tasks
@@ -569,7 +569,7 @@ make test
 1. Identify affected modules
 2. Update data structures if needed
 3. Implement feature in module
-4. Add tests in `tests/gomoku_test.cpp`
+4. Add tests in `gomoku-c/tests/gomoku_test.cpp`
 5. Update documentation
 
 **Debugging AI Issues**:

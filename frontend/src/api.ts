@@ -27,7 +27,7 @@ export async function postGameState(
   let delayMs = 100
   let attempt = 0
 
-  const url = `${API_BASE}/gomoku/play`
+  const url = `${API_BASE}/game/play`
 
   while (true) {
     let response: Response
@@ -77,7 +77,7 @@ export async function postGameState(
 
 export async function checkHealth(): Promise<boolean> {
   try {
-    const response = await fetch(`${API_BASE}/health`)
+    const response = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) })
     return response.ok
   } catch {
     return false

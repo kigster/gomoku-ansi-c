@@ -3,8 +3,10 @@ name: C99 Test Suite
 on:
   push:
     branches: [ '**' ]
+    paths: ['gomoku-c/**']
   pull_request:
     branches: [ main ]
+    paths: ['gomoku-c/**']
 
 jobs:
   build-and-test:
@@ -12,7 +14,11 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest]
-        
+
+    defaults:
+      run:
+        working-directory: gomoku-c
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -22,11 +28,13 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y gcc g++ make cmake
+      working-directory: .
 
     - name: Install dependencies (macOS)
       if: matrix.os == 'macos-latest'
       run: |
         brew install gcc make cmake
+      working-directory: .
 
     - name: Build Google Test
       run: |
@@ -48,17 +56,13 @@ jobs:
 
     - name: Test binary execution
       run: |
-        # Test that the binary runs and shows help
-        ./gomoku --help
-        
-        # Test that the binary can be invoked with various flags
-        timeout 5s ./gomoku --level easy --board 15 || true
+        ./bin/gomoku --help
+        timeout 5s ./bin/gomoku --level easy --board 15 || true
         echo "Binary execution test completed"
 
     - name: Check for memory leaks (Ubuntu only)
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get install -y valgrind
-        # Run a quick memory check on the test binary
-        valgrind --leak-check=summary --error-exitcode=1 ./test_gomoku || echo "Memory check completed" 
-
+        valgrind --leak-check=summary --error-exitcode=1 ./bin/test_gomoku || echo "Memory check completed"
+      working-directory: gomoku-c

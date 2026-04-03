@@ -1,90 +1,65 @@
-/build
-/iac/config/haproxy.cfg
-/iac/config/nginx.conf
-/.idea
-/tests/evals/results/*
-gomoku
-gomoku-httpd
-gomoku-http-client
-test_gomoku
-test_daemon
-**/.DS_Store
-**/*.log
-tests/googletest
-# CMake specific files and directories
-/build*/                  # Common build directories (e.g., build/, build-release/, etc.)
-/out/                     # Another common build directory name
-CMakeCache.txt            # CMake cache file
-CMakeFiles/               # Directory for generated build system files
-cmake_install.cmake       # Installation script
-install_manifest.txt      # Manifest of installed files
-CTestTestfile.cmake       # CTest generated file
-CmakeScripts/             # Directory for generated scripts
-Testing/                  # Directory for test results
-_deps/                    # Directory for dependencies managed by CMake's FetchContent
-compile_commands.json     # Optional, but often generated and ignorable
-
-# IDE-specific directories and files
-/.idea/                   # CLion IDE files
-.vscode/                  # VS Code settings (optional, can be kept if desired)
-*.VC.opendb               # Visual Studio files
-*.VC.db
-/bld/                     # Visual Studio build directory
-.vs/                      # Visual Studio cache/options directory
-*.user                    # User-specific files for various IDEs (e.g., CMakeLists.txt.user)
+# ─── C build artifacts ────────────────────────────────────────────────────────
+.secret
+gomoku-c/bin/
+gomoku-c/tests/googletest/
+gomoku-c/tests/evals/results/*
+gomoku-c/src/vendor/json-c/build/
+gomoku-c/games/*.json
 **/*.o
 **/*.a
+**/*.so
+**/*.dylib
 
-# Compiled object files and executables
-*.o                       # Object files
-*.obj
-*.d
-*.os
-*.exe                     # Executables (Windows)
-*.out                     # Executables (Unix-like)
-*.app                     # Executables (macOS)
-*.dll                     # Dynamic libraries (Windows)
-*.lib                     # Static/Import libraries (Windows)
-*.so                      # Shared libraries (Unix-like)
-*.a                       # Static libraries (Unix-like)
-*.dylib                   # Dynamic libraries (macOS)
+# ─── CMake ────────────────────────────────────────────────────────────────────
+**/build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+_deps/
+compile_commands.json
 
-# Compiler/Linker output
-*.map
-*.stackdump
-*.manifest
+# ─── IDE ──────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+.vs/
+*.swp
+*.swo
+*.user
+*.VC.opendb
+*.VC.db
+# ─── Environment ──────────────────────────────────────────────────────────────
+.env
+.env.local
 
-# Miscellaneous
-.DS_Store                 # macOS Finder files
-*.pyc                     # Python compile output (if using Python with CMake)
-/*.json
-/games/*.json
-/tests/eval/results/tournament_*.txt
-nohup.out
-# Vendored library build artifacts
-src/vendor/json-c/build/
-/.env
-**/.vite
-
-# Terraform
-# Terraform generated files
+# ─── Terraform ────────────────────────────────────────────────────────────────
 .terraform/
 .terraform.lock.hcl
-
-# Terraform state files
 *.tfstate
 *.tfstate.*
 *.tfrun
-
-# Sensitive variable files
 *.tfvars
 *.tfvars.json
-
-# Crash log files
 crash.log
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.coverage
+htmlcov/
+.pytest_cache/
+/.secret
+.ruff_cache/
 
-# You can add other files that are environment specific or contain secrets
-# such as:
-# *.override.tf
-# *.override.tf.json
+# ─── Node/Frontend ────────────────────────────────────────────────────────────
+node_modules/
+**/.vite
+# ─── OS / Misc ────────────────────────────────────────────────────────────────
+**/.DS_Store
+**/*.log
+nohup.out
 /.rubymate
+/tmp/**

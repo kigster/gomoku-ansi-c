@@ -1,0 +1,75 @@
+import re
+from datetime import datetime
+
+from pydantic import BaseModel, EmailStr, field_validator
+
+# A-Z a-z (including accented), 0-9, dash, caret
+USERNAME_PATTERN = re.compile(r"^[\w\u00C0-\u024F0-9\-\^]{2,30}$")
+
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    email: EmailStr | None = None
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        if not USERNAME_PATTERN.match(v):
+            raise ValueError(
+                "Username must be 2-30 characters: letters (including accented), "
+                "digits, dash, or caret"
+            )
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 7:
+            raise ValueError("Password must be at least 7 characters")
+        return v
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    username: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 7:
+            raise ValueError("Password must be at least 7 characters")
+        return v
+
+
+class PersonalBest(BaseModel):
+    score: int
+    rating: float
+    depth: int
+    radius: int
+    played_at: datetime
+
+
+class UserOut(BaseModel):
+    id: str
+    username: str
+    email: str | None
+    created_at: datetime
+    games_won: int = 0
+    games_lost: int = 0
+    personal_best: PersonalBest | None = None
