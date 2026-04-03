@@ -39,6 +39,9 @@ install-frontend: build-frontend
 test: test-daemon test-api test-frontend
     make -C gomoku-c test
 
+test-gomoku-c: 
+    make -C gmoku-c test
+
 # Run daemon unit tests only
 test-daemon:
     make -C gomoku-c test-daemon

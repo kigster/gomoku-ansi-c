@@ -1,52 +1,36 @@
-output:
-  - summary
-  - failure
-
 pre-commit:
   parallel: true
   jobs:
     - name: lint
-      root: frontend
       run: uv run --group dev ruff check {staged_files}
       glob: "*.{py,ipynb}"
       stage_fixed: true
 
     - name: typecheck
-      root: frontend
       run: uv run --all-groups ty check {staged_files}
       glob: "*.{py,ipynb}"
       stage_fixed: true
 
     - name: check for conflict markers and whitespace issues
-      root: frontend
       run: git --no-pager diff --check
 
-    - name: run tests for C-Gomoku
-      run: just test-daemon
-        
-    - name: run tests for FastAPI
-      run: just test-api
-        
-    - name: run tests for Frontend
-      run: just test-frontend
+    # If tests take >1 second, move this (or just the long-running tests) to pre-push.
+    - name: run tests
+      run: just test
 
     - name: sort pyproject.toml dependencies
-      root: frontend
       run: uv run --group dev uv-sort {staged_files}
       glob: "pyproject.toml"
       stage_fixed: true
 
     - name: spell check
-      root: frontend
       run: uv run --group dev codespell {staged_files}
       glob: "*.{py,ipynb,md}"
 
     - name: format markdown
-      root: frontend
       run: uv run --group dev mdformat {staged_files}
       glob: "*.md"
       stage_fixed: true
 
     - name: scan for secrets
-      root: frontend
       run: uv run --group dev detect-secrets-hook --baseline .secrets.baseline
