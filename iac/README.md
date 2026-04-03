@@ -1,96 +1,57 @@
 # Infrastructure — Gomoku
 
-Deployment configuration for Google Cloud Run and Cloud SQL.
+Deployment configuration for Google Cloud Run with external PostgreSQL (Neon).
 
 ## Architecture
 
 ```
-Internet → Cloud Run (frontend/nginx) → Cloud Run (FastAPI) → Cloud Run (gomoku-httpd)
-                                              ↓
-                                         Cloud SQL (PostgreSQL 17)
+Internet → gomoku-api (Cloud Run, public) → gomoku-httpd (Cloud Run, internal)
+               ↓
+           Neon PostgreSQL (external)
 ```
 
-- **gomoku-frontend** — nginx serving React SPA, proxies API calls to FastAPI. Public-facing.
-- **gomoku-api** — FastAPI handling auth, game save, scoring, leaderboard. Proxies `/game/play` to gomoku-httpd. Internal only.
-- **gomoku-httpd** — C game engine, stateless, single-threaded. Internal only.
-- **Cloud SQL** — PostgreSQL 17 (`gomoku-db`), private IP, IAM auth.
+- **gomoku-api** — FastAPI serving the React SPA as static files, plus auth, scoring, leaderboard, and game move proxy. Public-facing.
+- **gomoku-httpd** — C game engine, stateless, single-threaded, concurrency=1. Internal only, auto-scales per demand.
 
-All three Cloud Run services scale independently. The frontend and API handle
-many concurrent connections; gomoku-httpd is limited to 1 request per instance
-(single-threaded) and auto-scales to match demand.
+Both services scale independently. Cloud Run handles TLS and load balancing automatically.
 
 ## Directory Structure
 
 ```
 iac/
 ├── cloud_run/           # Terraform + deploy scripts for Cloud Run
-│   ├── main.tf          # Three Cloud Run services + IAM
-│   ├── variables.tf     # Project ID, region, images, JWT secret
+│   ��── main.tf          # Two Cloud Run services + IAM
+│   ├── variables.tf     # Project ID, region, images, secrets
 │   ├── outputs.tf       # Service URLs
 │   ├── deploy.sh        # First-time deploy (terraform init + apply)
-│   └── update.sh        # Update one or all services (build + push + gcloud)
-├── cloud_sql/           # Database setup
+│   ���── update.sh        # Update one or both services (build + push + gcloud)
+��   └── README.md        # Full Cloud Run deployment guide
+├─��� cloud_sql/           # Database schema and utilities
 │   ├── setup.sql        # Schema: users, games, views, functions
-│   ├── create-instance.sh  # Create Cloud SQL instance
+│   ├── create-instance.sh  # Create Cloud SQL instance (if using GCP Postgres)
 │   └── resolve-geo.sh   # Backfill IP geolocation data
 ├── local/               # Local development configs (used by bin/gctl)
-│   ├── envoy/           # Envoy proxy config for local perf testing
+│   ├── envoy/           # Envoy proxy config for local worker pool
 │   └── templates/       # Config templates (envoy, nginx)
 └── README.md            # This file
 ```
 
-## First-Time Setup
-
-### 1. Create Cloud SQL Instance
+## Quick Start
 
 ```bash
-cd iac/cloud_sql
-./create-instance.sh
-```
+# 1. Set up Neon database
+psql "$NEON_DATABASE_URL" -f iac/cloud_sql/setup.sql
 
-This creates a PostgreSQL 17 instance (`gomoku-db`) with no public IP,
-applies the schema, and connects it to the Cloud Run services.
-
-### 2. Deploy to Cloud Run
-
-```bash
-# Set the JWT secret (generate a strong one for production)
+# 2. Set environment variables
+export PROJECT_ID="your-gcp-project-id"
 export TF_VAR_jwt_secret="$(openssl rand -base64 32)"
+export TF_VAR_database_url="postgresql://user:pass@ep-xyz.neon.tech/gomoku?sslmode=require"
 
-# Build all Docker images and deploy
-cd iac/cloud_run
-./deploy.sh
-```
-
-Or from the project root:
-
-```bash
-export TF_VAR_jwt_secret="$(openssl rand -base64 32)"
+# 3. Build and deploy
 just cr-init
 ```
 
-### 3. Point DNS
-
-Point `gomoku.games` (or `app.gomoku.games`) to the frontend service URL
-shown in the deploy output.
-
-## Updating Services
-
-Update all services:
-
-```bash
-just cr-update
-```
-
-Update individual services:
-
-```bash
-cd iac/cloud_run
-./update.sh frontend       # Frontend only
-./update.sh api            # API only
-./update.sh httpd          # Game engine only
-./update.sh api frontend   # Multiple services
-```
+See [cloud_run/README.md](cloud_run/README.md) for the full deployment guide, custom domain setup, scaling, and monitoring.
 
 ## Database Schema
 
@@ -100,8 +61,7 @@ The schema is in `cloud_sql/setup.sql`. Key tables:
 - **games** — UUID PK, player name, winner, depth, radius, score, game JSON, IP, geo
 - **password_reset_tokens** — UUID PK, token, expiry
 
-Score formula: `1000 * depth + 50 * radius + f(human_time_seconds)`
-where `f(x)` rewards fast wins and penalizes slow ones.
+Score formula: `1000 * depth + 50 * radius + f(human_time_seconds)` where `f(x)` rewards fast wins and penalizes slow ones.
 
 Views: `leaderboard` (best per player), `top_scores` (global top 100).
 
@@ -111,17 +71,10 @@ Views: `leaderboard` (best per player), `top_scores` (global top 100).
 
 | Variable | Source | Purpose |
 |---|---|---|
-| `GOMOKU_HTTPD_URL` | Terraform (from httpd service URL) | Upstream game engine |
-| `DB_SOCKET` | Terraform (Cloud SQL proxy path) | Database connection |
-| `DB_NAME` | Terraform (`gomoku`) | Database name |
-| `DB_USER` | Terraform (`postgres`) | Database user |
+| `DATABASE_URL` | `TF_VAR_database_url` | Neon PostgreSQL connection string |
+| `GOMOKU_HTTPD_URL` | Terraform (from httpd service URL) | Internal URL to game engine |
 | `JWT_SECRET` | `TF_VAR_jwt_secret` | JWT signing key |
-
-### Frontend (`gomoku-frontend`)
-
-| Variable | Source | Purpose |
-|---|---|---|
-| `API_URL` | Terraform (from api service host:443) | nginx proxy target |
+| `CORS_ORIGINS` | Terraform variable | Allowed origins (default `["*"]`) |
 
 ### Game Engine (`gomoku-httpd`)
 
@@ -132,8 +85,7 @@ No environment variables — all config via CLI args (`-b 0.0.0.0:8787`).
 Use `bin/gctl` instead of Cloud Run:
 
 ```bash
-bin/gctl start              # Start nginx, envoy, gomoku-httpd, API, frontend
-bin/gctl start api frontend # Start specific components
+bin/gctl start              # Start nginx, envoy, gomoku-httpd workers, API
 bin/gctl status             # Check what's running
 bin/gctl stop               # Stop everything
 ```

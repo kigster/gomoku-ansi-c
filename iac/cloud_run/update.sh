@@ -3,11 +3,11 @@ set -euo pipefail
 
 REGION="us-central1"
 REPO_NAME="gomoku-repo"
-export PROJECT_ID="${PROJECT_ID:-fine-booking-486503-k7}"
+PROJECT_ID="${PROJECT_ID:?Set PROJECT_ID to your GCP project ID}"
 REGISTRY="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME"
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
-# Parse which services to update (default: all)
+# Which services to update (default: both)
 SERVICES="${*:-httpd api}"
 
 gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
@@ -22,7 +22,7 @@ fi
 
 if [[ "$SERVICES" == *"api"* ]]; then
     IMAGE="$REGISTRY/gomoku-api:latest"
-    echo "Building and pushing gomoku-api (includes frontend)..."
+    echo "Building and pushing gomoku-api..."
     docker buildx build --platform linux/amd64 -t "$IMAGE" --load "$REPO_ROOT/api/"
     docker push "$IMAGE"
     gcloud run services update gomoku-api --region="$REGION" --image="$IMAGE"
