@@ -129,18 +129,18 @@ export default function GameStatus({
             <span className="text-neutral-500">:</span>
             <span className="font-mono whitespace-nowrap">
               <span className={isHumanTurn ? 'text-amber-400' : 'text-neutral-400'}>{formatTime(humanCurrentMove)}</span>
-              <span className="text-neutral-600 font-sans text-[13pt]"> (total this game: </span>
+              <span className="text-neutral-600 font-sans text-[14pt]"> (total this game: </span>
               <span className={isHumanTurn ? 'text-amber-400' : 'text-neutral-400'}>{formatTime(humanTotal)}</span>
-              <span className="text-neutral-600 font-sans text-[13pt]">)</span>
+              <span className="text-neutral-600 font-sans text-[14pt]">)</span>
             </span>
 
             <span className="text-neutral-500 text-right whitespace-nowrap">AI Player Time</span>
             <span className="text-neutral-500">:</span>
             <span className="font-mono whitespace-nowrap">
               <span className={isAiThinking ? 'text-amber-400' : 'text-neutral-400'}>{formatTime(aiCurrentMove)}</span>
-              <span className="text-neutral-600 font-sans text-[13pt]"> (total this game: </span>
+              <span className="text-neutral-600 font-sans text-[14pt]"> (total this game: </span>
               <span className={isAiThinking ? 'text-amber-400' : 'text-neutral-400'}>{formatTime(aiTotal)}</span>
-              <span className="text-neutral-600 font-sans text-[13pt]">)</span>
+              <span className="text-neutral-600 font-sans text-[14pt]">)</span>
             </span>
           </>
         ) : (

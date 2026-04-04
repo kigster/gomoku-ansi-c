@@ -4,10 +4,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock* ./
 RUN uv sync --frozen --no-dev 2>/dev/null || uv sync --no-dev
-COPY app/ app/
+COPY . app/
 
-# Frontend static assets — pre-built via `just stage-frontend`
-COPY public/ public/
+# How to interrupt the build if ./public is empty?
+# RUN bash -c "test -f public/index.html || { echo 'No files in ./public!'; exit 1; }"
 
 # Stage 2: Runtime — slim image with just the venv
 FROM python:3.13-slim

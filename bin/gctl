@@ -502,6 +502,7 @@ frontend.build() {
     return 1
   }
   (cd "$frontend_dir" && npm run build) >/dev/null 2>&1
+  (cd "$frontend_dir" && just build-production) >/dev/null 2>&1
   ui.closer.ok:
   sudo find "${PROJECT_DIR}/frontend/dist/" -type d -exec chmod 711 {} +
   sudo chmod -R 755 "${PROJECT_DIR}/frontend/dist/"

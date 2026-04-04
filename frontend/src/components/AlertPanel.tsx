@@ -103,19 +103,19 @@ function AlertItem({ alert, onRemove }: { alert: Alert; onRemove: () => void }) 
         color: colors.text,
         border: `1px solid ${colors.border}`,
         boxShadow: '0 0 8px rgba(0,0,0,0.5)',
-        padding: '20px',
+        padding: '26px',
         opacity,
         transition,
       }}
-      className="pointer-events-auto rounded-lg max-w-lg w-[90%] sm:w-auto sm:min-w-[400px]"
+      className="pointer-events-auto rounded-lg max-w-xl w-[90%] sm:w-auto sm:min-w-[520px]"
     >
-      <div className="flex items-start gap-3">
-        <p className="flex-1 text-sm font-medium">{alert.message}</p>
-        <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex items-start gap-4">
+        <p className="flex-1 text-2xl font-medium">{alert.message}</p>
+        <div className="flex items-center gap-2 shrink-0">
           {hasDetail && (
             <button
               onClick={() => setExpanded(e => !e)}
-              className="text-xs font-bold opacity-80 hover:opacity-100 transition-opacity cursor-pointer"
+              className="text-sm font-bold opacity-80 hover:opacity-100 transition-opacity cursor-pointer"
               style={{ color: colors.text }}
               aria-label="More info"
             >
@@ -124,7 +124,7 @@ function AlertItem({ alert, onRemove }: { alert: Alert; onRemove: () => void }) 
           )}
           <button
             onClick={dismiss}
-            className="text-xs font-bold opacity-80 hover:opacity-100 transition-opacity cursor-pointer"
+            className="text-sm font-bold opacity-80 hover:opacity-100 transition-opacity cursor-pointer"
             style={{ color: colors.text }}
             aria-label="Dismiss"
           >
@@ -134,7 +134,7 @@ function AlertItem({ alert, onRemove }: { alert: Alert; onRemove: () => void }) 
       </div>
       {expanded && alert.detail && (
         <div
-          className="mt-3 pt-3 text-xs font-mono whitespace-pre-wrap break-words"
+          className="mt-4 pt-4 text-base font-mono whitespace-pre-wrap break-words"
           style={{ borderTop: `1px solid ${colors.border}`, opacity: 0.85 }}
         >
           {alert.detail}

@@ -105,11 +105,15 @@ export function useGameState(settings: GameSettings) {
 
     while (true) {
       try {
-        const response = await postGameState(state, 20, timeoutMs)
+        const raw = await postGameState(state, 20, timeoutMs)
+
+        // Merge: request fields as defaults, response fields on top.
+        // The C backend may omit player configs, winner, etc.
+        const response: GameState = { ...state, ...raw }
 
         // Track AI timing (wall-clock from request to response)
         const aiElapsed = Date.now() - turnStartMs.current
-        const aiPlayed = response.moves.length > state.moves.length
+        const aiPlayed = (response.moves?.length ?? 0) > state.moves.length
         if (aiPlayed) {
           lastAiMoveMs.current = aiElapsed
           aiTimeAccum.current += aiElapsed

@@ -1,7 +1,9 @@
+"""Routes for the leaderboard API."""
+
 from fastapi import APIRouter, Depends, Query
 
 from app.database import get_pool
-from app.models.leaderboard import LeaderboardEntry, LeaderboardResponse
+from app.models import LeaderboardEntry, LeaderboardResponse
 from app.scoring import rating
 
 router = APIRouter(prefix="/leaderboard", tags=["leaderboard"])
@@ -13,7 +15,7 @@ async def get_leaderboard(
     pool=Depends(get_pool),
 ):
     rows = await pool.fetch(
-        """SELECT player_name, score, depth, radius, total_moves,
+        """SELECT username, score, depth, radius, total_moves,
                   round(human_time_s::numeric, 1) AS human_time_s,
                   geo_country, geo_city, played_at
            FROM games
@@ -24,7 +26,7 @@ async def get_leaderboard(
     )
     entries = [
         LeaderboardEntry(
-            player_name=r["player_name"],
+            username=r["username"],
             score=r["score"],
             rating=rating(r["score"]),
             depth=r["depth"],

@@ -7,7 +7,7 @@ const mockOnClose = vi.fn()
 
 const sampleEntries = [
   {
-    player_name: 'GrandMaster',
+    username: 'GrandMaster',
     score: 6500,
     rating: 89.7,
     depth: 6,
@@ -16,10 +16,10 @@ const sampleEntries = [
     human_time_s: 45.2,
     geo_country: 'Japan',
     geo_city: 'Tokyo',
-    played_at: '2026-03-30T12:00:00Z',
+    played_at: '2026-03-30T12:00:00Z'
   },
   {
-    player_name: 'Beginner',
+    username: 'Beginner',
     score: 1200,
     rating: 16.6,
     depth: 1,
@@ -28,8 +28,8 @@ const sampleEntries = [
     human_time_s: 10.0,
     geo_country: null,
     geo_city: null,
-    played_at: '2026-03-29T08:00:00Z',
-  },
+    played_at: '2026-03-29T08:00:00Z'
+  }
 ]
 
 describe('LeaderboardModal', () => {
@@ -40,17 +40,17 @@ describe('LeaderboardModal', () => {
 
   it('shows loading state initially', () => {
     vi.spyOn(globalThis, 'fetch').mockReturnValue(new Promise(() => {}))
-    render(<LeaderboardModal apiBase="" onClose={mockOnClose} />)
+    render(<LeaderboardModal apiBase='' onClose={mockOnClose} />)
     expect(screen.getByText('Loading...')).toBeInTheDocument()
   })
 
   it('renders leaderboard entries', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ entries: sampleEntries }),
+      json: () => Promise.resolve({ entries: sampleEntries })
     } as Response)
 
-    render(<LeaderboardModal apiBase="" onClose={mockOnClose} />)
+    render(<LeaderboardModal apiBase='' onClose={mockOnClose} />)
 
     await waitFor(() => {
       expect(screen.getByText('GrandMaster')).toBeInTheDocument()
@@ -63,10 +63,10 @@ describe('LeaderboardModal', () => {
   it('shows empty state when no entries', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ entries: [] }),
+      json: () => Promise.resolve({ entries: [] })
     } as Response)
 
-    render(<LeaderboardModal apiBase="" onClose={mockOnClose} />)
+    render(<LeaderboardModal apiBase='' onClose={mockOnClose} />)
 
     await waitFor(() => {
       expect(screen.getByText(/No scores yet/)).toBeInTheDocument()
@@ -75,10 +75,10 @@ describe('LeaderboardModal', () => {
 
   it('shows error state on fetch failure', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-      ok: false,
+      ok: false
     } as Response)
 
-    render(<LeaderboardModal apiBase="" onClose={mockOnClose} />)
+    render(<LeaderboardModal apiBase='' onClose={mockOnClose} />)
 
     await waitFor(() => {
       expect(screen.getByText(/Failed to load/)).toBeInTheDocument()
@@ -89,10 +89,10 @@ describe('LeaderboardModal', () => {
     const user = userEvent.setup()
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ entries: [] }),
+      json: () => Promise.resolve({ entries: [] })
     } as Response)
 
-    render(<LeaderboardModal apiBase="" onClose={mockOnClose} />)
+    render(<LeaderboardModal apiBase='' onClose={mockOnClose} />)
     await user.click(screen.getByLabelText('Close'))
     expect(mockOnClose).toHaveBeenCalledOnce()
   })

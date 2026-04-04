@@ -1,10 +1,17 @@
+"""Models for the game API."""
+
 from datetime import datetime
+from uuid import uuid4
 
 from pydantic import BaseModel
 
 
 class LeaderboardEntry(BaseModel):
-    player_name: str
+    """A single entry in the leaderboard."""
+
+    id: uuid4()
+    ordinal: int
+    username: str
     score: int
     rating: float
     depth: int
@@ -17,4 +24,6 @@ class LeaderboardEntry(BaseModel):
 
 
 class LeaderboardResponse(BaseModel):
+    """Response body for the leaderboard."""
+
     entries: list[LeaderboardEntry]

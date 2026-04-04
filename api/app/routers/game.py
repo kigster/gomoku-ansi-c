@@ -1,6 +1,7 @@
 import json as json_mod
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse
 from httpx import AsyncClient
 
 from app.database import get_pool
@@ -91,7 +92,7 @@ async def save(
         async with conn.transaction():
             row = await conn.fetchrow(
                 """INSERT INTO games
-                   (player_name, user_id, winner, human_player, board_size, depth, radius,
+                   (username, user_id, winner, human_player, board_size, depth, radius,
                     total_moves, human_time_s, ai_time_s, score, game_json, client_ip)
                    VALUES ($1, $2::uuid, $3, $4, $5, $6, $7,
                            $8, $9, $10, $11, $12::jsonb, $13::inet)
@@ -126,7 +127,7 @@ async def game_history(
 ):
     """Return the authenticated user's games in reverse chronological order."""
     rows = await pool.fetch(
-        """SELECT id, player_name, winner, human_player, score, depth,
+        """SELECT id, username, winner, human_player, score, depth,
                   round(human_time_s::numeric, 1) AS human_time_s,
                   round(ai_time_s::numeric, 1) AS ai_time_s,
                   played_at
@@ -141,7 +142,7 @@ async def game_history(
         games=[
             GameHistoryEntry(
                 id=str(r["id"]),
-                player_name=r["player_name"],
+                username=r["username"],
                 won=r["winner"] == r["human_player"],
                 score=r["score"],
                 depth=r["depth"],
@@ -168,4 +169,7 @@ async def download_game_json(
     )
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Game not found")
-    return row["game_json"]
+    data = row["game_json"]
+    if isinstance(data, str):
+        data = json_mod.loads(data)
+    return JSONResponse(content=data)
