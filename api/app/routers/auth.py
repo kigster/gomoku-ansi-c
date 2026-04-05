@@ -27,12 +27,14 @@ async def signup(body: UserCreate, pool=Depends(get_pool)):
     hashed = hash_password(body.password)
     try:
         row = await pool.fetchrow(
-            """INSERT INTO users (username, email, password_hash)
-               VALUES ($1, $2, $3)
+            """INSERT INTO users (username, email, password_hash, first_name, last_name)
+               VALUES ($1, $2, $3, $4, $5)
                RETURNING id, username""",
             body.username,
             body.email,
             hashed,
+            body.first_name,
+            body.last_name,
         )
     except UniqueViolationError:
         logger.warning("Signup conflict: username=%s email=%s", body.username, body.email)
@@ -53,6 +55,19 @@ async def login(body: UserLogin, pool=Depends(get_pool)):
     if row is None or not verify_password(body.password, row["password_hash"]):
         logger.warning("Login failed: username=%s", body.username)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid username or password")
+
+    # Track login activity — fire and forget, must not fail the login
+    try:
+        await pool.execute(
+            """UPDATE users
+               SET last_logged_in_at = now(),
+                   logins_count = logins_count + 1,
+                   updated_at = now()
+               WHERE id = $1::uuid""",
+            str(row["id"]),
+        )
+    except Exception:
+        logger.warning("Failed to update login stats: user_id=%s", row["id"])
 
     logger.info("Login success: user_id=%s username=%s", row["id"], row["username"])
     token = create_token(str(row["id"]), row["username"])

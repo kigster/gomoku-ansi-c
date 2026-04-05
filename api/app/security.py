@@ -58,7 +58,9 @@ async def get_current_user(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token payload")
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, username, email, created_at FROM users WHERE id = $1::uuid",
+            """SELECT id, username, email, first_name, last_name,
+                      created_at, last_logged_in_at, logins_count
+               FROM users WHERE id = $1::uuid""",
             user_id,
         )
     if row is None:
