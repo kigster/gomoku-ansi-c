@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, Query
 
 from app.database import get_pool
-from app.models import LeaderboardEntry, LeaderboardResponse
+from app.models.types import LeaderboardEntry, LeaderboardResponse
 from app.scoring import rating
 
 router = APIRouter(prefix="/leaderboard", tags=["leaderboard"])

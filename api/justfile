@@ -1,8 +1,79 @@
 set dotenv-load
 
+listen_port  := env("API_LISTEN_PORT", "8000")
+listen_host  := env("API_LISTEN_HOST", "0.0.0.0")
+environment  := env("ENVIRONMENT", "development")
+workers      := env("UVICORN_WORKERS", "4")
+
+db_name      := env("DB_NAME", "gomoku")
+db_user      := env("DB_USER", "postgres")
+db_host      := env("DB_HOST", "localhost")
+db_port      := env("DB_PORT", "5432")
+
+database_url := env("DATABASE_URL", "postgresql://" + db_user + "@" + db_host + ":" + db_port + "/" + db_name)
+
+invert       := '\033[7m'
+bold         := '\033[1m'
+normal       := '\033[0m'
+red          := "\\e[31m"
+green        := "\\e[32m"
+yellow       := "\\e[33m"
+blue         := "\\e[34m"
+magenta      := "\\e[35m"
+cyan         := "\\e[36m"
+grey         := "\\e[90m"
+
 [no-exit-message]
 recipes:
     @just --choose
+
+# Start uvicorn in dev mode with --reload (foreground)
+dev:
+    ENVIRONMENT=development uv run uvicorn app.main:app \
+        --reload \
+        --host {{listen_host}} \
+        --port {{listen_port}} \
+        --log-level debug
+
+# Start uvicorn in production mode (background, multiple workers)
+start: install
+    #!/usr/bin/env bash
+    set +e
+    mkdir -p logs
+    echo -e " {{blue}} • starting uvicorn ({{workers}} workers) on port {{listen_port}} {{normal}}"
+    ENVIRONMENT={{environment}} nohup uv run uvicorn app.main:app \
+        --workers {{workers}} \
+        --host {{listen_host}} \
+        --port {{listen_port}} \
+        --log-level info \
+        >>logs/fastapi.{{environment}}.log 2>&1 &
+    disown
+    sleep 1
+    if curl -sf http://localhost:{{listen_port}}/health >/dev/null 2>&1; then
+        echo -e " {{green}} • uvicorn is up on port {{listen_port}} {{normal}}"
+    else
+        echo -e " {{red}} • ERROR: uvicorn may not have started. Check logs/fastapi.{{environment}}.log {{normal}}"
+        exit 1
+    fi
+
+# Stop all uvicorn processes on the listen port
+stop:
+    #!/usr/bin/env bash
+    set +e
+    if test -n "$(/bin/ps -ef | /usr/bin/grep -E '[u]vicorn.*{{listen_port}}' | /usr/bin/awk '{print $2}')"; then
+        echo -e " {{blue}} • sending TERM to any running uvicorns {{normal}}"
+        /bin/ps -ef | /usr/bin/grep -E '[u]vicorn.*{{listen_port}}' | /usr/bin/awk '{print $2}' | xargs kill -TERM
+        sleep 1
+        if test -n "$(/bin/ps -ef | /usr/bin/grep -E '[u]vicorn.*{{listen_port}}' | /usr/bin/awk '{print $2}')"; then
+            echo -e " {{blue}} • sending KILL to any running uvicorns {{normal}}"
+            /bin/ps -ef | /usr/bin/grep -E '[u]vicorn.*{{listen_port}}' | /usr/bin/awk '{print $2}' | xargs kill -KILL
+        fi
+    else
+        echo -e " {{green}} • No uvicorns were found roaming. {{normal}}"
+    fi
+
+# Restart uvicorn
+restart: stop start
 
 install:
     @uv sync --all-extras
@@ -14,11 +85,11 @@ lint *args:
 
 # Run all tests
 test *args:
-    uv run --group test pytest {{args}}
+    ENVIRONMENT=test uv run --group test pytest {{args}}
 
 # Run all tests with coverage and show it at the end
 test-coverage *args:
-    uv run --group test pytest --cov --cov-branch {{args}}
+    ENVIRONMENT=test uv run --group test pytest --cov --cov-branch {{args}}
 
 # Run type checking linter on Python code
 typecheck *args:
@@ -36,3 +107,84 @@ ci:
 # Clean Python caches and various other temp files
 clean:
     uv cache clean --force
+
+# ─── Database ──────────────────────────────────────────────────────────────
+
+# Create gomoku and gomoku_test databases (idempotent)
+db-create:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for db in "{{db_name}}" "{{db_name}}_test"; do
+        exists=$(psql -X -h "{{db_host}}" -p "{{db_port}}" -U "{{db_user}}" -d postgres \
+            -tAc "SELECT 1 FROM pg_database WHERE datname = '${db}'" 2>/dev/null || true)
+        if [ "$exists" != "1" ]; then
+            psql -X -h "{{db_host}}" -p "{{db_port}}" -U "{{db_user}}" -d postgres \
+                -c "CREATE DATABASE \"${db}\""
+            echo "Created database: ${db}"
+        else
+            echo "Database already exists: ${db}"
+        fi
+    done
+
+# Drop gomoku and gomoku_test databases
+db-drop:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for db in "{{db_name}}_test" "{{db_name}}"; do
+        exists=$(psql -X -h "{{db_host}}" -p "{{db_port}}" -U "{{db_user}}" -d postgres \
+            -tAc "SELECT 1 FROM pg_database WHERE datname = '${db}'" 2>/dev/null || true)
+        if [ "$exists" = "1" ]; then
+            psql -X -h "{{db_host}}" -p "{{db_port}}" -U "{{db_user}}" -d postgres \
+                -c "DROP DATABASE \"${db}\""
+            echo "Dropped database: ${db}"
+        else
+            echo "Database does not exist: ${db}"
+        fi
+    done
+
+# Drop and recreate both databases, then run migrations
+db-reset: db-drop db-create db-migrate-up
+
+# Run Alembic migrations to head on both databases
+db-migrate-up rev="head":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for db in "{{db_name}}" "{{db_name}}_test"; do
+        url="postgresql://{{db_user}}@{{db_host}}:{{db_port}}/${db}"
+        echo "Migrating ${db} to {{rev}}..."
+        DATABASE_URL="${url}" uv run alembic upgrade "{{rev}}"
+    done
+
+# Downgrade Alembic migrations on both databases (default: one step back)
+db-migrate-down rev="-1":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for db in "{{db_name}}" "{{db_name}}_test"; do
+        url="postgresql://{{db_user}}@{{db_host}}:{{db_port}}/${db}"
+        echo "Downgrading ${db} to {{rev}}..."
+        DATABASE_URL="${url}" uv run alembic downgrade "{{rev}}"
+    done
+
+# Show current Alembic revision for both databases
+db-current:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for db in "{{db_name}}" "{{db_name}}_test"; do
+        url="postgresql://{{db_user}}@{{db_host}}:{{db_port}}/${db}"
+        echo "=== ${db} ==="
+        DATABASE_URL="${url}" uv run alembic current
+    done
+
+# Show Alembic migration history
+db-history:
+    DATABASE_URL="{{database_url}}" uv run alembic history --verbose
+
+# Create a new Alembic migration revision
+db-revision message:
+    DATABASE_URL="{{database_url}}" uv run alembic revision -m "{{message}}"
+
+# ─── CLI ───────────────────────────────────────────────────────────────────
+
+# Run the Gomoku admin CLI (pass subcommands after --)
+cli *args:
+    uv run python -m app.cli {{args}}

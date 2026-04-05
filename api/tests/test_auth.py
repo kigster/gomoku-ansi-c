@@ -1,5 +1,8 @@
+import asyncpg
 import pytest
 from httpx import AsyncClient
+
+from tests.conftest import TEST_DSN
 
 
 @pytest.mark.asyncio
@@ -191,3 +194,54 @@ async def test_password_reset_confirm_invalid_token(client: AsyncClient):
         },
     )
     assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_password_reset_full_flow(client: AsyncClient):
+    """Full flow: signup, request reset, grab token from DB, confirm, login with new password."""
+    await client.post(
+        "/auth/signup",
+        json={"username": "resetflow", "password": "oldpass123", "email": "flow@example.com"},
+    )
+
+    await client.post("/auth/password-reset", json={"email": "flow@example.com"})
+
+    # Grab the token directly from DB
+    conn = await asyncpg.connect(TEST_DSN)
+    try:
+        token = await conn.fetchval(
+            "SELECT token FROM password_reset_tokens ORDER BY created_at DESC LIMIT 1"
+        )
+    finally:
+        await conn.close()
+    assert token is not None
+
+    resp = await client.post(
+        "/auth/password-reset/confirm",
+        json={"token": token, "new_password": "newpass456"},
+    )
+    assert resp.status_code == 200
+    assert "updated" in resp.json()["message"].lower()
+
+    # Login with the new password
+    resp = await client.post(
+        "/auth/login", json={"username": "resetflow", "password": "newpass456"}
+    )
+    assert resp.status_code == 200
+    assert "access_token" in resp.json()
+
+    # Old password should fail
+    resp = await client.post(
+        "/auth/login", json={"username": "resetflow", "password": "oldpass123"}
+    )
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_password_reset_confirm_short_password(client: AsyncClient):
+    """Short new_password on confirm should fail validation."""
+    resp = await client.post(
+        "/auth/password-reset/confirm",
+        json={"token": "any-token", "new_password": "abc"},
+    )
+    assert resp.status_code == 422
