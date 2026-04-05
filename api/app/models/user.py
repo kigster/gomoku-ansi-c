@@ -1,5 +1,8 @@
+"""Models for the user API."""
+
 import re
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, field_validator
 
@@ -66,9 +69,9 @@ class PersonalBest(BaseModel):
 
 
 class UserOut(BaseModel):
-    id: str
+    id: UUID
     username: str
-    email: str | None
+    email: str | None = None
     created_at: datetime
     games_won: int = 0
     games_lost: int = 0

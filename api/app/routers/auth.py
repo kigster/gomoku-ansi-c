@@ -1,4 +1,3 @@
-import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 
@@ -6,6 +5,7 @@ from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.database import get_pool
+from app.logger import get_logger
 from app.models.user import (
     PasswordResetConfirm,
     PasswordResetRequest,
@@ -16,7 +16,7 @@ from app.models.user import (
 from app.security import create_token, hash_password, verify_password
 from app.services.email import send_password_reset_email
 
-logger = logging.getLogger("gomoku.auth")
+logger = get_logger("gomoku.auth")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

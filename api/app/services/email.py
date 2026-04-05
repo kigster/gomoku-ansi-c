@@ -1,8 +1,7 @@
-import logging
-
 from app.config import settings
+from app.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def send_password_reset_email(to_email: str, token: str) -> None:
