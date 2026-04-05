@@ -754,7 +754,7 @@ cmd_ps() {
   export GREP_COLOR='1;33'
   local output
   output=$(/bin/ps -eo pid,ppid,%cpu,rss,command |
-    /usr/bin/grep -E '[g]omoku|[e]nvoy|[n]ginx|[v]ite|[u]vicorn|PID' |
+    /usr/bin/grep -E '[g]omoku|[e]nvoy|[n]ginx|[v]ite|[u]vicorn|[p]ostgres|PID' |
     /usr/bin/grep -Ev 'gctl|grep')
 
   if [[ -n "$output" ]]; then
