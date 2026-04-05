@@ -1,7 +1,11 @@
+"""Settings for the application."""
+
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    """Settings for the application."""
+
     # Database
     db_socket: str = ""
     db_name: str = "gomoku"

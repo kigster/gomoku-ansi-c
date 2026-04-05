@@ -157,7 +157,7 @@ export default function Board({
         width="100%" height="100%"
         viewBox={`0 0 ${BOARD_PX} ${BOARD_PX}`}
         onClick={handleClick}
-        className="block"
+        className={`block ${interactive ? 'cursor-pointer' : 'cursor-default'}`}
       >
         {gridLines}
         {starDots}

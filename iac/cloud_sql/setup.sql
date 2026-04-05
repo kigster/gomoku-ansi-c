@@ -43,7 +43,7 @@ CREATE INDEX IF NOT EXISTS idx_prt_token ON password_reset_tokens (token) WHERE 
 
 CREATE TABLE IF NOT EXISTS games (
     id            UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-    player_name   TEXT        NOT NULL,
+    username   TEXT        NOT NULL,
     user_id       UUID        REFERENCES users(id),
     winner        TEXT        NOT NULL CHECK (winner IN ('X', 'O', 'draw')),
     human_player  TEXT        NOT NULL CHECK (human_player IN ('X', 'O')),
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS games (
     played_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_games_player   ON games (player_name);
+CREATE INDEX idx_games_player   ON games (username);
 CREATE INDEX idx_games_played   ON games (played_at DESC);
 CREATE INDEX idx_games_score    ON games (score DESC);
 CREATE INDEX idx_games_ip       ON games (client_ip);
@@ -102,8 +102,8 @@ $$;
 
 -- Leaderboard view: best score per player
 CREATE OR REPLACE VIEW leaderboard AS
-SELECT DISTINCT ON (player_name)
-    player_name,
+SELECT DISTINCT ON (username)
+    username,
     score,
     depth,
     radius,
@@ -114,12 +114,12 @@ SELECT DISTINCT ON (player_name)
     played_at
 FROM games
 WHERE score > 0
-ORDER BY player_name, score DESC;
+ORDER BY username, score DESC;
 
 -- Top scores view (for the global leaderboard)
 CREATE OR REPLACE VIEW top_scores AS
 SELECT
-    player_name,
+    username,
     score,
     round(score * 100.0 / 7250, 1) AS rating,  -- normalized 0-100
     depth,

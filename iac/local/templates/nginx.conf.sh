@@ -10,7 +10,7 @@ export LETSENCRYPT_CERTIFICATE="${3:-${HOME}/.letsencrypt/live/dev.gomoku.games/
 export LETSENCRYPT_PRIVATE_KEY="${4:-${HOME}/.letsencrypt/live/dev.gomoku.games/privkey.pem}"
 
 export SCRIPT_DIR="$(cd "$(dirname "$(dirname "${BASH_SOURCE[0]}")")" && pwd -P)"
-export PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+export PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 export STATIC_DIR="${PROJECT_DIR}/api/public"
 
 declare CONNECTION_METHOD

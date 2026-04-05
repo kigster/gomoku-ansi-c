@@ -2,10 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  font-size: calc(16px + 1pt);
+}
+
 body {
   font-family: 'Dosis', sans-serif;
   font-weight: 600;
-  font-size: 13pt;
+  font-size: 14pt;
   background: linear-gradient(135deg, #e8e0d4 0%, #f5f0e8 25%, #ddd5c8 50%, #f0ebe3 75%, #e5ddd0 100%);
   background-attachment: fixed;
   min-height: 100vh;

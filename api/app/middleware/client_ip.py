@@ -1,3 +1,5 @@
+"""Pure ASGI middleware that extracts the client IP from X-Forwarded-For."""
+
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 

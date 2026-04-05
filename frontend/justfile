@@ -25,7 +25,6 @@ test:
 
 # Copy frontend dist into API public directory
 build-production: build
-    rm -rf ../api/public
-    mkdir -p ../api/public
-    cp -rpv dist ../api/public
+    rm -rf ../api/public/*
+    cp -rpv dist/* ../api/public
 

@@ -43,7 +43,7 @@ bin/gomoku -i                                 # Show threat hints (blink highlig
 
 ### CLI Reference
 
-```
+```text
 gomoku [options]
 
 Gameplay:
@@ -128,7 +128,7 @@ bin/gctl start           # Start nginx + envoy + gomoku-httpd workers + FastAPI
 bin/gctl start -w 4      # Start with 4 workers instead of default (one per CPU core)
 ```
 
-Open **https://dev.gomoku.games** (local SSL via mkcert).
+Open **<https://dev.gomoku.games>** (local SSL via mkcert).
 
 ### `gctl` Command Reference
 
@@ -209,9 +209,11 @@ The application needs two containers and a PostgreSQL database. All three deploy
 
 1. Create a Neon project and database named `gomoku`.
 2. Run the schema migration:
+
    ```bash
    psql "$NEON_DATABASE_URL" -f iac/cloud_sql/setup.sql
    ```
+
 3. Copy the connection string — you'll set it as `DATABASE_URL` below.
 
 > The schema creates `users`, `games`, and `password_reset_tokens` tables plus leaderboard views. See [iac/README.md](iac/README.md) for details.
@@ -221,6 +223,7 @@ The application needs two containers and a PostgreSQL database. All three deploy
 Serverless, scales to zero, cheapest for low/medium traffic. Managed by Terraform.
 
 Two Cloud Run services:
+
 - **gomoku-api** — FastAPI + React SPA (nginx), handles auth, scoring, leaderboard, and proxies game moves
 - **gomoku-httpd** — C game engine, single-threaded, concurrency=1, auto-scales per demand
 
@@ -245,6 +248,7 @@ just cr-init
 ```
 
 This runs `iac/cloud_run/deploy.sh`, which:
+
 1. Initializes Terraform and enables Cloud Run + Artifact Registry APIs
 2. Creates an Artifact Registry repository (`gomoku-repo`)
 3. Builds both Docker images for `linux/amd64` and pushes them
@@ -314,7 +318,6 @@ docker compose up -d
 ```
 
 Minimum setup: two containers (`gomoku-api:latest` on port 8000, `gomoku-httpd:latest` on port 8787), a reverse proxy (nginx/Caddy) for TLS. Set environment variables as shown in the [Configuration](#configuration) section.
-
 
 ## Configuration
 

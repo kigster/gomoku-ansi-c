@@ -63,3 +63,7 @@ node_modules/
 nohup.out
 /.rubymate
 /tmp/**
+# 
+# ─── API ────────────────────────────────────────────────────────────────
+api/public/**
+api/.coverage
