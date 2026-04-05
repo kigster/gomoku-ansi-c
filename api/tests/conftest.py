@@ -1,4 +1,5 @@
 import os
+import subprocess
 from pathlib import Path
 
 import asyncpg
@@ -9,16 +10,29 @@ from httpx import ASGITransport, AsyncClient
 
 # Load .env.ci if ENVIRONMENT=ci, otherwise .env (local dev)
 _api_dir = Path(__file__).resolve().parent.parent
-_env_file = _api_dir / f".env.{os.environ.get('ENVIRONMENT', '')}"
+if os.environ.get("CI", "") != "":
+    _env_file = _api_dir / ".env.ci"
+else:
+    _env_file = _api_dir / ".env"
+
 if not _env_file.is_file():
     _env_file = _api_dir / ".env"
+
 load_dotenv(_env_file, override=False)
 
 os.environ.setdefault("JWT_SECRET", "test-secret-key-for-unit-tests-only!!")
-os.environ.setdefault("GOMOKU_HTTPD_URL", "http://localhost:1")
+os.environ.setdefault("GOMOKU_HTTPD_URL", "http://localhost:10000")
 
-TEST_DSN = os.environ.get("DATABASE_URL", "postgresql://postgres@localhost:5432/gomoku_test")
-_admin_dsn = TEST_DSN.rsplit("/", 1)[0] + "/postgres"
+# Derive test DSN: append _test to the database name from DATABASE_URL
+_base_url = os.environ.get("DATABASE_URL", "postgresql://postgres@localhost:5432/gomoku")
+_parts = _base_url.rsplit("/", 1)
+_base_db = _parts[-1].split("?")[0]
+_test_db = _base_db if _base_db.endswith("_test") else f"{_base_db}_test"
+TEST_DSN = f"{_parts[0]}/{_test_db}"
+_admin_dsn = f"{_parts[0]}/postgres"
+
+# Override DATABASE_URL so the app uses the test database
+os.environ["DATABASE_URL"] = TEST_DSN
 
 from app.database import create_pool  # noqa: E402
 from app.main import app, fastapi_app  # noqa: E402
@@ -32,30 +46,24 @@ async def _ensure_initialized():
         return
     _initialized = True
 
-    # Create test database if needed
+    # Create test database if it doesn't exist
     conn = await asyncpg.connect(_admin_dsn)
     try:
-        db_name = TEST_DSN.rsplit("/", 1)[-1].split("?")[0]
-        exists = await conn.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", db_name)
+        exists = await conn.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", _test_db)
         if not exists:
-            await conn.execute(f'CREATE DATABASE "{db_name}"')
+            await conn.execute(f'CREATE DATABASE "{_test_db}"')
     finally:
         await conn.close()
 
-    # Apply schema if needed
-    conn = await asyncpg.connect(TEST_DSN)
-    try:
-        has_schema = await conn.fetchval(
-            "SELECT 1 FROM information_schema.tables WHERE table_name = 'users'"
-        )
-        if not has_schema:
-            schema_path = os.path.join(
-                os.path.dirname(__file__), "..", "..", "iac", "cloud_sql", "setup.sql"
-            )
-            with open(schema_path) as f:
-                await conn.execute(f.read())
-    finally:
-        await conn.close()
+    # Run Alembic migrations (upgrade to head)
+    env = {**os.environ, "DATABASE_URL": TEST_DSN}
+    subprocess.run(
+        ["uv", "run", "alembic", "upgrade", "head"],
+        cwd=str(_api_dir),
+        env=env,
+        check=True,
+        capture_output=True,
+    )
 
     # Initialize app state on the FastAPI instance (not the ASGI wrapper)
     fastapi_app.state.db_pool = await create_pool()

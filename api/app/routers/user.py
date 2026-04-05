@@ -38,7 +38,7 @@ async def get_me(user: dict = Depends(get_current_user), pool=Depends(get_pool))
     )
 
     return UserOut(
-        id=str(user["id"]),
+        id=user["id"],
         username=user["username"],
         email=user.get("email"),
         created_at=user["created_at"],

@@ -1,4 +1,3 @@
-import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,16 +10,12 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import close_pool, create_pool
-from app.logging_config import setup_logging
+from app.logger import get_logger
 from app.middleware.client_ip import ClientIPMiddleware
 from app.middleware.request_logging import RequestLoggingMiddleware
 from app.routers import auth, game, leaderboard, user
 
-setup_logging()
-
 STATIC_DIR = Path(__file__).resolve().parent.parent / "public"
-
-print(STATIC_DIR)
 
 
 @asynccontextmanager
@@ -36,7 +31,7 @@ async def lifespan(fastapi_app: FastAPI):
     await close_pool()
 
 
-logger = logging.getLogger("gomoku.app")
+logger = get_logger("gomoku.app")
 
 fastapi_app = FastAPI(title="Gomoku API", version="0.1.0", lifespan=lifespan)
 

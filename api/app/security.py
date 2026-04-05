@@ -2,11 +2,12 @@ from datetime import UTC, datetime, timedelta
 
 import bcrypt
 import jwt
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPBearer
 
 from app.config import settings
 from app.database import get_pool
+from app.session import get_session
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -38,12 +39,20 @@ def decode_token(token: str) -> dict:
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    request: Request,
     pool=Depends(get_pool),
 ) -> dict:
-    if credentials is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
-    payload = decode_token(credentials.credentials)
+    """Resolve the authenticated user. Uses the JWT already decoded by middleware."""
+    session = get_session(request)
+    if session.jwt_payload:
+        payload = session.jwt_payload
+    else:
+        # Middleware didn't decode (no token or invalid) — try with proper error messages
+        auth = request.headers.get("authorization", "")
+        if not auth.startswith("Bearer "):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
+        payload = decode_token(auth[7:])
+
     user_id = payload.get("sub")
     if user_id is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token payload")
@@ -58,12 +67,15 @@ async def get_current_user(
 
 
 async def get_optional_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    request: Request,
     pool=Depends(get_pool),
 ) -> dict | None:
-    if credentials is None:
-        return None
+    session = get_session(request)
+    if not session.jwt_payload:
+        auth = request.headers.get("authorization", "")
+        if not auth.startswith("Bearer "):
+            return None
     try:
-        return await get_current_user(credentials, pool)
+        return await get_current_user(request, pool)
     except HTTPException:
         return None
