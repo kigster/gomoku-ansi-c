@@ -67,4 +67,5 @@ nohup.out
 # 
 # ─── API ────────────────────────────────────────────────────────────────
 api/public/**
+!api/public/.gitkeep
 api/.coverage
