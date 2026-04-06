@@ -305,35 +305,120 @@ export default function App () {
               </div>
 
               {/* Unified nav menu — visible dropdown on all screen sizes */}
-              <div className='relative flex items-center gap-3'>
+              <div className='flex items-center gap-3'>
                 <span className='hidden sm:block text-neutral-400 text-sm'>
                   Hello,{' '}
                   <span className='text-neutral-200 font-medium'>
                     {playerName}
                   </span>
                 </span>
-                <button
-                  onClick={() => setShowNavMenu(s => !s)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold
-                             text-sm transition-all cursor-pointer border
-                             ${showNavMenu
-                               ? 'bg-amber-500 text-neutral-900 border-amber-400'
-                               : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-200 border-neutral-600 hover:border-neutral-500'
-                             }`}
-                  aria-label='Menu'
-                  aria-expanded={showNavMenu}
-                >
-                  <svg viewBox='0 0 24 24' width='16' height='16' fill='none'
-                    stroke='currentColor' strokeWidth='2.5' strokeLinecap='round'>
-                    <path d='M3 12h18' /><path d='M3 6h18' /><path d='M3 18h18' />
-                  </svg>
-                  <span>Menu</span>
-                  <svg viewBox='0 0 24 24' width='14' height='14' fill='none'
-                    stroke='currentColor' strokeWidth='2.5' strokeLinecap='round'
-                    className={`transition-transform duration-200 ${showNavMenu ? 'rotate-180' : ''}`}>
-                    <path d='M6 9l6 6 6-6' />
-                  </svg>
-                </button>
+                <div className='relative'>
+                  <button
+                    onClick={() => setShowNavMenu(s => !s)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold
+                               text-sm transition-all cursor-pointer border
+                               ${showNavMenu
+                                 ? 'bg-amber-500 text-neutral-900 border-amber-400'
+                                 : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-200 border-neutral-600 hover:border-neutral-500'
+                               }`}
+                    aria-label='Menu'
+                    aria-expanded={showNavMenu}
+                  >
+                    <svg viewBox='0 0 24 24' width='16' height='16' fill='none'
+                      stroke='currentColor' strokeWidth='2.5' strokeLinecap='round'>
+                      <path d='M3 12h18' /><path d='M3 6h18' /><path d='M3 18h18' />
+                    </svg>
+                    <span>Menu</span>
+                    <svg viewBox='0 0 24 24' width='14' height='14' fill='none'
+                      stroke='currentColor' strokeWidth='2.5' strokeLinecap='round'
+                      className={`transition-transform duration-200 ${showNavMenu ? 'rotate-180' : ''}`}>
+                      <path d='M6 9l6 6 6-6' />
+                    </svg>
+                  </button>
+
+                  {showNavMenu && (
+                    <div className='absolute top-full right-0 z-[1001] mt-1
+                                    bg-neutral-800 border border-neutral-700 rounded-xl
+                                    shadow-2xl shadow-black/50 min-w-[220px] overflow-hidden'>
+                      <div className='py-1'>
+                        <button
+                          onClick={() => {
+                            setShowNavMenu(false)
+                            trackModalOpen('rules')
+                            setShowRulesModal(true)
+                            window.scrollTo(0, 0)
+                          }}
+                          className='w-full px-4 py-3 text-left
+                                     text-neutral-300 hover:text-white hover:bg-neutral-700
+                                     transition-colors cursor-pointer text-[1.05rem] font-semibold'
+                        >
+                          Gomoku Rules
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowNavMenu(false)
+                            trackModalOpen('about')
+                            setShowAboutModal(true)
+                            window.scrollTo(0, 0)
+                          }}
+                          className='w-full px-4 py-3 text-left
+                                     text-neutral-300 hover:text-white hover:bg-neutral-700
+                                     transition-colors cursor-pointer text-[1.05rem] font-semibold'
+                        >
+                          About the Author
+                        </button>
+                        <hr className='border-neutral-700 my-1' />
+                        <button
+                          onClick={() => {
+                            setShowNavMenu(false)
+                            setShowHistoryModal(true)
+                            window.scrollTo(0, 0)
+                          }}
+                          className='w-full px-4 py-3 text-left
+                                     text-neutral-300 hover:text-white hover:bg-neutral-700
+                                     transition-colors cursor-pointer text-[1.05rem] font-semibold'
+                        >
+                          Your Game History
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowNavMenu(false)
+                            trackModalOpen('leaderboard')
+                            setShowLeaderboardModal(true)
+                            window.scrollTo(0, 0)
+                          }}
+                          className='w-full px-4 py-3 text-left
+                                     text-neutral-300 hover:text-white hover:bg-neutral-700
+                                     transition-colors cursor-pointer text-[1.05rem] font-semibold'
+                        >
+                          Global Leaderboard (top 100)
+                        </button>
+                        <hr className='border-neutral-700 my-1' />
+                        <JsonDebugModal
+                          className='w-full px-4 py-3 text-left
+                                     text-neutral-300 hover:text-white hover:bg-neutral-700
+                                     transition-colors cursor-pointer text-[1.05rem] font-semibold'
+                        />
+                        <button
+                          onClick={() => {
+                            setShowNavMenu(false)
+                            if (playerName) trackLogout(playerName)
+                            sessionStorage.removeItem(TOKEN_KEY)
+                            sessionStorage.removeItem(STORAGE_KEY)
+                            setAnalyticsUser(null)
+                            setAuthToken(null)
+                            setPlayerName(null)
+                          }}
+                          className='w-full px-4 py-3 text-left
+                                     text-red-400 hover:text-red-300 hover:bg-red-950/40
+                                     transition-colors cursor-pointer text-[1.05rem] font-semibold'
+                        >
+                          Log Out
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -344,86 +429,6 @@ export default function App () {
                   className='fixed inset-0 z-[1000]'
                   onClick={() => setShowNavMenu(false)}
                 />
-                <div className='absolute top-full right-0 z-[1001] mt-1
-                                bg-neutral-800 border border-neutral-700 rounded-xl
-                                shadow-2xl shadow-black/50 min-w-[220px] overflow-hidden'>
-                  <div className='py-1'>
-                    <button
-                      onClick={() => {
-                        setShowNavMenu(false)
-                        trackModalOpen('rules')
-                        setShowRulesModal(true)
-                        window.scrollTo(0, 0)
-                      }}
-                      className='w-full px-4 py-3 text-left
-                                 text-neutral-300 hover:text-white hover:bg-neutral-700
-                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
-                    >
-                      Gomoku Rules
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowNavMenu(false)
-                        trackModalOpen('about')
-                        setShowAboutModal(true)
-                        window.scrollTo(0, 0)
-                      }}
-                      className='w-full px-4 py-3 text-left
-                                 text-neutral-300 hover:text-white hover:bg-neutral-700
-                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
-                    >
-                      About the Author
-                    </button>
-                    <hr className='border-neutral-700 my-1' />
-                    <button
-                      onClick={() => {
-                        setShowNavMenu(false)
-                        setShowHistoryModal(true)
-                        window.scrollTo(0, 0)
-                      }}
-                      className='w-full px-4 py-3 text-left
-                                 text-neutral-300 hover:text-white hover:bg-neutral-700
-                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
-                    >
-                      Your Game History
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowNavMenu(false)
-                        trackModalOpen('leaderboard')
-                        setShowLeaderboardModal(true)
-                        window.scrollTo(0, 0)
-                      }}
-                      className='w-full px-4 py-3 text-left
-                                 text-neutral-300 hover:text-white hover:bg-neutral-700
-                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
-                    >
-                      Global Leaderboard (top 100)
-                    </button>
-                    <hr className='border-neutral-700 my-1' />
-                    <JsonDebugModal
-                      className='w-full px-4 py-3 text-left
-                                 text-neutral-300 hover:text-white hover:bg-neutral-700
-                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
-                    />
-                    <button
-                      onClick={() => {
-                        setShowNavMenu(false)
-                        if (playerName) trackLogout(playerName)
-                        sessionStorage.removeItem(TOKEN_KEY)
-                        sessionStorage.removeItem(STORAGE_KEY)
-                        setAnalyticsUser(null)
-                        setAuthToken(null)
-                        setPlayerName(null)
-                      }}
-                      className='w-full px-4 py-3 text-left
-                                 text-red-400 hover:text-red-300 hover:bg-red-950/40
-                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
-                    >
-                      Log Out
-                    </button>
-                  </div>
-                </div>
               </>
             )}
           </nav>
