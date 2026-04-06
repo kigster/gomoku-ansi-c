@@ -93,10 +93,14 @@ typedef enum {
     PLAYER_TYPE_AI = 1
 } player_type_t;
 
+#define MAX_SEARCH_RADIUS 6
+#define MAX_SEARCH_DEPTH 7
+
 // Search parameters
 #define SEARCH_RADIUS 4
-#define NEED_TO_WIN 5
 #define NUM_DIRECTIONS 4
+#define NEED_TO_WIN 5
+
 
 // Return codes
 #define RT_SUCCESS 0

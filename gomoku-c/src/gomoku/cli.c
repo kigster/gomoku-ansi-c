@@ -21,7 +21,7 @@
 cli_config_t parse_arguments(int argc, char *argv[]) {
   cli_config_t config = {
       .board_size = 19,  // Default board size
-      .max_depth = 3,    // Default difficulty (medium)
+      .max_depth = 6,    // Default difficulty (medium)
       .move_timeout = 0, // No timeout by default
       .show_help = 0,
       .invalid_args = 0,
@@ -328,9 +328,9 @@ void print_help(const char *program_name) {
 
   printf("%sAI PLAYER(s) FLAGS:%s\n", COLOR_BRIGHT_MAGENTA, COLOR_RESET);
 
-  printf(
-      "  %s-d, --depth N%s         The depth of search, default is 3. When\n",
-      COLOR_YELLOW, COLOR_RESET);
+  printf("  %s-d, --depth N%s         The depth of search, default is 3, max "
+         "is %d. When\n",
+         COLOR_YELLOW, COLOR_RESET, MAX_SEARCH_DEPTH);
 
   printf("                        both players are AI players,\n");
   printf("                        use N for both, or N:M for asymmetric depths "

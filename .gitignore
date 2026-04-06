@@ -1,5 +1,6 @@
 # ─── C build artifacts ────────────────────────────────────────────────────────
 .secret
+bin/gomoku*
 gomoku-c/bin/
 gomoku-c/tests/googletest/
 gomoku-c/tests/evals/results/*

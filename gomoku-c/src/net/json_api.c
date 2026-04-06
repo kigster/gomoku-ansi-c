@@ -491,8 +491,7 @@ char *json_api_serialize_game_ex(game_state_t *game,
     char coord[8];
     if (coord_to_notation(move->x, move->y, game->board_size, coord,
                           sizeof(coord))) {
-      json_object_object_add(move_obj, username,
-                             json_object_new_string(coord));
+      json_object_object_add(move_obj, username, json_object_new_string(coord));
     }
 
     // AI-specific fields

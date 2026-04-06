@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     database_url: str = ""
 
     # Upstream game engine
-    gomoku_httpd_url: str = "http://localhost:8787"
+    gomoku_httpd_url: str = "http://localhost:5000"
 
     # JWT
     jwt_secret: str = "change-me-in-production"
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: list[str] = ["*"]
-
+ 
     # Email
     email_provider: str = "stdout"  # stdout | sendgrid
     email_from: str = "noreply@gomoku.games"

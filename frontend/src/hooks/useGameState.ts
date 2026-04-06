@@ -93,7 +93,7 @@ export function useGameState(settings: GameSettings) {
     state: GameState,
     timeoutMs?: number,
     timeoutSec = 0,
-  ) => {
+  ): Promise<boolean> => {
     setPhase('thinking')
     setError(null)
     turnStartMs.current = Date.now()
@@ -127,7 +127,7 @@ export function useGameState(settings: GameSettings) {
           turnStartMs.current = Date.now()
           setPhase('playing')
         }
-        return
+        return true
       } catch (err) {
         if (err instanceof DOMException && err.name === 'TimeoutError' && timeoutMs) {
           attempts++
@@ -145,7 +145,7 @@ export function useGameState(settings: GameSettings) {
         }
         setError(err instanceof Error ? err.message : 'Unknown error')
         setPhase('playing')
-        return
+        return false
       }
     }
   }, [])
@@ -183,6 +183,9 @@ export function useGameState(settings: GameSettings) {
     if (turn !== settings.playerSide) return
 
     const elapsed = Date.now() - turnStartMs.current
+    const previousGameState = gameState
+    const previousHumanTimeAccum = humanTimeAccum.current
+    const previousLastHumanMoveMs = lastHumanMoveMs.current
     humanTimeAccum.current += elapsed
     lastHumanMoveMs.current = elapsed
     const moveKey = `${turn} (human)` as 'X (human)' | 'O (human)'
@@ -210,7 +213,15 @@ export function useGameState(settings: GameSettings) {
     // Send to server for AI's response
     const timeoutSec = settings.aiTimeout !== 'none' ? parseInt(settings.aiTimeout) : 0
     const timeoutMs = timeoutSec > 0 ? (timeoutSec + 5) * 1000 : undefined
-    await sendToServer(newState, timeoutMs, timeoutSec)
+    const aiMoveSucceeded = await sendToServer(newState, timeoutMs, timeoutSec)
+    if (!aiMoveSucceeded) {
+      // Roll back the optimistic human move so the game does not get stuck
+      // on the AI's turn after a failed backend request.
+      humanTimeAccum.current = previousHumanTimeAccum
+      lastHumanMoveMs.current = previousLastHumanMoveMs
+      setGameState(previousGameState)
+      turnStartMs.current = Date.now()
+    }
   }, [gameState, phase, settings.playerSide, settings.aiTimeout, sendToServer])
 
   const board = gameState

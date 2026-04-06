@@ -16,7 +16,6 @@
 // AI CONSTANTS AND STRUCTURES
 //===============================================================================
 
-#define MAX_RADIUS 2
 #define WIN_SCORE 1000000
 
 static int is_five_from_last_move(int **board, int board_size, int x, int y,
@@ -1187,9 +1186,9 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
     for (int i = 0; i < blocking_move_count; i++) {
       if (blocking_threat_level[i] != max_opp_threat)
         continue;
-      int own_threat =
-          evaluate_threat_fast(game->board, blocking_moves_x[i],
-                               blocking_moves_y[i], ai_player, game->board_size);
+      int own_threat = evaluate_threat_fast(game->board, blocking_moves_x[i],
+                                            blocking_moves_y[i], ai_player,
+                                            game->board_size);
       if (own_threat > best_own_threat) {
         best_own_threat = own_threat;
         best_block_count = 0;

@@ -30,6 +30,20 @@ const STORAGE_KEY = 'gomoku_username'
 const TOKEN_KEY = 'gomoku_auth_token'
 const API_BASE = import.meta.env.VITE_API_BASE || ''
 
+async function extractErrorDetail (response: Response): Promise<string> {
+  const text = await response.text().catch(() => '')
+  if (!text) return ''
+
+  try {
+    const parsed = JSON.parse(text)
+    if (typeof parsed.detail === 'string') return parsed.detail
+    if (typeof parsed.error === 'string') return parsed.error
+    return text
+  } catch {
+    return text
+  }
+}
+
 export default function App () {
   const [playerName, setPlayerName] = useState<string | null>(() =>
     sessionStorage.getItem(STORAGE_KEY)
@@ -78,6 +92,7 @@ export default function App () {
   const [showSettings, setShowSettings] = useState(false)
   const [stats, setStats] = useState<{ won: number; lost: number } | null>(null)
   const prevPhaseRef = useRef<string>('idle')
+  const lastAlertedErrorRef = useRef<string | null>(null)
 
   // Fetch win/loss stats from API on mount
   useEffect(() => {
@@ -122,6 +137,16 @@ export default function App () {
     resetGame
   } = useGameState(settings)
 
+  useEffect(() => {
+    if (!error) {
+      lastAlertedErrorRef.current = null
+      return
+    }
+    if (lastAlertedErrorRef.current === error) return
+    lastAlertedErrorRef.current = error
+    showError('API request failed.', error)
+  }, [error])
+
   // Record win/loss when game ends
   useEffect(() => {
     if (
@@ -129,9 +154,12 @@ export default function App () {
       phase === 'gameover' &&
       playerName
     ) {
-      if (winner === 'draw') {
+      const isFinishedGame = winner !== 'none'
+      const isDraw = winner === 'draw'
+
+      if (isDraw) {
         showInfo('The game ended in a draw!')
-      } else if (winner !== 'none') {
+      } else if (isFinishedGame) {
         const youWon = winner === settings.playerSide
 
         setStats(prev => {
@@ -149,32 +177,43 @@ export default function App () {
             `The AI won this round. Better luck next time, ${playerName}!`
           )
         }
+      }
 
-        // Save game to API
-        if (authToken && gameState) {
-          fetch(`${API_BASE}/game/save`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${authToken}`
-            },
-            body: JSON.stringify({ game_json: gameState })
+      // Save every finished game, including draws.
+      if (isFinishedGame && authToken && gameState) {
+        fetch(`${API_BASE}/game/save`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`
+          },
+          body: JSON.stringify({ game_json: gameState })
+        })
+          .then(async r => {
+            if (r.status === 401) {
+              handleSessionExpired()
+              throw new Error('Session expired')
+            }
+            if (!r.ok) {
+              const detail = await extractErrorDetail(r)
+              throw new Error(detail || `Game save failed (${r.status})`)
+            }
+            return r.json()
           })
-            .then(r => {
-              if (r.status === 401) {
-                handleSessionExpired()
-                return Promise.reject(r)
-              }
-              return r.ok ? r.json() : Promise.reject(r)
-            })
-            .then(data => {
-              if (data.score > 0) {
-                showInfo(`Score: ${data.score} (Rating: ${data.rating}/100)`)
-              }
-            })
-            .catch(() => {})
-        }
+          .then(data => {
+            if (data.score > 0) {
+              showInfo(`Score: ${data.score} (Rating: ${data.rating}/100)`)
+            }
+          })
+          .catch(err => {
+            const detail = err instanceof Error ? err.message : 'Unable to save game'
+            if (detail !== 'Session expired') {
+              showError('Failed to save finished game.', detail)
+            }
+          })
+      }
 
+      if (isFinishedGame) {
         trackGameFinish(
           winner,
           settings.playerSide,
@@ -265,71 +304,9 @@ export default function App () {
                 </h1>
               </div>
 
-              {/* Desktop nav links */}
-              <div className='hidden md:flex items-center gap-4'>
-                <JsonDebugModal />
-                <button
-                  onClick={() => {
-                    trackModalOpen('leaderboard')
-                    setShowLeaderboardModal(true)
-                    window.scrollTo(0, 0)
-                  }}
-                  className='text-neutral-400 hover:text-neutral-200 transition-colors px-2 py-1 cursor-pointer'
-                >
-                  Leaderboard
-                </button>
-                <button
-                  onClick={() => {
-                    trackModalOpen('rules')
-                    setShowRulesModal(true)
-                    window.scrollTo(0, 0)
-                  }}
-                  className='text-neutral-400 hover:text-neutral-200 transition-colors px-2 py-1 cursor-pointer'
-                >
-                  Rules
-                </button>
-                <button
-                  onClick={() => {
-                    trackModalOpen('about')
-                    setShowAboutModal(true)
-                    window.scrollTo(0, 0)
-                  }}
-                  className='text-neutral-400 hover:text-neutral-200 transition-colors px-2 py-1 cursor-pointer'
-                >
-                  About
-                </button>
-                <span className='text-neutral-700'>|</span>
-                <button
-                  onClick={() => {
-                    setShowHistoryModal(true)
-                    window.scrollTo(0, 0)
-                  }}
-                  className='text-neutral-400 hover:text-neutral-200 transition-colors cursor-pointer'
-                >
-                  Hello,{' '}
-                  <span className='text-neutral-200 font-medium'>
-                    {playerName}
-                  </span>
-                </button>
-                <button
-                  onClick={() => {
-                    if (playerName) trackLogout(playerName)
-                    sessionStorage.removeItem(TOKEN_KEY)
-                    sessionStorage.removeItem(STORAGE_KEY)
-                    setAnalyticsUser(null)
-                    setAuthToken(null)
-                    setPlayerName(null)
-                  }}
-                  className='text-neutral-400 hover:text-neutral-200 transition-colors px-2 py-1 cursor-pointer'
-                  title='Log out and switch accounts'
-                >
-                  Log Out
-                </button>
-              </div>
-
-              {/* Mobile: player name + hamburger */}
-              <div className='flex md:hidden items-center gap-3'>
-                <span className='text-neutral-400 text-sm'>
+              {/* Unified nav menu — visible dropdown on all screen sizes */}
+              <div className='relative flex items-center gap-3'>
+                <span className='hidden sm:block text-neutral-400 text-sm'>
                   Hello,{' '}
                   <span className='text-neutral-200 font-medium'>
                     {playerName}
@@ -337,102 +314,98 @@ export default function App () {
                 </span>
                 <button
                   onClick={() => setShowNavMenu(s => !s)}
-                  className='text-neutral-400 hover:text-neutral-200 transition-colors p-1 cursor-pointer'
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold
+                             text-sm transition-all cursor-pointer border
+                             ${showNavMenu
+                               ? 'bg-amber-500 text-neutral-900 border-amber-400'
+                               : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-200 border-neutral-600 hover:border-neutral-500'
+                             }`}
                   aria-label='Menu'
+                  aria-expanded={showNavMenu}
                 >
-                  {showNavMenu ? (
-                    <svg
-                      viewBox='0 0 24 24'
-                      width='24'
-                      height='24'
-                      fill='none'
-                      stroke='currentColor'
-                      strokeWidth='2'
-                      strokeLinecap='round'
-                    >
-                      <path d='M18 6L6 18' />
-                      <path d='M6 6l12 12' />
-                    </svg>
-                  ) : (
-                    <svg
-                      viewBox='0 0 24 24'
-                      width='24'
-                      height='24'
-                      fill='none'
-                      stroke='currentColor'
-                      strokeWidth='2'
-                      strokeLinecap='round'
-                    >
-                      <path d='M3 12h18' />
-                      <path d='M3 6h18' />
-                      <path d='M3 18h18' />
-                    </svg>
-                  )}
+                  <svg viewBox='0 0 24 24' width='16' height='16' fill='none'
+                    stroke='currentColor' strokeWidth='2.5' strokeLinecap='round'>
+                    <path d='M3 12h18' /><path d='M3 6h18' /><path d='M3 18h18' />
+                  </svg>
+                  <span>Menu</span>
+                  <svg viewBox='0 0 24 24' width='14' height='14' fill='none'
+                    stroke='currentColor' strokeWidth='2.5' strokeLinecap='round'
+                    className={`transition-transform duration-200 ${showNavMenu ? 'rotate-180' : ''}`}>
+                    <path d='M6 9l6 6 6-6' />
+                  </svg>
                 </button>
               </div>
             </div>
 
-            {/* Mobile dropdown menu */}
+            {/* Dropdown menu */}
             {showNavMenu && (
               <>
                 <div
-                  className='fixed inset-0 z-[1000] md:hidden'
+                  className='fixed inset-0 z-[1000]'
                   onClick={() => setShowNavMenu(false)}
                 />
-                <div
-                  className='md:hidden absolute top-full left-0 right-0 z-[1001]
-                            bg-neutral-900 border-b border-neutral-800 shadow-xl'
-                >
-                  <div className='max-w-6xl mx-auto px-4 py-2 flex flex-col font-semibold text-base'>
+                <div className='absolute top-full right-0 z-[1001] mt-1
+                                bg-neutral-800 border border-neutral-700 rounded-xl
+                                shadow-2xl shadow-black/50 min-w-[220px] overflow-hidden'>
+                  <div className='py-1'>
                     <button
                       onClick={() => {
                         setShowNavMenu(false)
-                        setShowLeaderboardModal(true)
-                        window.scrollTo(0, 0)
-                      }}
-                      className='text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800
-                             transition-colors px-3 py-2.5 text-left rounded cursor-pointer'
-                    >
-                      Leaderboard
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowNavMenu(false)
+                        trackModalOpen('rules')
                         setShowRulesModal(true)
                         window.scrollTo(0, 0)
                       }}
-                      className='text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800
-                             transition-colors px-3 py-2.5 text-left rounded cursor-pointer'
+                      className='w-full px-4 py-3 text-left
+                                 text-neutral-300 hover:text-white hover:bg-neutral-700
+                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
                     >
-                      Rules
+                      Gomoku Rules
                     </button>
                     <button
                       onClick={() => {
                         setShowNavMenu(false)
+                        trackModalOpen('about')
                         setShowAboutModal(true)
                         window.scrollTo(0, 0)
                       }}
-                      className='text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800
-                             transition-colors px-3 py-2.5 text-left rounded cursor-pointer'
+                      className='w-full px-4 py-3 text-left
+                                 text-neutral-300 hover:text-white hover:bg-neutral-700
+                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
                     >
-                      About
+                      About the Author
                     </button>
-                    <JsonDebugModal
-                      className='text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800
-                             transition-colors px-3 py-2.5 text-left rounded cursor-pointer w-full'
-                    />
-                    <hr className='border-neutral-800 my-1' />
+                    <hr className='border-neutral-700 my-1' />
                     <button
                       onClick={() => {
                         setShowNavMenu(false)
                         setShowHistoryModal(true)
                         window.scrollTo(0, 0)
                       }}
-                      className='text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800
-                             transition-colors px-3 py-2.5 text-left rounded cursor-pointer'
+                      className='w-full px-4 py-3 text-left
+                                 text-neutral-300 hover:text-white hover:bg-neutral-700
+                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
                     >
-                      Game History
+                      Your Game History
                     </button>
+                    <button
+                      onClick={() => {
+                        setShowNavMenu(false)
+                        trackModalOpen('leaderboard')
+                        setShowLeaderboardModal(true)
+                        window.scrollTo(0, 0)
+                      }}
+                      className='w-full px-4 py-3 text-left
+                                 text-neutral-300 hover:text-white hover:bg-neutral-700
+                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
+                    >
+                      Global Leaderboard (top 100)
+                    </button>
+                    <hr className='border-neutral-700 my-1' />
+                    <JsonDebugModal
+                      className='w-full px-4 py-3 text-left
+                                 text-neutral-300 hover:text-white hover:bg-neutral-700
+                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
+                    />
                     <button
                       onClick={() => {
                         setShowNavMenu(false)
@@ -443,8 +416,9 @@ export default function App () {
                         setAuthToken(null)
                         setPlayerName(null)
                       }}
-                      className='text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800
-                             transition-colors px-3 py-2.5 text-left rounded cursor-pointer'
+                      className='w-full px-4 py-3 text-left
+                                 text-red-400 hover:text-red-300 hover:bg-red-950/40
+                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
                     >
                       Log Out
                     </button>
@@ -471,16 +445,24 @@ export default function App () {
                   >
                     {showSettings ? 'Hide Settings' : 'Settings'}
                   </button>
+                  {/* Wrapper uses grid-rows collapse + opacity so CSS transition works */}
                   <div
-                    className={`${
-                      showSettings || !isActive ? 'block' : 'hidden'
-                    } lg:block`}
+                    className={[
+                      'grid overflow-hidden',
+                      'transition-[grid-template-rows,opacity] duration-500 ease-in-out',
+                      showSettings || !isActive
+                        ? 'grid-rows-[1fr] opacity-100'
+                        : 'grid-rows-[0fr] opacity-0 pointer-events-none',
+                      'lg:!block lg:!opacity-100 lg:pointer-events-auto',
+                    ].join(' ')}
                   >
-                    <SettingsPanel
-                      settings={settings}
-                      onChange={setSettings}
-                      disabled={isActive}
-                    />
+                    <div className='overflow-hidden'>
+                      <SettingsPanel
+                        settings={settings}
+                        onChange={setSettings}
+                        disabled={isActive}
+                      />
+                    </div>
                   </div>
 
                   {/* Start / New Game Button */}
@@ -501,7 +483,8 @@ export default function App () {
                         }}
                         className='w-full py-4 rounded-xl text-xl font-bold font-heading
                                bg-amber-600 hover:bg-amber-500 active:bg-amber-700
-                               shadow-lg shadow-amber-900/30 transition-all
+                               ring-1 ring-amber-500/30 shadow-lg shadow-amber-900/40
+                               transition-all duration-200 hover:shadow-amber-600/25
                                hover:shadow-xl hover:scale-[1.02]'
                       >
                         Start Game
@@ -511,7 +494,8 @@ export default function App () {
                       <button
                         onClick={handleAbort}
                         className='w-full py-3 rounded-xl text-lg font-semibold font-heading
-                               bg-neutral-700 hover:bg-neutral-600 transition-colors'
+                               glass-card border-neutral-600 hover:border-neutral-500
+                               hover:bg-neutral-800/90 text-neutral-300 transition-all duration-200'
                       >
                         New Game
                       </button>
@@ -526,9 +510,9 @@ export default function App () {
                           onClick={handleUndo}
                           disabled={phase !== 'playing' || moveCount < 2}
                           className='w-full py-3 rounded-xl text-lg font-bold font-heading
-                                 bg-amber-600 hover:bg-amber-500 active:bg-amber-700
-                                 shadow-lg shadow-amber-900/30 transition-all
-                                 disabled:opacity-40 disabled:cursor-not-allowed'
+                                 bg-sky-700 hover:bg-sky-600 active:bg-sky-800
+                                 text-white shadow-md shadow-sky-900/40 transition-all duration-200
+                                 disabled:opacity-30 disabled:cursor-not-allowed'
                         >
                           Undo
                         </button>
@@ -537,10 +521,10 @@ export default function App () {
                       <button
                         onClick={handleAbort}
                         className='w-full mt-3 py-3 rounded-xl text-lg font-bold font-heading
-                               bg-amber-600 hover:bg-amber-500 active:bg-amber-700
-                               shadow-lg shadow-amber-900/30 transition-all'
+                               bg-red-700 hover:bg-red-600 active:bg-red-800
+                               text-white shadow-md shadow-red-900/40 transition-all duration-200'
                       >
-                        Abort This Game
+                        Abort Game
                       </button>
                     </div>
                   )}
@@ -555,7 +539,7 @@ export default function App () {
                     displayMode={settings.displayMode}
                     winner={winner}
                     moveCount={moveCount}
-                    error={error}
+                    error={null}
                     stats={stats}
                     humanTotalMs={humanTotalMs}
                     aiTotalMs={aiTotalMs}
@@ -573,8 +557,8 @@ export default function App () {
                         <button
                           onClick={handleAbort}
                           className='w-[30%] py-2 rounded-xl text-sm font-bold font-heading
-                                 bg-amber-600 hover:bg-amber-500 active:bg-amber-700
-                                 shadow-lg shadow-amber-900/30 transition-all'
+                                 bg-red-700 hover:bg-red-600 active:bg-red-800
+                                 text-white shadow-md shadow-red-900/40 transition-all duration-200'
                         >
                           Abort
                         </button>
@@ -583,9 +567,9 @@ export default function App () {
                             onClick={handleUndo}
                             disabled={phase !== 'playing' || moveCount < 2}
                             className='w-[30%] py-2 rounded-xl text-sm font-bold font-heading
-                                   bg-amber-600 hover:bg-amber-500 active:bg-amber-700
-                                   shadow-lg shadow-amber-900/30 transition-all
-                                   disabled:opacity-40 disabled:cursor-not-allowed'
+                                   bg-sky-700 hover:bg-sky-600 active:bg-sky-800
+                                   text-white shadow-md shadow-sky-900/40 transition-all duration-200
+                                   disabled:opacity-30 disabled:cursor-not-allowed'
                           >
                             Undo
                           </button>
