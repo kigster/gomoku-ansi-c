@@ -16,7 +16,6 @@
 // AI CONSTANTS AND STRUCTURES
 //===============================================================================
 
-#define MAX_RADIUS 2
 #define WIN_SCORE 1000000
 
 static int is_five_from_last_move(int **board, int board_size, int x, int y,
@@ -1130,10 +1129,20 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
   }
 
   // =========================================================================
-  // STEP 2: Block opponent closed four, open four, or five (>= 100000).
-  // A closed four has one open end — opponent wins next move if not blocked.
-  // Lower threats (compound threats, open threes) are handled by minimax,
-  // which can properly weigh offense vs defense with lookahead.
+  // STEP 2: Block opponent open four or immediate win (>= 500000).
+  //
+  // We only force-block here when the opponent can win IMMEDIATELY (five in a
+  // row = 1000000) or create an open four that cannot be stopped (500000).
+  //
+  // Closed fours (100000) are intentionally excluded: a closed four means the
+  // opponent needs ONE more move to win, and O can delay the block by a turn
+  // to play offense first, then block the winning cell on the next move.
+  // Preemptively blocking closed fours kills the AI's offensive development
+  // without any strategic gain.
+  //
+  // Examples of what is NOT caught here (handled by minimax instead):
+  //   - Opponent half-open three that would extend to a closed four
+  //   - Closed four threats where O has a better offensive reply
   // =========================================================================
   step_start = get_current_time();
   int blocking_moves_x[361];
@@ -1147,7 +1156,7 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
                                           opponent, game->board_size);
     if (opp_threat > max_opp_threat)
       max_opp_threat = opp_threat;
-    if (opp_threat >= 100000) {
+    if (opp_threat >= 500000) { // open four or win — must block immediately
       blocking_moves_x[blocking_move_count] = moves[i].x;
       blocking_moves_y[blocking_move_count] = moves[i].y;
       blocking_threat_level[blocking_move_count] = opp_threat;
@@ -1168,12 +1177,23 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
   }
 
   if (blocking_move_count > 0) {
+    // Among equally urgent blocks, prefer the one that also builds our offense.
     int best_blocks_x[361];
     int best_blocks_y[361];
     int best_block_count = 0;
+    int best_own_threat = -1;
 
     for (int i = 0; i < blocking_move_count; i++) {
-      if (blocking_threat_level[i] == max_opp_threat) {
+      if (blocking_threat_level[i] != max_opp_threat)
+        continue;
+      int own_threat = evaluate_threat_fast(game->board, blocking_moves_x[i],
+                                            blocking_moves_y[i], ai_player,
+                                            game->board_size);
+      if (own_threat > best_own_threat) {
+        best_own_threat = own_threat;
+        best_block_count = 0;
+      }
+      if (own_threat == best_own_threat) {
         best_blocks_x[best_block_count] = blocking_moves_x[i];
         best_blocks_y[best_block_count] = blocking_moves_y[i];
         best_block_count++;
@@ -1184,7 +1204,7 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
     *best_x = best_blocks_x[selected];
     *best_y = best_blocks_y[selected];
     snprintf(game->ai_status_message, sizeof(game->ai_status_message),
-             "%s%c%s Blocking opponent's threat!", ai_color, ai_symbol,
+             "%s%c%s Blocking opponent's open four!", ai_color, ai_symbol,
              COLOR_RESET);
     add_ai_history_entry(game, blocking_move_count);
     return;

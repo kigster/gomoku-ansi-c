@@ -477,22 +477,21 @@ char *json_api_serialize_game_ex(game_state_t *game,
     json_object *move_obj = json_object_new_object();
 
     // Player identifier
-    const char *player_name;
+    const char *username;
     int player_index = (move->player == AI_CELL_CROSSES) ? 0 : 1;
     int is_ai = (game->player_type[player_index] == PLAYER_TYPE_AI);
 
     if (move->player == AI_CELL_CROSSES) {
-      player_name = is_ai ? "X (AI)" : "X (human)";
+      username = is_ai ? "X (AI)" : "X (human)";
     } else {
-      player_name = is_ai ? "O (AI)" : "O (human)";
+      username = is_ai ? "O (AI)" : "O (human)";
     }
 
     // Position in compact board notation (e.g., "H7")
     char coord[8];
     if (coord_to_notation(move->x, move->y, game->board_size, coord,
                           sizeof(coord))) {
-      json_object_object_add(move_obj, player_name,
-                             json_object_new_string(coord));
+      json_object_object_add(move_obj, username, json_object_new_string(coord));
     }
 
     // AI-specific fields

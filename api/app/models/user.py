@@ -14,6 +14,8 @@ class UserCreate(BaseModel):
     username: str
     password: str
     email: EmailStr | None = None
+    first_name: str | None = None
+    last_name: str | None = None
 
     @field_validator("username")
     @classmethod
@@ -72,7 +74,11 @@ class UserOut(BaseModel):
     id: UUID
     username: str
     email: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
     created_at: datetime
+    last_logged_in_at: datetime | None = None
+    logins_count: int = 0
     games_won: int = 0
     games_lost: int = 0
     personal_best: PersonalBest | None = None

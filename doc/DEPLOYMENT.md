@@ -1,445 +1,307 @@
 # Deployment Guide
 
-This project supports local development clusters and two production deployment targets on Google Cloud Platform.
+Production deployment uses Google Cloud Run with external PostgreSQL (Neon). For local development, use the `gctl` cluster controller.
 
 ---
 
 ## 1. Local Development Cluster
 
-This section covers running the Gomoku cluster locally on a development machine using the `gctl` controller script.
-
-### Overview
-
-Since `gomoku-httpd` is single-threaded, serving web traffic requires a swarm of worker processes behind a reverse proxy. The local cluster consists of:
-
-| Component      | Default Port(s) | Description                                        |
-|----------------|------------------|----------------------------------------------------|
-| **nginx**      | 80, 443          | TLS termination, static assets, upstream routing   |
-| **envoy**      | 10000 (fe), 9901 (admin) | Reverse proxy with least-request LB, health checks |
-| **haproxy**    | 10000 (fe), 8404 (admin) | Alternative reverse proxy with agent-check LB      |
-| **gomoku-httpd** | 9500+          | Worker processes (one per port)                    |
-| **frontend**   | 5173             | Vite React dev server                              |
+Since `gomoku-httpd` is single-threaded, serving concurrent game requests requires a pool of worker processes behind a load balancer. The local cluster replicates the production architecture on your dev machine.
 
 ### Architecture
 
+```mermaid
+graph TB
+    subgraph Browser
+        Client["Browser / curl"]
+    end
+
+    subgraph "Local Dev Machine"
+        Nginx["nginx :443 / :80<br/>(TLS termination via mkcert)"]
+
+        subgraph "FastAPI :8000"
+            API["Auth, Scoring, Leaderboard<br/>Game Proxy, Static SPA"]
+        end
+
+        subgraph "Game Engine Pool"
+            Envoy["Envoy :10000<br/>(least-request LB, health checks)"]
+            W1["gomoku-httpd :9500"]
+            W2["gomoku-httpd :9501"]
+            W3["gomoku-httpd :9502"]
+            WN["gomoku-httpd :950N"]
+        end
+
+        PG[("PostgreSQL<br/>localhost:5432")]
+        Vite["Vite :5173<br/>(dev server, HMR)"]
+    end
+
+    Client -->|"HTTPS"| Nginx
+    Nginx --> API
+    Nginx --> Vite
+    API -->|"POST /gomoku/play"| Envoy
+    Envoy --> W1 & W2 & W3 & WN
+    API -->|"asyncpg"| PG
+
+    style Client fill:#4A90D9,color:#fff
+    style Nginx fill:#009639,color:#fff
+    style API fill:#2D6A4F,color:#fff
+    style Envoy fill:#E76F51,color:#fff
+    style PG fill:#7B68EE,color:#fff
+    style Vite fill:#646CFF,color:#fff
 ```
-Browser ──► nginx (:443 TLS) ──► envoy/haproxy (:10000) ──► gomoku-httpd (:9500..N)
-                                                             (worker pool)
-Frontend dev: http://localhost:5173
-```
 
-The sequence diagram below illustrates the request flow:
+### Components
 
-![Cluster architecture](img/haproxy-design-sequence.png)
+| Component | Default Port(s) | Description |
+|---|---|---|
+| **nginx** | 80, 443 | TLS termination (mkcert), routing to API and Vite |
+| **envoy** | 10000 (frontend), 9901 (admin) | Least-request LB across gomoku-httpd workers |
+| **gomoku-httpd** | 9500+ | Worker pool (one process per port, one per CPU core) |
+| **FastAPI** | 8000 | Auth, scoring, leaderboard, game move proxy |
+| **Vite** | 5173 | React dev server with HMR |
+| **PostgreSQL** | 5432 | Local database for leaderboard and user accounts |
 
-### Managing Cluster with `gctl`
+### `gctl` — Cluster Controller
 
-> [!IMPORTANT]
-> We'll only say this once, but get `direnv` working so that `bin` folder is added to your `$PATH` when you cd into the project.This is why we use `gctl` in these examples, and not `bin/gctl`.
+![gctl help](img/gctl-help.jpg)
 
-#### `gctl` Help Screen
+> **Tip:** Use [direnv](https://direnv.net/) so that `bin/` is on your `$PATH` — then you can type `gctl` instead of `bin/gctl`.
 
-Nothing tells you more about a utility than its help page. `gctl` has two: regular `-h` and `details`:
-
-![gctl-help](img/gctl-help.png)
-
-##### And the Details
-
-![gctl-details](img/gctl-details.png)
-
-### Prerequisites
-
-Before first use, run the one-time setup:
+#### Setup (One-Time)
 
 ```bash
 gctl setup
 ```
 
-This will:
-- Install [Bashmatic](https://github.com/kigster/bashmatic) (the shell framework used by `gctl`)
-- Create and set permissions on log files under `/var/log/`
-- Configure `direnv`
-- Install monitoring utilities (`btop`, `htop`, `ctop`, `bottom`)
-
-### Quick Start
-
-```bash
-# Start the full cluster with Envoy (default) and 10 workers
-gctl start
-
-# Start with 16 workers
-gctl start -w 16
-
-# Start with HAProxy instead of Envoy
-gctl start -p haproxy
-
-# Start with HAProxy and 8 workers
-gctl start -p haproxy -w 8
-```
-
-When you run `gctl start`, the script automatically generates the proxy configuration (haproxy.cfg or envoy.yaml) from templates in `iac/templates/` to match the requested number of workers. This means you no longer need to manually edit config files when changing worker counts.
-
-### Commands Reference
+This installs dependencies, creates log files under `/var/log/`, generates local SSL certs via mkcert, and configures envoy/nginx templates.
 
 #### Cluster Lifecycle
 
 ```bash
-# Start the entire cluster (envoy is the default proxy)
-gctl start [-p <haproxy|envoy>] [-w <workers>]
-
-# Stop all components
-gctl stop
-
-# Restart everything
-gctl restart
-
-# Check status of all components
-gctl status
+gctl start                  # Start all components (1 worker per CPU core)
+gctl start -w 16            # Start with 16 workers
+gctl stop                   # Stop everything
+gctl restart                # Restart all components
+gctl status                 # Show what's running
 ```
 
-#### Operating Individual Components
-
-You can pass components to `start`, `stop`, and `restart`, such as `nginx`, `frontend`, `envoy`, `haproxy`, `gomoku`.
+#### Individual Components
 
 ```bash
-# Start only nginx and gomoku workers
-gctl start nginx gomoku
-
-# Restart only envoy
-gctl restart envoy
-
-# Stop only the frontend dev server
-gctl stop frontend
-
-# Check status of gomoku workers
-gctl status gomoku
+gctl start nginx api        # Start only nginx and FastAPI
+gctl restart envoy          # Restart just envoy
+gctl stop frontend          # Stop Vite dev server
 ```
 
-Available component names: `nginx`, `haproxy`, `envoy`, `gomoku` (alias: `gomoku-httpd`), `frontend`.
+Components: `nginx`, `envoy`, `gomoku`, `api`, `frontend`.
 
 #### Monitoring
 
 ```bash
-# Show cluster processes sorted by CPU usage
-gctl ps
-
-# Launch a monitoring tool filtered to Gomoku processes
-gctl observe btop
-gctl observe htop
-gctl observe ctop
-gctl observe btm
+gctl ps                     # Process table (PID, PPID, CPU, MEM, ARGS)
+gctl observe btop           # Launch btop filtered to gomoku processes
+gctl observe htop           # Or htop, ctop, btm
 ```
 
-#### Setup
-
-```bash
-# First-time setup: log files, utilities, direnv
-gctl setup
-```
-
-### Dynamic Config Generation
-
-The proxy configuration files are generated on the fly from shell templates located in `iac/templates/`:
-
-| Template                           | Output                           |
-|------------------------------------|----------------------------------|
-| `iac/templates/haproxy.cfg.sh`     | `$(brew --prefix)/etc/haproxy.cfg` |
-| `iac/local/templates/envoy.yaml.sh`      | `iac/envoy/envoy.yaml`          |
-
-Each template accepts a single argument — the number of workers — and writes the appropriate config with matching upstream/backend entries.
-
-You can also invoke them directly:
-
-```bash
-# Generate an envoy config for 16 workers
-bash iac/local/templates/envoy.yaml.sh 16 > iac/envoy/envoy.yaml
-
-# Generate a haproxy config for 8 workers
-bash iac/templates/haproxy.cfg.sh 8 > /usr/local/etc/haproxy.cfg
-```
-
-### Admin Interfaces
+#### Admin Interfaces
 
 - **Envoy admin:** http://127.0.0.1:9901
-- **HAProxy stats:** http://127.0.0.1:8404/stats
+- **Vite dev server:** http://localhost:5173
+- **Local HTTPS:** https://dev.gomoku.games
 
 ### Log Files
 
-All components log to `/var/log/`:
-
-| File                            | Component       |
-|---------------------------------|-----------------|
-| `/var/log/nginx/access.log`     | nginx access    |
-| `/var/log/nginx/error.log`      | nginx errors    |
-| `/var/log/envoy.log`            | Envoy proxy     |
-| `/var/log/haproxy.log`          | HAProxy         |
-| `/var/log/gomoku-httpd.log`     | gomoku workers  |
-| `/var/log/gomoku-frontend.log`  | Vite dev server |
+| File | Component |
+|---|---|
+| `/var/log/nginx/access.log` | nginx access |
+| `/var/log/nginx/error.log` | nginx errors |
+| `/var/log/envoy.log` | Envoy proxy |
+| `/var/log/gomoku-httpd.log` | gomoku workers |
+| `/var/log/gomoku-api.log` | FastAPI |
+| `/var/log/gomoku-frontend.log` | Vite dev server |
 
 ---
 
-## 2. Cloud Run (Recommended)
+## 2. Production — Google Cloud Run + Neon PostgreSQL
 
-Simpler, cheaper at low traffic, zero maintenance. Full documentation is in [`iac/cloud_run/README.md`](../iac/cloud_run/README.md).
-
-| | Cloud Run | GKE (Kubernetes) |
-|---|---|---|
-| **Complexity** | Low — serverless, no cluster to manage | High — full K8s cluster, Envoy, cert-manager |
-| **Cost at idle** | $0 (scales to zero) | ~$140/mo (2 x e2-standard-4 nodes always on) |
-| **Cost under load** | Pay-per-request + CPU time | Fixed node cost, autoscales pods within nodes |
-| **Cold start** | 1-2s on first request after idle | None (pods always running) |
-| **Config location** | `iac/cloud_run/` | `iac/k8s/` + `bin/gcp-create-cluster` |
-| **Deploy command** | `cd iac/cloud_run && ./deploy.sh` | `bin/gcp-create-cluster setup && bin/gcp-create-cluster deploy` |
-| **Custom domain SSL** | Google-managed (automatic) | cert-manager + Let's Encrypt |
-| **Load balancing** | Cloud Run built-in | Envoy gateway (LEAST_REQUEST, circuit breakers) |
+Serverless, scales to zero, $0/month at low traffic. Two Cloud Run services, database outsourced to Neon.
 
 ### Architecture
 
-Very simple:
+```mermaid
+graph TB
+    subgraph Internet
+        Browser["Browser"]
+    end
 
-![cloud-run](img/gcp-diagram.png)
+    subgraph "Google Cloud Run"
+        subgraph "gomoku-api (public)"
+            API["FastAPI + React SPA<br/>Auth, Scoring, Leaderboard<br/>Game Proxy<br/><br/>concurrency: 80<br/>auto-scale: 0–5"]
+        end
 
-### Quick Deploy
+        subgraph "gomoku-httpd (internal)"
+            Engine["C Game Engine<br/>Minimax + Alpha-Beta<br/><br/>concurrency: 1<br/>auto-scale: 0–20"]
+        end
+    end
+
+    subgraph "Neon (External)"
+        PG[("PostgreSQL<br/>serverless")]
+    end
+
+    Browser -->|"HTTPS :443<br/>(Google-managed TLS)"| API
+    API -->|"POST /gomoku/play<br/>(service-to-service auth)"| Engine
+    API -->|"asyncpg<br/>(TLS, connection pooling)"| PG
+
+    style Browser fill:#4A90D9,color:#fff
+    style API fill:#2D6A4F,color:#fff
+    style Engine fill:#E76F51,color:#fff
+    style PG fill:#7B68EE,color:#fff
+```
+
+### How It Works
+
+- **gomoku-api** is the only public-facing service. It serves the React SPA as static files, handles authentication, scoring, and leaderboard queries against Neon PostgreSQL, and proxies game move requests to gomoku-httpd.
+- **gomoku-httpd** is internal-only. Each instance handles one request at a time (`concurrency=1`). Cloud Run automatically spins up new instances for concurrent game moves and scales back to zero when idle.
+- **Cloud Run handles TLS** — your containers listen on plain HTTP. Google provisions and renews certificates for both the default `*.run.app` URL and any custom domain you map.
+- **No envoy, no nginx, no load balancer config** — Cloud Run's built-in request routing replaces all of that in production.
+
+### Request Flow
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant CR as Cloud Run Ingress
+    participant API as gomoku-api
+    participant PG as Neon PostgreSQL
+    participant E as gomoku-httpd
+
+    B->>CR: HTTPS POST /game/play
+    CR->>API: HTTP :8000 (TLS terminated)
+    API->>API: Validate JWT, parse game state
+    API->>E: POST /gomoku/play (internal, service-to-service auth)
+    Note over E: AI computes best move<br/>(minimax + alpha-beta pruning)
+    E-->>API: JSON with AI move
+    API->>PG: UPDATE game state, score
+    PG-->>API: OK
+    API-->>CR: JSON response
+    CR-->>B: HTTPS response with AI move
+```
+
+### Prerequisites
+
+- GCP project with billing enabled
+- `gcloud` CLI authenticated (`gcloud auth login`)
+- Terraform >= 1.0
+- Docker with `buildx`
+- A [Neon](https://neon.tech) database (free tier works)
+
+### Database Setup
+
+1. Create a Neon project and database named `gomoku`
+2. Apply the schema:
+   ```bash
+   psql "$NEON_DATABASE_URL" -f iac/cloud_sql/setup.sql
+   ```
+3. Save the connection string for the next step
+
+### Deploy
 
 ```bash
-export PROJECT_ID="fine-booking-486503-k7"
+# Set required environment variables
+export PROJECT_ID="your-gcp-project-id"
+export TF_VAR_jwt_secret="$(openssl rand -base64 32)"
+export TF_VAR_database_url="postgresql://user:pass@ep-xyz.neon.tech/gomoku?sslmode=require"
+
+# Build frontend, copy to api/public, build Docker images (linux/amd64)
+just cr-prepare
+
+# First-time: Terraform init + apply
+just cr-init
+
+# Subsequent updates: rebuild + push + gcloud update
+just cr-update
+```
+
+Or update individual services:
+
+```bash
 cd iac/cloud_run
-./deploy.sh
+./update.sh httpd        # Game engine only
+./update.sh api          # API + frontend only
 ```
 
-### Service URLs
+See [iac/cloud_run/README.md](../iac/cloud_run/README.md) for the full reference.
 
-| Service  | URL |
-|----------|-----|
-| Frontend | <https://gomoku-frontend-hdnatxbb3a-wl.a.run.app> |
-| Backend  | <https://gomoku-httpd-hdnatxbb3a-wl.a.run.app> |
-
-### Update Individual Components
+### Custom Domain
 
 ```bash
-REGION="us-central1"
-
-# Frontend only
-IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/gomoku-repo/gomoku-frontend:latest"
-docker buildx build --platform linux/amd64 -t "$IMAGE" --load frontend/
-docker push "$IMAGE"
-gcloud run services update gomoku-frontend --region=$REGION --image=$IMAGE
-
-# Backend only
-IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/gomoku-repo/gomoku-httpd:latest"
-docker buildx build --platform linux/amd64 -t "$IMAGE" --load .
-docker push "$IMAGE"
-gcloud run services update gomoku-httpd --region=$REGION --image=$IMAGE
-```
-
-### Custom Domain (gomoku.games)
-
-Cloud Run uses Google-managed SSL certificates with HTTP-01 validation. No certbot or DNS provider API credentials needed — just add DNS records and Google handles the rest.
-
-```bash
-# 1. Verify domain ownership (adds a TXT record)
-gcloud domains verify gomoku.games
-
-# 2. Create domain mapping
+gcloud domains verify gomoku.us
 gcloud run domain-mappings create \
-    --service=gomoku-frontend \
-    --domain=gomoku.games \
-    --region=us-central1
-
-# 3. Add DNS records in DnsMadeEasy (A records for apex domain):
-#    @ → 216.239.32.21, 216.239.34.21, 216.239.36.21, 216.239.38.21
-#
-#    Or for a subdomain (app.gomoku.games), just one CNAME:
-#    app → ghs.googlehosted.com.
-
-# 4. Check SSL provisioning status
-gcloud run domain-mappings describe --domain=gomoku.games --region=us-central1
+    --service gomoku-api \
+    --domain gomoku.us \
+    --region us-central1
 ```
+
+For the apex domain, add the A/AAAA records Google provides. For a subdomain (e.g. `app.gomoku.us`), add a single CNAME to `ghs.googlehosted.com`. Cloud Run provisions the TLS certificate automatically.
+
+### Scaling
+
+| Setting | gomoku-api | gomoku-httpd |
+|---|---|---|
+| Min instances | 0 | 0 |
+| Max instances | 5 | 20 |
+| Concurrency | 80 | 1 |
+| CPU | 1 vCPU | 1 vCPU |
+| Memory | 512 Mi | 512 Mi |
+
+Adjust via gcloud:
+
+```bash
+gcloud run services update gomoku-httpd --region=us-central1 --max-instances=50
+gcloud run services update gomoku-httpd --region=us-central1 --min-instances=1
+```
+
+### Cost
+
+| Resource | Free Tier |
+|---|---|
+| Cloud Run | 2M requests/mo, 360K vCPU-sec |
+| Artifact Registry | 500MB storage |
+| Neon PostgreSQL | 0.5GB storage, 190 compute hours/mo |
+
+**Total for hobby traffic: $0/month.** Set `min-instances=1` on gomoku-httpd to avoid cold starts (~$10-15/month).
 
 ### Monitoring
 
 ```bash
 # Live logs
+gcloud run services logs tail gomoku-api --region=us-central1
 gcloud run services logs tail gomoku-httpd --region=us-central1
-gcloud run services logs tail gomoku-frontend --region=us-central1
 
-# Health checks
-curl https://gomoku-frontend-hdnatxbb3a-wl.a.run.app/nginx-health
-curl https://gomoku-frontend-hdnatxbb3a-wl.a.run.app/health
-```
+# Health check
+curl https://gomoku-api-HASH-uc.a.run.app/health
 
-Cloud Console dashboards:
-
-- [Cloud Run overview](https://console.cloud.google.com/run?project=fine-booking-486503-k7)
-- [Frontend metrics](https://console.cloud.google.com/run/detail/us-central1/gomoku-frontend/metrics?project=fine-booking-486503-k7)
-- [Backend metrics](https://console.cloud.google.com/run/detail/us-central1/gomoku-httpd/metrics?project=fine-booking-486503-k7)
-
-### Terraform State
-
-Stored remotely in GCS for team collaboration:
-
-```
-gs://gomoku-tfstate-fine-booking/cloud-run/gomoku/
-```
-
-Any collaborator with GCP project access can run `terraform init` to connect.
-
----
-
-## 3. GKE / Kubernetes
-
-Full Kubernetes deployment with Envoy gateway for advanced load balancing. More complex to set up and operate, but gives fine-grained control over networking, circuit breaking, and pod-level scaling.
-
-### Architecture Graph
-
-```mermaid
-flowchart LR
-    Browser -- "HTTPS :443" --> Ingress
-
-    subgraph "GKE Cluster"
-        Ingress["nginx-ingress<br/>+ cert-manager TLS"]
-        Ingress -- ":80" --> FE["gomoku-frontend<br/>nginx + React SPA<br/>2 replicas"]
-        FE -- "/gomoku/* /health<br/>:10000" --> Envoy["envoy-gateway<br/>LEAST_REQUEST LB<br/>circuit breakers<br/>2 replicas"]
-        Envoy -- ":8787" --> Workers["gomoku-workers<br/>gomoku-httpd<br/>HPA 2-20 replicas"]
-    end
-
-    style Ingress fill:#4285F4,color:#fff
-    style FE fill:#34A853,color:#fff
-    style Envoy fill:#FBBC04,color:#000
-    style Workers fill:#EA4335,color:#fff
-```
-
-### Prerequisites
-
-```bash
-export PROJECT_ID="fine-booking-486503-k7"
-export REGION="us-central1"
-export CLUSTER_NAME="gomoku-cluster"
-```
-
-Ensure these are set in your `.envrc` / `.env` file (the script reads them from there).
-
-### Setup (One-Time)
-
-Creates the GKE cluster, Cloud NAT, Artifact Registry, builds and pushes images:
-
-```bash
-bin/gcp-create-cluster setup
-```
-
-This will:
-
-1. Create a private GKE zonal cluster (2 x e2-standard-4 nodes)
-2. Set up Cloud NAT for outbound internet from private nodes
-3. Create Artifact Registry repository
-4. Build both Docker images for linux/amd64
-5. Push images to Artifact Registry
-
-### Deploy
-
-Installs nginx-ingress, cert-manager, and deploys all K8s resources:
-
-```bash
-bin/gcp-create-cluster deploy
-```
-
-This will:
-
-1. Install nginx-ingress controller and wait for external IP
-2. Prompt you to update DNS for `gomoku.games` to the external IP
-3. Install cert-manager with Let's Encrypt ClusterIssuer
-4. Update image references in kustomization.yaml
-5. Apply all K8s manifests via `kubectl apply -k iac/k8s/`
-
-### Custom Domain (gomoku.games)
-
-GKE uses cert-manager with Let's Encrypt HTTP-01 challenges via the nginx-ingress controller.
-
-1. The `deploy` command prints the ingress external IP
-2. Point `gomoku.games` A record to that IP in DnsMadeEasy
-3. cert-manager automatically requests and renews the TLS certificate
-
-### Monitoring
-
-```bash
-# Pod status
-kubectl get pods -n gomoku
-
-# Resource usage
-kubectl top pods -n gomoku
-
-# Worker logs
-kubectl logs -n gomoku -l app.kubernetes.io/component=worker --tail=100
-
-# Envoy admin dashboard
-kubectl port-forward -n gomoku svc/envoy-gateway 9901:9901
-# Then visit http://localhost:9901
-
-# HPA status (worker autoscaling)
-kubectl get hpa -n gomoku
-```
-
-### Scaling
-
-```bash
-# Manual scaling
-kubectl scale deployment gomoku-workers -n gomoku --replicas=8
-
-# HPA automatically scales workers between 2-20 based on CPU
-kubectl describe hpa gomoku-workers -n gomoku
-```
-
-### Updating
-
-```bash
-REGISTRY="${REGION}-docker.pkg.dev/${PROJECT_ID}/gomoku"
-
-# Build and push new images
-docker buildx build --platform linux/amd64 -t ${REGISTRY}/gomoku-httpd:latest --load .
-docker buildx build --platform linux/amd64 -t ${REGISTRY}/gomoku-frontend:latest --load frontend/
-docker push ${REGISTRY}/gomoku-httpd:latest
-docker push ${REGISTRY}/gomoku-frontend:latest
-
-# Rolling update (triggers new pods)
-kubectl rollout restart deployment gomoku-workers -n gomoku
-kubectl rollout restart deployment gomoku-frontend -n gomoku
-```
-
-### Teardown
-
-```bash
-# Delete K8s resources
-kubectl delete -k iac/k8s/
-
-# Delete the cluster entirely
-gcloud container clusters delete $CLUSTER_NAME --zone ${REGION}-a
+# Service status
+gcloud run services describe gomoku-api --region=us-central1 --format="yaml(status)"
+gcloud run revisions list --service=gomoku-httpd --region=us-central1
 ```
 
 ---
 
-## 4. Troubleshooting
-
-### Cloud Run
+## 3. Troubleshooting
 
 | Problem | Fix |
-|---------|-----|
-| 405 on POST | Check `VITE_API_BASE` in frontend `.env` — must be empty for production |
+|---|---|
+| 405 on POST | Ensure `VITE_API_BASE` is empty in frontend `.env` for production (same-origin) |
 | CPU < 1 with concurrency > 1 | Cloud Run requires CPU >= 1000m when concurrency > 1 |
 | Memory < 512Mi | CPU always-allocated requires memory >= 512Mi |
 | Image not updating | Use `gcloud run services update` to force a new revision with `:latest` |
-| ARM64 image on Cloud Run | Always build with `--platform linux/amd64` |
-
-### GKE
-
-| Problem | Fix |
-|---------|-----|
-| Pods stuck in ImagePullBackOff | Private nodes need Cloud NAT; check `gomoku-nat` exists |
-| Certificate not issuing | Check `kubectl describe certificate -n gomoku` and cert-manager logs |
-| 503 under load | Check HPA: `kubectl get hpa -n gomoku`; increase `maxReplicas` |
-| Envoy not discovering workers | Verify headless service: `kubectl run debug --image=busybox -n gomoku -- nslookup gomoku-workers` |
+| ARM64 image on Cloud Run | Always build with `docker buildx build --platform linux/amd64` |
+| Database connection refused | Check `DATABASE_URL` includes `?sslmode=require` for Neon |
+| Cold starts slow | Set `min-instances=1` on gomoku-httpd |
 
 ### Links
 
-- [Kubernetes manifests](../iac/k8s/README.md)
-- [SystemD deployment](../iac/systemd/README.md)
-- [Google Cloud Run](../iac/cloud_run/README.md)
+- [Cloud Run infrastructure](../iac/cloud_run/README.md) — Terraform config, deploy scripts, environment variables
+- [AI Engine](AI-ENGINE.md) — Algorithm details, threat scoring, known issues
+- [HTTP Daemon](HTTPD.md) — API reference and JSON schema

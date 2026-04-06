@@ -27,6 +27,18 @@ grey         := "\\e[90m"
 recipes:
     @just --choose
 
+# Run the CLI that refreshes the materialized view
+leaderboard-refresh:
+    @uv run python -m app.cli leaderboard refresh
+
+# Run the CLI that refreshes the materialized view
+leaderboard-show:
+    @uv run python -m app.cli leaderboard show
+
+# Run the CLI that refreshes the materialized view
+leaderboard-stats:
+    @uv run python -m app.cli leaderboard stats
+
 # Start uvicorn in dev mode with --reload (foreground)
 dev:
     ENVIRONMENT=development uv run uvicorn app.main:app \

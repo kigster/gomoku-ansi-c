@@ -26,7 +26,7 @@ async def test_leaderboard_with_scores(client: AsyncClient, auth_headers):
     assert resp.status_code == 200
     entries = resp.json()["entries"]
     assert len(entries) == 1
-    assert entries[0]["player_name"] == "testplayer"
+    assert entries[0]["username"] == "testplayer"
     assert entries[0]["score"] > 0
     assert entries[0]["rating"] > 0
     assert entries[0]["depth"] == 5

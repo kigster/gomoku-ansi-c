@@ -1,19 +1,38 @@
 import json as json_mod
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse
 from httpx import AsyncClient
 
 from app.database import get_pool
+from app.logger import get_logger
 from app.models.game import GameHistoryEntry, GameHistoryResponse, GameSaveRequest, GameSaveResponse
 from app.scoring import game_score, rating
 from app.security import get_current_user
 
 router = APIRouter(prefix="/game", tags=["game"])
+log = get_logger("gomoku.game")
+
+
+def log_game_request(
+    request: Request, start_time: float, status_code: int, payload_bytes: int
+) -> None:
+    latency_ms = (time.monotonic() - start_time) * 1000
+    log.info(
+        "game_route",
+        method=request.method,
+        path=request.url.path,
+        status=status_code,
+        payload_bytes=payload_bytes,
+        latency_ms=round(latency_ms, 1),
+    )
 
 
 @router.post("/play")
 async def play(request: Request):
     """Proxy game state to gomoku-httpd and return the AI's response."""
+    start_time = time.monotonic()
     body = await request.body()
     client: AsyncClient = request.app.state.httpx_client
     try:
@@ -23,23 +42,29 @@ async def play(request: Request):
             headers={"Content-Type": "application/json"},
         )
     except Exception:
+        log_game_request(request, start_time, status.HTTP_503_SERVICE_UNAVAILABLE, len(body))
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "Game engine unavailable, please retry",
         )
+    log_game_request(request, start_time, resp.status_code, len(body))
     return resp.json()
 
 
 @router.post("/start")
 async def start(
+    request: Request,
     user: dict = Depends(get_current_user),
     pool=Depends(get_pool),
 ):
     """Record that a user started a game."""
+    start_time = time.monotonic()
+    body = await request.body()
     await pool.execute(
         "UPDATE users SET games_started = games_started + 1 WHERE id = $1::uuid",
         str(user["id"]),
     )
+    log_game_request(request, start_time, status.HTTP_200_OK, len(body))
     return {"status": "ok"}
 
 
@@ -51,9 +76,12 @@ async def save(
     pool=Depends(get_pool),
 ):
     """Save a completed game with score calculation."""
+    start_time = time.monotonic()
+    raw_body = await request.body()
     gj = body.game_json
     winner = gj.get("winner", "none")
     if winner == "none":
+        log_game_request(request, start_time, status.HTTP_400_BAD_REQUEST, len(raw_body))
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Game is not finished")
 
     # Determine which side is human
@@ -91,7 +119,7 @@ async def save(
         async with conn.transaction():
             row = await conn.fetchrow(
                 """INSERT INTO games
-                   (player_name, user_id, winner, human_player, board_size, depth, radius,
+                   (username, user_id, winner, human_player, board_size, depth, radius,
                     total_moves, human_time_s, ai_time_s, score, game_json, client_ip)
                    VALUES ($1, $2::uuid, $3, $4, $5, $6, $7,
                            $8, $9, $10, $11, $12::jsonb, $13::inet)
@@ -115,18 +143,21 @@ async def save(
                 user_id,
             )
 
+    log_game_request(request, start_time, status.HTTP_200_OK, len(raw_body))
     return GameSaveResponse(id=str(row["id"]), score=score, rating=rating(score))
 
 
 @router.get("/history", response_model=GameHistoryResponse)
 async def game_history(
+    request: Request,
     limit: int = Query(default=50, ge=1, le=200),
     user: dict = Depends(get_current_user),
     pool=Depends(get_pool),
 ):
     """Return the authenticated user's games in reverse chronological order."""
+    start_time = time.monotonic()
     rows = await pool.fetch(
-        """SELECT id, player_name, winner, human_player, score, depth,
+        """SELECT id, username, winner, human_player, score, depth,
                   round(human_time_s::numeric, 1) AS human_time_s,
                   round(ai_time_s::numeric, 1) AS ai_time_s,
                   played_at
@@ -137,11 +168,11 @@ async def game_history(
         str(user["id"]),
         limit,
     )
-    return GameHistoryResponse(
+    response = GameHistoryResponse(
         games=[
             GameHistoryEntry(
                 id=str(r["id"]),
-                player_name=r["player_name"],
+                username=r["username"],
                 won=r["winner"] == r["human_player"],
                 score=r["score"],
                 depth=r["depth"],
@@ -152,20 +183,29 @@ async def game_history(
             for r in rows
         ]
     )
+    log_game_request(request, start_time, status.HTTP_200_OK, 0)
+    return response
 
 
 @router.get("/{game_id}/json")
 async def download_game_json(
+    request: Request,
     game_id: str,
     user: dict = Depends(get_current_user),
     pool=Depends(get_pool),
 ):
     """Return the full game JSON for a single game (for download)."""
+    start_time = time.monotonic()
     row = await pool.fetchrow(
         "SELECT game_json FROM games WHERE id = $1::uuid AND user_id = $2::uuid",
         game_id,
         str(user["id"]),
     )
     if row is None:
+        log_game_request(request, start_time, status.HTTP_404_NOT_FOUND, 0)
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Game not found")
-    return row["game_json"]
+    data = row["game_json"]
+    if isinstance(data, str):
+        data = json_mod.loads(data)
+    log_game_request(request, start_time, status.HTTP_200_OK, 0)
+    return JSONResponse(content=data)

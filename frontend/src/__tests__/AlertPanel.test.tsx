@@ -94,19 +94,17 @@ describe('AlertPanel', () => {
     expect(screen.queryByText('Dismissable')).not.toBeInTheDocument()
   })
 
-  it('shows [?] only on errors with detail', () => {
+  it('does not render a detail expansion control', () => {
     render(<AlertPanel />)
     act(() => {
       showError('Has detail', 'Stack trace here')
       showError('No detail')
       showInfo('Info msg')
     })
-    const buttons = screen.getAllByLabelText('More info')
-    expect(buttons).toHaveLength(1)
+    expect(screen.queryByLabelText('More info')).not.toBeInTheDocument()
   })
 
-  it('expands error detail when [?] is clicked', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+  it('does not render hidden error detail text', () => {
     render(<AlertPanel />)
     act(() => {
       showError('Oops', 'Detailed stack trace here')
@@ -115,8 +113,5 @@ describe('AlertPanel', () => {
 
     expect(screen.getByText('Oops')).toBeInTheDocument()
     expect(screen.queryByText('Detailed stack trace here')).not.toBeInTheDocument()
-
-    await user.click(screen.getByLabelText('More info'))
-    expect(screen.getByText('Detailed stack trace here')).toBeInTheDocument()
   })
 })

@@ -66,7 +66,6 @@ export default function AlertPanel() {
 function AlertItem({ alert, onRemove }: { alert: Alert; onRemove: () => void }) {
   const [visible, setVisible] = useState(false)
   const [fading, setFading] = useState(false)
-  const [expanded, setExpanded] = useState(false)
   const dismissingRef = useRef(false)
 
   // Trigger fade-in shortly after mount (works with both real and fake timers)
@@ -90,8 +89,6 @@ function AlertItem({ alert, onRemove }: { alert: Alert; onRemove: () => void }) 
   }, [alert.type, dismiss])
 
   const colors = STYLES[alert.type]
-  const isError = alert.type === 'error'
-  const hasDetail = isError && !!alert.detail
 
   const opacity = fading ? 0 : visible ? 0.9 : 0
   const transition = `opacity ${fading ? '1s' : '0.2s'} ease-${fading ? 'out' : 'in'}`
@@ -103,43 +100,33 @@ function AlertItem({ alert, onRemove }: { alert: Alert; onRemove: () => void }) 
         color: colors.text,
         border: `1px solid ${colors.border}`,
         boxShadow: '0 0 8px rgba(0,0,0,0.5)',
-        padding: '20px',
+        padding: '26px',
         opacity,
         transition,
       }}
-      className="pointer-events-auto rounded-lg max-w-lg w-[90%] sm:w-auto sm:min-w-[400px]"
+      className="pointer-events-auto rounded-lg max-w-xl w-[90%] sm:w-auto sm:min-w-[520px]"
     >
-      <div className="flex items-start gap-3">
-        <p className="flex-1 text-sm font-medium">{alert.message}</p>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {hasDetail && (
-            <button
-              onClick={() => setExpanded(e => !e)}
-              className="text-xs font-bold opacity-80 hover:opacity-100 transition-opacity cursor-pointer"
-              style={{ color: colors.text }}
-              aria-label="More info"
-            >
-              [?]
-            </button>
-          )}
+      <div className="flex items-start gap-4">
+        <p className="flex-1 text-2xl font-medium">{alert.message}</p>
+        <div className="flex items-center shrink-0">
           <button
             onClick={dismiss}
-            className="text-xs font-bold opacity-80 hover:opacity-100 transition-opacity cursor-pointer"
-            style={{ color: colors.text }}
+            className="ml-[20px] relative top-[2px] opacity-80 hover:opacity-100 transition-all duration-150 cursor-pointer leading-none
+                       text-black hover:text-[#FFAF22] hover:[filter:drop-shadow(0_0_2px_rgba(255,175,34,0.9))]"
             aria-label="Dismiss"
           >
-            [x]
+            <svg
+              viewBox="0 0 384 512"
+              width="20"
+              height="20"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z" />
+            </svg>
           </button>
         </div>
       </div>
-      {expanded && alert.detail && (
-        <div
-          className="mt-3 pt-3 text-xs font-mono whitespace-pre-wrap break-words"
-          style={{ borderTop: `1px solid ${colors.border}`, opacity: 0.85 }}
-        >
-          {alert.detail}
-        </div>
-      )}
     </div>
   )
 }

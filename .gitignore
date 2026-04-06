@@ -1,5 +1,6 @@
 # ─── C build artifacts ────────────────────────────────────────────────────────
 .secret
+bin/gomoku*
 gomoku-c/bin/
 gomoku-c/tests/googletest/
 gomoku-c/tests/evals/results/*
@@ -63,3 +64,8 @@ node_modules/
 nohup.out
 /.rubymate
 /tmp/**
+# 
+# ─── API ────────────────────────────────────────────────────────────────
+api/public/**
+!api/public/.gitkeep
+api/.coverage

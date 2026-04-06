@@ -52,6 +52,18 @@ export default function JsonDebugModal({ className }: JsonDebugModalProps) {
   }, [])
 
   const activeTheme = THEMES[themeKey] ?? THEMES.oneDark
+  const lastGamePayload = exchange?.response ?? exchange?.request ?? null
+
+  const handleDownload = useCallback(() => {
+    if (!lastGamePayload) return
+    const blob = new Blob([JSON.stringify(lastGamePayload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `gomoku-game-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [lastGamePayload])
 
   return (
     <>
@@ -60,7 +72,7 @@ export default function JsonDebugModal({ className }: JsonDebugModalProps) {
         title="View last API exchange"
         className={className ?? "text-neutral-400 hover:text-neutral-200 transition-colors cursor-pointer px-2 py-1"}
       >
-        Game as JSON
+        Download Your Last Game
       </button>
 
       {open && createPortal(
@@ -149,16 +161,7 @@ export default function JsonDebugModal({ className }: JsonDebugModalProps) {
             <div className="flex gap-3 px-5 pb-4 pt-2">
               {exchange && (
                 <button
-                  onClick={() => {
-                    const data = exchange.response ?? exchange.request
-                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = `gomoku-game-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`
-                    a.click()
-                    URL.revokeObjectURL(url)
-                  }}
+                  onClick={handleDownload}
                   className="flex-1 py-3 rounded-xl text-lg font-bold font-heading
                              bg-amber-500 hover:bg-amber-400 active:bg-amber-600
                              shadow-lg shadow-amber-900/30 transition-all cursor-pointer"
