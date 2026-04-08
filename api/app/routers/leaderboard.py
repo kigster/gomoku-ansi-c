@@ -14,6 +14,7 @@ async def get_leaderboard(
     limit: int = Query(default=100, ge=1, le=500),
     pool=Depends(get_pool),
 ):
+    """Get the leaderboard."""
     rows = await pool.fetch(
         """SELECT username, score, depth, radius, total_moves,
                   round(human_time_s::numeric, 1) AS human_time_s,

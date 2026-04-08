@@ -5,7 +5,7 @@ logger = get_logger(__name__)
 
 
 async def send_password_reset_email(to_email: str, token: str) -> None:
-    reset_url = f"https://gomoku.games/reset-password?token={token}"
+    reset_url = f"https://{settings.public_domain}/reset-password?token={token}"
 
     if settings.email_provider == "stdout":
         logger.info(f"[DEV] Password reset email to {to_email}: {reset_url}")
