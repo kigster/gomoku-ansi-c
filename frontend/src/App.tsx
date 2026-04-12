@@ -24,6 +24,8 @@ import JsonDebugModal from './components/JsonDebugModal'
 import RulesModal from './components/RulesModal'
 import AboutModal from './components/AboutModal'
 import LeaderboardModal from './components/LeaderboardModal'
+import DifficultySettingsModal from './components/DifficultySettingsModal'
+import AmbientBackground from './components/AmbientBackground'
 import logo from '../assets/images/logo.png'
 
 const STORAGE_KEY = 'gomoku_username'
@@ -77,7 +79,7 @@ export default function App () {
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
         if (data)
-          setStats({ won: data.games_won ?? 0, lost: data.games_lost ?? 0 })
+          setStats({ won: data.games_won ?? 0, lost: data.games_lost ?? 0, bestScore: data.personal_best?.score ?? null })
       })
       .catch(() => {})
   }, [])
@@ -90,7 +92,7 @@ export default function App () {
 
   const [settings, setSettings] = useState<GameSettings>(DEFAULT_SETTINGS)
   const [showSettings, setShowSettings] = useState(false)
-  const [stats, setStats] = useState<{ won: number; lost: number } | null>(null)
+  const [stats, setStats] = useState<{ won: number; lost: number; bestScore: number | null } | null>(null)
   const prevPhaseRef = useRef<string>('idle')
   const lastAlertedErrorRef = useRef<string | null>(null)
 
@@ -110,7 +112,7 @@ export default function App () {
       })
       .then(data => {
         if (data)
-          setStats({ won: data.games_won ?? 0, lost: data.games_lost ?? 0 })
+          setStats({ won: data.games_won ?? 0, lost: data.games_lost ?? 0, bestScore: data.personal_best?.score ?? null })
       })
       .catch(() => {})
   }, [handleSessionExpired])
@@ -163,10 +165,11 @@ export default function App () {
         const youWon = winner === settings.playerSide
 
         setStats(prev => {
-          if (!prev) return { won: youWon ? 1 : 0, lost: youWon ? 0 : 1 }
+          if (!prev) return { won: youWon ? 1 : 0, lost: youWon ? 0 : 1, bestScore: null }
           return {
             won: prev.won + (youWon ? 1 : 0),
-            lost: prev.lost + (youWon ? 0 : 1)
+            lost: prev.lost + (youWon ? 0 : 1),
+            bestScore: prev.bestScore,
           }
         })
 
@@ -276,6 +279,7 @@ export default function App () {
 
   const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [showRulesModal, setShowRulesModal] = useState(false)
+  const [showDifficultySettingsModal, setShowDifficultySettingsModal] = useState(false)
   const [showAboutModal, setShowAboutModal] = useState(false)
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false)
   const [showNavMenu, setShowNavMenu] = useState(false)
@@ -294,8 +298,9 @@ export default function App () {
         />
       ) : (
         <div className='min-h-screen relative z-10'>
+          <AmbientBackground />
           {/* Navigation Bar */}
-          <nav className='bg-neutral-900/95 backdrop-blur-sm border-b border-neutral-800 shadow-lg sticky top-0 z-40'>
+          <nav className='bg-neutral-800/95 backdrop-blur-sm border-b border-neutral-700 shadow-lg sticky top-0 z-40'>
             <div className='max-w-6xl mx-auto px-4 py-3 flex items-center justify-between'>
               <div className='flex items-center gap-3'>
                 <img src={logo} alt='Gomoku' className='h-9 w-auto' />
@@ -305,35 +310,140 @@ export default function App () {
               </div>
 
               {/* Unified nav menu — visible dropdown on all screen sizes */}
-              <div className='relative flex items-center gap-3'>
+              <div className='flex items-center gap-3 mr-5'>
                 <span className='hidden sm:block text-neutral-400 text-sm'>
-                  Hello,{' '}
-                  <span className='text-neutral-200 font-medium'>
-                    {playerName}
-                  </span>
+                  Hey,{' '}
+                  <span className='text-amber-400 font-semibold'>@{playerName}</span>
+                  {'! '}
+                  {stats?.bestScore != null && (
+                    <span className='text-neutral-500'>
+                      (Highest Score:{' '}
+                      <span className='text-neutral-300 font-medium'>{stats.bestScore}</span>
+                      )
+                    </span>
+                  )}
                 </span>
-                <button
-                  onClick={() => setShowNavMenu(s => !s)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold
-                             text-sm transition-all cursor-pointer border
-                             ${showNavMenu
-                               ? 'bg-amber-500 text-neutral-900 border-amber-400'
-                               : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-200 border-neutral-600 hover:border-neutral-500'
-                             }`}
-                  aria-label='Menu'
-                  aria-expanded={showNavMenu}
-                >
-                  <svg viewBox='0 0 24 24' width='16' height='16' fill='none'
-                    stroke='currentColor' strokeWidth='2.5' strokeLinecap='round'>
-                    <path d='M3 12h18' /><path d='M3 6h18' /><path d='M3 18h18' />
-                  </svg>
-                  <span>Menu</span>
-                  <svg viewBox='0 0 24 24' width='14' height='14' fill='none'
-                    stroke='currentColor' strokeWidth='2.5' strokeLinecap='round'
-                    className={`transition-transform duration-200 ${showNavMenu ? 'rotate-180' : ''}`}>
-                    <path d='M6 9l6 6 6-6' />
-                  </svg>
-                </button>
+                <div className='relative'>
+                  <button
+                    onClick={() => setShowNavMenu(s => !s)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold
+                               text-sm transition-all cursor-pointer border
+                               ${showNavMenu
+                                 ? 'bg-amber-500 text-neutral-900 border-amber-400'
+                                 : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-200 border-neutral-600 hover:border-neutral-500'
+                               }`}
+                    aria-label='Menu'
+                    aria-expanded={showNavMenu}
+                  >
+                    <svg viewBox='0 0 24 24' width='16' height='16' fill='none'
+                      stroke='currentColor' strokeWidth='2.5' strokeLinecap='round'>
+                      <path d='M3 12h18' /><path d='M3 6h18' /><path d='M3 18h18' />
+                    </svg>
+                    <span>Menu</span>
+                    <svg viewBox='0 0 24 24' width='14' height='14' fill='none'
+                      stroke='currentColor' strokeWidth='2.5' strokeLinecap='round'
+                      className={`transition-transform duration-200 ${showNavMenu ? 'rotate-180' : ''}`}>
+                      <path d='M6 9l6 6 6-6' />
+                    </svg>
+                  </button>
+
+                  {showNavMenu && (
+                    <div className='absolute top-full right-0 z-[1001] mt-1
+                                    min-w-[220px] overflow-hidden rounded-xl border border-neutral-700
+                                    bg-neutral-800 shadow-2xl shadow-black/50'>
+                      <div className='py-1'>
+                        <button
+                          onClick={() => {
+                            setShowNavMenu(false)
+                            trackModalOpen('rules')
+                            setShowRulesModal(true)
+                            window.scrollTo(0, 0)
+                          }}
+                          className='w-full px-4 py-3 text-left
+                                     text-neutral-300 hover:text-white hover:bg-neutral-700
+                                     transition-colors cursor-pointer text-[1.05rem] font-semibold'
+                        >
+                          Gomoku Rules
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowNavMenu(false)
+                            trackModalOpen('difficulty')
+                            setShowDifficultySettingsModal(true)
+                            window.scrollTo(0, 0)
+                          }}
+                          className='w-full px-4 py-3 text-left
+                                     text-neutral-300 hover:text-white hover:bg-neutral-700
+                                     transition-colors cursor-pointer text-[1.05rem] font-semibold'
+                        >
+                          Difficulty Settings
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowNavMenu(false)
+                            trackModalOpen('about')
+                            setShowAboutModal(true)
+                            window.scrollTo(0, 0)
+                          }}
+                          className='w-full px-4 py-3 text-left
+                                     text-neutral-300 hover:text-white hover:bg-neutral-700
+                                     transition-colors cursor-pointer text-[1.05rem] font-semibold'
+                        >
+                          About the Author
+                        </button>
+                        <hr className='my-1 border-neutral-700' />
+                        <button
+                          onClick={() => {
+                            setShowNavMenu(false)
+                            trackModalOpen('history')
+                            setShowHistoryModal(true)
+                            window.scrollTo(0, 0)
+                          }}
+                          className='w-full px-4 py-3 text-left
+                                     text-neutral-300 hover:text-white hover:bg-neutral-700
+                                     transition-colors cursor-pointer text-[1.05rem] font-semibold'
+                        >
+                          Your Game History
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowNavMenu(false)
+                            trackModalOpen('leaderboard')
+                            setShowLeaderboardModal(true)
+                            window.scrollTo(0, 0)
+                          }}
+                          className='w-full px-4 py-3 text-left
+                                     text-neutral-300 hover:text-white hover:bg-neutral-700
+                                     transition-colors cursor-pointer text-[1.05rem] font-semibold'
+                        >
+                          Worldwide Leaderboard
+                        </button>
+                        <hr className='my-1 border-neutral-700' />
+                        <JsonDebugModal
+                          className='w-full px-4 py-3 text-left
+                                     text-neutral-300 hover:text-white hover:bg-neutral-700
+                                     transition-colors cursor-pointer text-[1.05rem] font-semibold'
+                        />
+                        <button
+                          onClick={() => {
+                            setShowNavMenu(false)
+                            if (playerName) trackLogout(playerName)
+                            sessionStorage.removeItem(TOKEN_KEY)
+                            sessionStorage.removeItem(STORAGE_KEY)
+                            setAnalyticsUser(null)
+                            setAuthToken(null)
+                            setPlayerName(null)
+                          }}
+                          className='w-full px-4 py-3 text-left
+                                     text-red-400 hover:text-red-300 hover:bg-red-950/40
+                                     transition-colors cursor-pointer text-[1.05rem] font-semibold'
+                        >
+                          Log Out
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -344,86 +454,6 @@ export default function App () {
                   className='fixed inset-0 z-[1000]'
                   onClick={() => setShowNavMenu(false)}
                 />
-                <div className='absolute top-full right-0 z-[1001] mt-1
-                                bg-neutral-800 border border-neutral-700 rounded-xl
-                                shadow-2xl shadow-black/50 min-w-[220px] overflow-hidden'>
-                  <div className='py-1'>
-                    <button
-                      onClick={() => {
-                        setShowNavMenu(false)
-                        trackModalOpen('rules')
-                        setShowRulesModal(true)
-                        window.scrollTo(0, 0)
-                      }}
-                      className='w-full px-4 py-3 text-left
-                                 text-neutral-300 hover:text-white hover:bg-neutral-700
-                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
-                    >
-                      Gomoku Rules
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowNavMenu(false)
-                        trackModalOpen('about')
-                        setShowAboutModal(true)
-                        window.scrollTo(0, 0)
-                      }}
-                      className='w-full px-4 py-3 text-left
-                                 text-neutral-300 hover:text-white hover:bg-neutral-700
-                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
-                    >
-                      About the Author
-                    </button>
-                    <hr className='border-neutral-700 my-1' />
-                    <button
-                      onClick={() => {
-                        setShowNavMenu(false)
-                        setShowHistoryModal(true)
-                        window.scrollTo(0, 0)
-                      }}
-                      className='w-full px-4 py-3 text-left
-                                 text-neutral-300 hover:text-white hover:bg-neutral-700
-                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
-                    >
-                      Your Game History
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowNavMenu(false)
-                        trackModalOpen('leaderboard')
-                        setShowLeaderboardModal(true)
-                        window.scrollTo(0, 0)
-                      }}
-                      className='w-full px-4 py-3 text-left
-                                 text-neutral-300 hover:text-white hover:bg-neutral-700
-                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
-                    >
-                      Global Leaderboard (top 100)
-                    </button>
-                    <hr className='border-neutral-700 my-1' />
-                    <JsonDebugModal
-                      className='w-full px-4 py-3 text-left
-                                 text-neutral-300 hover:text-white hover:bg-neutral-700
-                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
-                    />
-                    <button
-                      onClick={() => {
-                        setShowNavMenu(false)
-                        if (playerName) trackLogout(playerName)
-                        sessionStorage.removeItem(TOKEN_KEY)
-                        sessionStorage.removeItem(STORAGE_KEY)
-                        setAnalyticsUser(null)
-                        setAuthToken(null)
-                        setPlayerName(null)
-                      }}
-                      className='w-full px-4 py-3 text-left
-                                 text-red-400 hover:text-red-300 hover:bg-red-950/40
-                                 transition-colors cursor-pointer text-[1.05rem] font-semibold'
-                    >
-                      Log Out
-                    </button>
-                  </div>
-                </div>
               </>
             )}
           </nav>
@@ -441,7 +471,7 @@ export default function App () {
                   <button
                     onClick={() => setShowSettings(s => !s)}
                     className='lg:hidden w-full mb-3 py-2 rounded-lg bg-neutral-700 hover:bg-neutral-600
-                           font-medium transition-colors'
+                           font-medium transition-all duration-200 hover:scale-[1.02]'
                   >
                     {showSettings ? 'Hide Settings' : 'Settings'}
                   </button>
@@ -495,7 +525,7 @@ export default function App () {
                         onClick={handleAbort}
                         className='w-full py-3 rounded-xl text-lg font-semibold font-heading
                                glass-card border-neutral-600 hover:border-neutral-500
-                               hover:bg-neutral-800/90 text-neutral-300 transition-all duration-200'
+                               hover:bg-neutral-800/90 text-neutral-300 transition-all duration-200 hover:scale-[1.02]'
                       >
                         New Game
                       </button>
@@ -512,7 +542,7 @@ export default function App () {
                           className='w-full py-3 rounded-xl text-lg font-bold font-heading
                                  bg-sky-700 hover:bg-sky-600 active:bg-sky-800
                                  text-white shadow-md shadow-sky-900/40 transition-all duration-200
-                                 disabled:opacity-30 disabled:cursor-not-allowed'
+                                 hover:scale-[1.03] disabled:opacity-30 disabled:cursor-not-allowed'
                         >
                           Undo
                         </button>
@@ -522,7 +552,7 @@ export default function App () {
                         onClick={handleAbort}
                         className='w-full mt-3 py-3 rounded-xl text-lg font-bold font-heading
                                bg-red-700 hover:bg-red-600 active:bg-red-800
-                               text-white shadow-md shadow-red-900/40 transition-all duration-200'
+                               text-white shadow-md shadow-red-900/40 transition-all duration-200 hover:scale-[1.03]'
                       >
                         Abort Game
                       </button>
@@ -558,7 +588,7 @@ export default function App () {
                           onClick={handleAbort}
                           className='w-[30%] py-2 rounded-xl text-sm font-bold font-heading
                                  bg-red-700 hover:bg-red-600 active:bg-red-800
-                                 text-white shadow-md shadow-red-900/40 transition-all duration-200'
+                                 text-white shadow-md shadow-red-900/40 transition-all duration-200 hover:scale-[1.05]'
                         >
                           Abort
                         </button>
@@ -569,7 +599,7 @@ export default function App () {
                             className='w-[30%] py-2 rounded-xl text-sm font-bold font-heading
                                    bg-sky-700 hover:bg-sky-600 active:bg-sky-800
                                    text-white shadow-md shadow-sky-900/40 transition-all duration-200
-                                   disabled:opacity-30 disabled:cursor-not-allowed'
+                                   hover:scale-[1.05] disabled:opacity-30 disabled:cursor-not-allowed'
                           >
                             Undo
                           </button>
@@ -650,6 +680,14 @@ export default function App () {
               onClose={() => {
                 trackModalClose('rules')
                 setShowRulesModal(false)
+              }}
+            />
+          )}
+          {showDifficultySettingsModal && (
+            <DifficultySettingsModal
+              onClose={() => {
+                trackModalClose('difficulty')
+                setShowDifficultySettingsModal(false)
               }}
             />
           )}

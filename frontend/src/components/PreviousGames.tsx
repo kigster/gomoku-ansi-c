@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import ModalShell from './ModalShell'
 
 interface GameEntry {
   id: string
@@ -51,143 +52,94 @@ export default function PreviousGames ({
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `gomoku-${game.played_at.slice(0, 10)}-depth${
-        game.depth
-      }.json`
+      a.download = `gomoku-${game.played_at.slice(0, 10)}-depth${game.depth}.json`
       a.click()
       URL.revokeObjectURL(url)
     } catch {
-      // silently ignore download errors
+      // Silently ignore download errors.
     }
   }
 
   return (
-    <div
-      className='fixed inset-0 z-50 flex items-start sm:items-center justify-center pt-[5vh] sm:pt-0 bg-black/60 backdrop-blur-sm'
-      onClick={onClose}
-    >
-      <div
-        className='bg-neutral-800 rounded-2xl shadow-2xl w-[98%] max-w-7xl max-h-[80vh] relative
-                   flex flex-col'
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className='flex items-center justify-between px-8 pt-6 pb-4 border-b border-neutral-700'>
-          <h2 className='text-2xl font-bold text-white font-heading'>
-            Game <span className='text-amber-400'>History</span>
-          </h2>
-          <button
-            onClick={onClose}
-            className='text-neutral-500 hover:text-neutral-200 text-2xl leading-none
-                       transition-colors'
-            aria-label='Close'
-          >
-            &times;
-          </button>
-        </div>
-
-        {/* Table */}
-        <div className='overflow-y-auto overflow-x-auto px-8 py-4'>
-          {loading ? (
-            <p className='text-neutral-500 text-center py-8'>Loading...</p>
-          ) : error ? (
-            <p className='text-red-400 text-center py-8'>
-              Failed to load game history.
-            </p>
-          ) : games.length === 0 ? (
-            <p className='text-neutral-500 text-center py-8'>
-              No games played yet.
-            </p>
-          ) : (
-            <table className='w-full'>
-              <thead>
-                <tr className='text-neutral-500 text-[14px] border-b border-neutral-700'>
-                  <th className='text-left py-2 pr-4 font-medium'>Username</th>
-                  <th className='text-left py-2 pr-4 font-medium'>Date</th>
-                  <th className='text-left py-2 pr-4 font-medium'>Status</th>
-                  <th className='text-right py-2 pr-4 font-medium'>
-                    Your&nbsp;Score
-                  </th>
-                  <th className='text-right py-2 pr-4 font-medium'>
-                    Your&nbsp;Time&nbsp;(s)
-                  </th>
-                  <th className='text-right py-2 pr-4 font-medium'>
-                    AI&nbsp;Time&nbsp;(s)
-                  </th>
-                  <th className='text-right py-2 pr-4 font-medium'>
-                    AI&nbsp;Depth
-                  </th>
-                  <th className='text-right py-2 font-medium'>
-                    Download&nbsp;Game
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {games.map(game => (
-                  <tr
-                    key={game.id}
-                    className='border-b border-neutral-700/40 text-[14px]'
-                  >
-                    <td className='py-2.5 pr-4 text-white'>{game.username}</td>
-                    <td className='py-2.5 pr-4 text-neutral-400 whitespace-nowrap'>
-                      {new Date(game.played_at).toLocaleDateString('en-US', {
-                        month: '2-digit',
-                        day: '2-digit',
-                        year: 'numeric'
-                      })}
-                    </td>
-                    <td
-                      className={`py-2.5 pr-4 font-semibold ${
-                        game.won ? 'text-amber-400' : 'text-red-400'
-                      }`}
-                    >
-                      {game.won ? 'Won' : 'Lost'}
-                    </td>
-                    <td className='py-2.5 pr-4 text-neutral-300 font-mono text-right'>
-                      {game.score}
-                    </td>
-                    <td className='py-2.5 pr-4 text-neutral-400 font-mono text-right'>
-                      {game.human_time_s.toFixed(1)}
-                    </td>
-                    <td className='py-2.5 pr-4 text-neutral-400 font-mono text-right'>
-                      {game.ai_time_s.toFixed(1)}
-                    </td>
-                    <td className='py-2.5 pr-4 text-neutral-400 font-mono text-right'>
-                      {game.depth}
-                    </td>
-                    <td className='py-2.5 text-right'>
-                      <button
-                        onClick={() => handleDownload(game)}
-                        className='text-amber-400 hover:text-amber-300 transition-colors
-                                   text-xs underline cursor-pointer'
-                      >
-                        JSON
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+    <ModalShell
+      title={<>Your Game <span className='text-amber-400'>History</span></>}
+      onClose={onClose}
+      widthClassName='max-w-7xl'
+      bodyClassName='space-y-4'
+      footer={
+        <div className='space-y-3'>
+          {games.length > 0 && (
+            <div className='text-center text-xs text-neutral-500'>
+              Showing {games.length} game{games.length !== 1 ? 's' : ''}
+            </div>
           )}
-        </div>
-
-        {/* Footer */}
-        {games.length > 0 && (
-          <div className='px-8 py-3 border-t border-neutral-700 text-neutral-500 text-xs text-center'>
-            Showing {games.length} game{games.length !== 1 ? 's' : ''}
-          </div>
-        )}
-        <div className='px-8 pb-6 pt-2'>
           <button
             onClick={onClose}
-            className='w-full py-3 rounded-xl text-lg font-bold font-heading
-                       bg-green-600 hover:bg-green-500 active:bg-green-700
-                       shadow-lg shadow-green-900/30 transition-all cursor-pointer'
+            className='w-full rounded-xl bg-green-600 py-3 text-lg font-bold font-heading
+                       shadow-lg shadow-green-900/30 transition-all cursor-pointer
+                       hover:bg-green-500 active:bg-green-700'
           >
             Close
           </button>
         </div>
-      </div>
-    </div>
+      }
+    >
+      {loading ? (
+        <p className='py-8 text-center text-neutral-500'>Loading...</p>
+      ) : error ? (
+        <p className='py-8 text-center text-red-400'>Failed to load game history.</p>
+      ) : games.length === 0 ? (
+        <p className='py-8 text-center text-neutral-500'>No games played yet.</p>
+      ) : (
+        <div className='overflow-x-auto'>
+          <table className='w-full'>
+            <thead>
+              <tr className='border-b border-neutral-700 text-[14px] text-neutral-500'>
+                <th className='py-2 pr-4 text-left font-medium'>Username</th>
+                <th className='py-2 pr-4 text-left font-medium'>Date</th>
+                <th className='py-2 pr-4 text-left font-medium'>Status</th>
+                <th className='py-2 pr-4 text-right font-medium'>Your Score</th>
+                <th className='py-2 pr-4 text-right font-medium'>Your Time (s)</th>
+                <th className='py-2 pr-4 text-right font-medium'>AI Time (s)</th>
+                <th className='py-2 pr-4 text-right font-medium'>AI Depth</th>
+                <th className='py-2 text-right font-medium'>Download Game</th>
+              </tr>
+            </thead>
+            <tbody>
+              {games.map(game => (
+                <tr
+                  key={game.id}
+                  className='border-b border-neutral-700/40 text-[14px]'
+                >
+                  <td className='py-2.5 pr-4 text-white'>{game.username}</td>
+                  <td className='whitespace-nowrap py-2.5 pr-4 text-neutral-400'>
+                    {new Date(game.played_at).toLocaleDateString('en-US', {
+                      month: '2-digit',
+                      day: '2-digit',
+                      year: 'numeric'
+                    })}
+                  </td>
+                  <td className={`py-2.5 pr-4 font-semibold ${game.won ? 'text-amber-400' : 'text-red-400'}`}>
+                    {game.won ? 'Won' : 'Lost'}
+                  </td>
+                  <td className='py-2.5 pr-4 text-right font-mono text-neutral-300'>{game.score}</td>
+                  <td className='py-2.5 pr-4 text-right font-mono text-neutral-400'>{game.human_time_s.toFixed(1)}</td>
+                  <td className='py-2.5 pr-4 text-right font-mono text-neutral-400'>{game.ai_time_s.toFixed(1)}</td>
+                  <td className='py-2.5 pr-4 text-right font-mono text-neutral-400'>{game.depth}</td>
+                  <td className='py-2.5 text-right'>
+                    <button
+                      onClick={() => handleDownload(game)}
+                      className='cursor-pointer text-xs text-amber-400 underline transition-colors hover:text-amber-300'
+                    >
+                      JSON
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </ModalShell>
   )
 }

@@ -151,7 +151,8 @@ export default function Board({
   }, [interactive, board, boardSize, cellSize])
 
   return (
-    <div className="board-wood rounded-xl shadow-2xl p-1 w-[95vw] max-w-[600px] aspect-square"
+    <div className="board-wood rounded-xl shadow-2xl p-1 w-[95vw] max-w-[600px] aspect-square
+                    transition-transform duration-300 ease-out hover:scale-[1.03] hover:shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
     >
       <svg
         width="100%" height="100%"
