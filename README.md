@@ -100,10 +100,14 @@ The full stack runs on your dev machine: nginx for TLS, envoy for load balancing
 ### One-Time Setup
 
 ```bash
-bin/gctl setup           # Installs deps, creates log files, generates local SSL certs (mkcert)
+bin/gctl setup  # Installs deps, creates log files, generates local SSL certs (mkcert)
 ```
 
 This runs four sub-setup steps: installs packages (`clang-format`, `shfmt`, `btop`, etc.), creates log files under `/var/log/`, generates SSL certs for `dev.gomoku.games`, and configures envoy/nginx templates.
+
+> [!NOTE]
+> 
+> Please add dev.gomoku.games to your `/etc/hosts` file mapped to 127.0.0.1
 
 ### Create the Database
 
