@@ -1,9 +1,17 @@
+#include <arpa/inet.h>
+#include <chrono>
+#include <condition_variable>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <gtest/gtest.h>
+#include <mutex>
+#include <netinet/in.h>
 #include <sstream>
 #include <string>
+#include <sys/socket.h>
+#include <thread>
+#include <unistd.h>
 
 // Include the C headers in C++ context
 extern "C" {
@@ -512,4 +520,112 @@ TEST_F(DaemonCliTest, ParseLogLevelFunction) {
   EXPECT_EQ(daemon_parse_log_level("FATAL"), DAEMON_LOG_FATAL);
   EXPECT_EQ((int)daemon_parse_log_level("INVALID"), -1);
   EXPECT_EQ((int)daemon_parse_log_level(nullptr), -1);
+}
+
+//===============================================================================
+// HTTP CLIENT LARGE RESPONSE (Content-Length) TESTS
+//===============================================================================
+
+/**
+ * Test that the HTTP client reads the full body when Content-Length exceeds
+ * the old 64KB limit. A mock server sends a 70KB response; we assert the
+ * client receives all 70KB and response_looks_complete passes for valid JSON.
+ */
+TEST_F(DaemonJsonTest, HttpClientReadsLargeResponseViaContentLength) {
+  static const size_t kBodySize = 70000;
+  static int server_port = 0;
+  static std::mutex port_mutex;
+  static std::condition_variable port_cv;
+  static int port_ready = 0;
+
+  std::thread server_thread([]() {
+    int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+    ASSERT_GE(listen_fd, 0);
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    ASSERT_EQ(bind(listen_fd, (struct sockaddr *)&addr, sizeof(addr)), 0);
+    ASSERT_EQ(listen(listen_fd, 1), 0);
+    socklen_t len = sizeof(addr);
+    ASSERT_EQ(getsockname(listen_fd, (struct sockaddr *)&addr, &len), 0);
+    {
+      std::lock_guard<std::mutex> lock(port_mutex);
+      server_port = ntohs(addr.sin_port);
+      port_ready = 1;
+      port_cv.notify_one();
+    }
+    int conn = accept(listen_fd, nullptr, nullptr);
+    ASSERT_GE(conn, 0);
+    std::string headers =
+        "HTTP/1.1 200 OK\r\nContent-Length: " + std::to_string(kBodySize) +
+        "\r\nConnection: close\r\n\r\n";
+    size_t sent = 0;
+    while (sent < headers.size()) {
+      ssize_t n = send(conn, headers.data() + sent, headers.size() - sent, 0);
+      ASSERT_GT(n, 0);
+      sent += static_cast<size_t>(n);
+    }
+    std::string body(kBodySize, 'x');
+    sent = 0;
+    while (sent < body.size()) {
+      ssize_t n = send(conn, body.data() + sent, body.size() - sent, 0);
+      ASSERT_GT(n, 0);
+      sent += static_cast<size_t>(n);
+    }
+    close(conn);
+    close(listen_fd);
+  });
+
+  {
+    std::unique_lock<std::mutex> lock(port_mutex);
+    port_cv.wait_for(lock, std::chrono::seconds(2),
+                     []() { return port_ready != 0; });
+    ASSERT_NE(server_port, 0) << "Server did not bind in time";
+  }
+
+  struct sockaddr_in addr;
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(static_cast<uint16_t>(server_port));
+  inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+  int sock = socket(AF_INET, SOCK_STREAM, 0);
+  ASSERT_GE(sock, 0);
+  ASSERT_EQ(connect(sock, (struct sockaddr *)&addr, sizeof(addr)), 0);
+
+  int status = 0;
+  size_t body_len = 0;
+  char *body = test_client_read_http_response(sock, &status, &body_len, 0,
+                                              nullptr, nullptr);
+  close(sock);
+  server_thread.join();
+
+  ASSERT_NE(body, nullptr) << "read_http_response failed";
+  EXPECT_EQ(status, 200);
+  EXPECT_EQ(body_len, kBodySize)
+      << "Expected full body (70KB), got " << body_len;
+  for (size_t i = 0; i < body_len && i < 10; i++) {
+    EXPECT_EQ(body[i], 'x') << "body[" << i << "]";
+  }
+  if (body_len > 0)
+    EXPECT_EQ(body[body_len - 1], 'x');
+  free(body);
+}
+
+/**
+ * test_client_response_looks_complete: valid JSON (ends with }) returns 1.
+ */
+TEST_F(DaemonJsonTest, ResponseLooksCompleteValidJson) {
+  const char *json = "{\"a\":1}";
+  EXPECT_EQ(test_client_response_looks_complete(json, strlen(json)), 1);
+}
+
+/**
+ * test_client_response_looks_complete: truncated JSON (no closing }) returns 0.
+ */
+TEST_F(DaemonJsonTest, ResponseLooksCompleteTruncatedJson) {
+  const char *truncated = "{\"board_state\":[\". . .";
+  EXPECT_EQ(test_client_response_looks_complete(truncated, strlen(truncated)),
+            0);
 }

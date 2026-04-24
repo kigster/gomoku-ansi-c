@@ -855,7 +855,8 @@ int write_game_json(game_state_t *game, const char *filename) {
   json_object_object_add(root, "O", player_o);
 
   // Game parameters
-  json_object_object_add(root, "board", json_object_new_int(game->board_size));
+  json_object_object_add(root, "board_size",
+                         json_object_new_int(game->board_size));
   json_object_object_add(root, "radius",
                          json_object_new_int(game->search_radius));
 
@@ -866,8 +867,7 @@ int write_game_json(game_state_t *game, const char *filename) {
     json_object_object_add(root, "timeout", json_object_new_string("none"));
   }
   json_object_object_add(
-      root, "undo",
-      json_object_new_string(game->config.enable_undo ? "on" : "off"));
+      root, "undo", json_object_new_boolean(game->config.enable_undo ? 1 : 0));
 
   // Winner (GAME_HUMAN_WIN = X won, GAME_AI_WIN = O won)
   const char *winner_str = "none";
@@ -1005,9 +1005,11 @@ int load_game_json(const char *filename, replay_data_t *data) {
     return 0;
   }
 
-  // Get board size
+  // Get board size (accept both "board_size" and legacy "board")
   json_object *board_obj;
-  if (json_object_object_get_ex(root, "board", &board_obj)) {
+  if (json_object_object_get_ex(root, "board_size", &board_obj)) {
+    data->board_size = json_object_get_int(board_obj);
+  } else if (json_object_object_get_ex(root, "board", &board_obj)) {
     data->board_size = json_object_get_int(board_obj);
   } else {
     data->board_size = 19; // Default

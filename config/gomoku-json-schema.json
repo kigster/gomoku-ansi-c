@@ -20,6 +20,12 @@
       "default": 19,
       "description": "Size of the game board (15x15 or 19x19). Defaults to 19 if not specified."
     },
+    "game_type": {
+      "type": "string",
+      "enum": ["standard", "freestyle", "renju", "caro", "omok", "ninuki"],
+      "default": "standard",
+      "description": "Game variant determining win conditions and move restrictions. 'standard' = exactly 5 wins (overlines don't count). 'freestyle' = 5+ wins. 'renju' = forbidden moves for Black (3x3, 4x4, overline). 'caro' = five must have at least one open end. 'omok' = standard + 3x3 forbidden for both. 'ninuki' = capture variant. Defaults to 'standard' if omitted."
+    },
     "radius": {
       "type": "integer",
       "minimum": 1,

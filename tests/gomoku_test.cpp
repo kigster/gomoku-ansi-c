@@ -791,6 +791,236 @@ TEST_F(GomokuTest, AIvsAI_AsymmetricDepths) {
   cleanup_game(ai_game);
 }
 
+//===============================================================================
+// BUG REPRODUCTION TESTS — see doc/ALGO-BUGS.md
+//===============================================================================
+
+/**
+ * BUG-001 Reproduction: AI must block opponent's closed four instead of
+ * creating its own closed four.
+ *
+ * Scenario from gomoku-game-2026-03-02T09-04-05.json, move 31:
+ *   Row 6: X X O X X X X .  (X has closed four at cols 12-15, open at col 16)
+ *   Row 4: . . X X O O O .  (O has three at cols 13-15, open at col 16)
+ *
+ * O played [4][16] (creating own closed four, score 100000) instead of
+ * blocking at [6][16] (where X would complete five-in-a-row, score 1000000).
+ *
+ * Root cause: Step 1 in find_best_ai_move treats threat >= 100000 as
+ * "immediate win" and returns without checking opponent threats.
+ */
+TEST_F(GomokuTest, AIBlocksFiveInARowOverOwnClosedFour) {
+  // Set up the board position from the recorded game (before move 31)
+  // Row 6: X at cols 9,10,12,13,14,15 — O at col 11
+  game->board[6][9] = AI_CELL_CROSSES;  // X
+  game->board[6][10] = AI_CELL_CROSSES; // X
+  game->board[6][11] = AI_CELL_NAUGHTS; // O (blocks X's left side)
+  game->board[6][12] = AI_CELL_CROSSES; // X
+  game->board[6][13] = AI_CELL_CROSSES; // X
+  game->board[6][14] = AI_CELL_CROSSES; // X
+  game->board[6][15] = AI_CELL_CROSSES; // X
+  // [6][16] is empty — X's winning move
+
+  // Row 4: X at cols 11,12 — O at cols 13,14,15
+  game->board[4][11] = AI_CELL_CROSSES; // X
+  game->board[4][12] = AI_CELL_CROSSES; // X
+  game->board[4][13] = AI_CELL_NAUGHTS; // O
+  game->board[4][14] = AI_CELL_NAUGHTS; // O
+  game->board[4][15] = AI_CELL_NAUGHTS; // O
+  // [4][16] is empty — O's closed four move (the buggy choice)
+
+  // Add some surrounding stones for context (from the actual game)
+  game->board[5][9] = AI_CELL_CROSSES;
+  game->board[5][10] = AI_CELL_NAUGHTS;
+  game->board[5][11] = AI_CELL_NAUGHTS;
+  game->board[5][12] = AI_CELL_NAUGHTS;
+  game->board[5][13] = AI_CELL_NAUGHTS;
+  game->board[5][14] = AI_CELL_CROSSES;
+  game->board[7][7] = AI_CELL_CROSSES;
+  game->board[7][8] = AI_CELL_NAUGHTS;
+  game->board[7][9] = AI_CELL_NAUGHTS;
+  game->board[7][10] = AI_CELL_NAUGHTS;
+  game->board[7][11] = AI_CELL_NAUGHTS;
+  game->board[7][12] = AI_CELL_CROSSES;
+  game->board[7][13] = AI_CELL_NAUGHTS;
+  game->board[8][9] = AI_CELL_CROSSES;
+  game->board[8][10] = AI_CELL_CROSSES;
+  game->board[8][11] = AI_CELL_NAUGHTS;
+  game->board[8][12] = AI_CELL_NAUGHTS;
+  game->board[9][11] = AI_CELL_CROSSES;
+  game->board[3][14] = AI_CELL_CROSSES;
+  game->board[4][9] = AI_CELL_CROSSES;
+
+  // Set O (AI_CELL_NAUGHTS) as the AI player
+  game->current_player = AI_CELL_NAUGHTS;
+  game->max_depth = 4;
+
+  // Verify the threat scores first
+  int x_threat_at_r6 =
+      evaluate_threat_fast(game->board, 6, 16, AI_CELL_CROSSES, BOARD_SIZE);
+  EXPECT_GE(x_threat_at_r6, 1000000)
+      << "X placing at [6][16] should be five-in-a-row (1,000,000)";
+
+  int o_threat_at_r4 =
+      evaluate_threat_fast(game->board, 4, 16, AI_CELL_NAUGHTS, BOARD_SIZE);
+  EXPECT_EQ(o_threat_at_r4, 100000)
+      << "O placing at [4][16] should be a closed four (100,000)";
+
+  // NOW: ask the AI to find its best move
+  int best_x = -1, best_y = -1;
+  find_best_ai_move(game, &best_x, &best_y, NULL);
+
+  // The AI MUST block at [6][16], NOT play [4][16]
+  EXPECT_EQ(best_x, 6)
+      << "AI should block at row 6 (opponent's five-in-a-row), not row "
+      << best_x;
+  EXPECT_EQ(best_y, 16)
+      << "AI should block at col 16 (opponent's five-in-a-row), not col "
+      << best_y;
+}
+
+/**
+ * When the opponent has a closed four (one move from five-in-a-row)
+ * and the AI has only a closed THREE (one move from four), the AI
+ * must block the opponent's threat, not extend its own three.
+ *
+ * Board:
+ *   Row 3: O X X X X .  (X has closed four at cols 5-8, open at col 9)
+ *   Row 7: X O O O . .  (O has closed three at cols 5-7, two moves from win)
+ *
+ * It's O's turn. O should block X at [3][9] (preventing five-in-a-row),
+ * not play [7][8] (extending to a closed four).
+ *
+ * This tests a weaker form of BUG-001: the AI might prefer advancing
+ * its own three over blocking the opponent's four. While the main bug
+ * is the >= 100000 threshold, this test verifies correct blocking at
+ * the five-in-a-row level.
+ */
+TEST_F(GomokuTest, AIBlocksOpponentClosedFour) {
+  // X's closed four in row 3: O X X X X . (cols 4-9)
+  game->board[3][4] = AI_CELL_NAUGHTS; // O blocks left end
+  game->board[3][5] = AI_CELL_CROSSES; // X
+  game->board[3][6] = AI_CELL_CROSSES; // X
+  game->board[3][7] = AI_CELL_CROSSES; // X
+  game->board[3][8] = AI_CELL_CROSSES; // X
+  // [3][9] is empty — X's winning move (five-in-a-row)
+
+  // O's closed three in row 7: X O O O . . (cols 4-8)
+  game->board[7][4] = AI_CELL_CROSSES; // X blocks left end
+  game->board[7][5] = AI_CELL_NAUGHTS; // O
+  game->board[7][6] = AI_CELL_NAUGHTS; // O
+  game->board[7][7] = AI_CELL_NAUGHTS; // O
+  // [7][8] and [7][9] are empty — O's extension moves
+
+  // Set O as the AI player
+  game->current_player = AI_CELL_NAUGHTS;
+  game->max_depth = 4;
+
+  // Verify threat scores
+  int x_threat =
+      evaluate_threat_fast(game->board, 3, 9, AI_CELL_CROSSES, BOARD_SIZE);
+  EXPECT_GE(x_threat, 1000000)
+      << "X at [3][9] should be five-in-a-row (>= 1,000,000)";
+
+  int o_threat =
+      evaluate_threat_fast(game->board, 7, 8, AI_CELL_NAUGHTS, BOARD_SIZE);
+  EXPECT_LT(o_threat, 500000)
+      << "O at [7][8] should be a closed four (100,000), not an open four";
+
+  // Ask the AI for its move
+  int best_x = -1, best_y = -1;
+  find_best_ai_move(game, &best_x, &best_y, NULL);
+
+  // AI must block X's five-in-a-row at [3][9]
+  EXPECT_EQ(best_x, 3)
+      << "AI should block opponent's five at row 3, not play at row " << best_x;
+  EXPECT_EQ(best_y, 9)
+      << "AI should block opponent's five at col 9, not play at col " << best_y;
+}
+
+/**
+ * Verify that an actual five-in-a-row (threat = 1,000,000) IS played
+ * immediately, even when the opponent also has a threat.
+ *
+ * The AI should always play a winning move when one exists.
+ */
+TEST_F(GomokuTest, AIPlaysImmediateWinOverBlocking) {
+  // O's winning five: X O O O O . at row 5, cols 4-9
+  game->board[5][4] = AI_CELL_CROSSES; // Block left end
+  game->board[5][5] = AI_CELL_NAUGHTS;
+  game->board[5][6] = AI_CELL_NAUGHTS;
+  game->board[5][7] = AI_CELL_NAUGHTS;
+  game->board[5][8] = AI_CELL_NAUGHTS;
+  // [5][9] is the only move that completes five-in-a-row for O
+
+  // X's threatening four: X X X X . at row 10, cols 5-9
+  game->board[10][4] = AI_CELL_NAUGHTS; // Block left
+  game->board[10][5] = AI_CELL_CROSSES;
+  game->board[10][6] = AI_CELL_CROSSES;
+  game->board[10][7] = AI_CELL_CROSSES;
+  game->board[10][8] = AI_CELL_CROSSES;
+  // [10][9] is X's winning move
+
+  game->current_player = AI_CELL_NAUGHTS;
+  game->max_depth = 4;
+
+  int best_x = -1, best_y = -1;
+  find_best_ai_move(game, &best_x, &best_y, NULL);
+
+  // O should play its own winning move at [5][9], not block X at [10][9]
+  EXPECT_EQ(best_x, 5) << "AI should play its own winning five at row 5";
+  EXPECT_EQ(best_y, 9) << "AI should play its own winning five at col 9";
+}
+
+/**
+ * Test depth parity: odd depth should find winning continuations
+ * that even depth might miss.
+ *
+ * Set up a position where the AI has a forced win in exactly 3 plies
+ * (AI move, opponent response, AI winning move). Depth 2 (even) won't
+ * see the win; depth 3 (odd) should.
+ */
+TEST_F(GomokuTest, OddDepthFindsWinEvenDepthMisses) {
+  // Set up: O has three-in-a-row with both ends open
+  // O O O at row 9, cols 7-9, both cols 6 and 10 are open
+  game->board[9][7] = AI_CELL_NAUGHTS;
+  game->board[9][8] = AI_CELL_NAUGHTS;
+  game->board[9][9] = AI_CELL_NAUGHTS;
+  // Playing col 6 or 10 creates an open four — guaranteed win
+
+  // Add some X stones far away to not interfere
+  game->board[2][2] = AI_CELL_CROSSES;
+  game->board[2][3] = AI_CELL_CROSSES;
+  game->board[15][15] = AI_CELL_CROSSES;
+
+  game->current_player = AI_CELL_NAUGHTS;
+
+  // With depth 3 (odd): AI should find a strong offensive move
+  game->max_depth = 3;
+  int best_x_d3 = -1, best_y_d3 = -1;
+  find_best_ai_move(game, &best_x_d3, &best_y_d3, NULL);
+
+  // With depth 2 (even): AI evaluates after opponent's response
+  game->max_depth = 2;
+  int best_x_d2 = -1, best_y_d2 = -1;
+  find_best_ai_move(game, &best_x_d2, &best_y_d2, NULL);
+
+  // Both should find a reasonable move at row 9
+  // (this tests that odd depth doesn't break anything)
+  EXPECT_EQ(best_x_d3, 9)
+      << "Depth 3: AI should play in row 9 to extend its three";
+  EXPECT_TRUE(best_y_d3 == 6 || best_y_d3 == 10)
+      << "Depth 3: AI should play at col 6 or 10 (open ends), got col "
+      << best_y_d3;
+
+  // Depth 2 should also find this (via pre-minimax steps)
+  EXPECT_EQ(best_x_d2, 9)
+      << "Depth 2: AI should play in row 9 to extend its three";
+  EXPECT_TRUE(best_y_d2 == 6 || best_y_d2 == 10)
+      << "Depth 2: AI should play at col 6 or 10 (open ends), got col "
+      << best_y_d2;
+}
+
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

@@ -349,6 +349,14 @@ void handle_play(struct http_request_s *request) {
   } else {
     // Use minimax
     find_best_ai_move(game, &best_x, &best_y, &scoring_report);
+
+    // Find decisive evaluator step and update move_type
+    for (int i = 0; i < scoring_report.entry_count; i++) {
+      if (scoring_report.entries[i].decisive) {
+        move_type = scoring_report.entries[i].evaluator;
+        break;
+      }
+    }
   }
 
   // Mark server as ready after AI computation
@@ -409,10 +417,27 @@ void handle_play(struct http_request_s *request) {
 
   // Log move details at INFO level
   int player_depth = game->depth_for_player[player_index];
-  LOG_INFO("Move %d: %s [%d,%d] depth=%d radius=%d evals=%d time=%.3fs",
+  LOG_INFO("Move %d: %s [%d,%d] depth=%d radius=%d evals=%d time=%.3fs via %s",
            game->move_history_count, (ai_player == AI_CELL_CROSSES) ? "X" : "O",
            best_x, best_y, player_depth, game->search_radius, moves_evaluated,
-           elapsed_time);
+           elapsed_time, move_type);
+
+  // Log scoring pipeline summary (only when evaluators ran)
+  if (scoring_report.entry_count > 0) {
+    char pipeline[512];
+    int pos = 0;
+    for (int i = 0; i < scoring_report.entry_count && pos < 480; i++) {
+      scoring_entry_t *e = &scoring_report.entries[i];
+      pos +=
+          snprintf(pipeline + pos, sizeof(pipeline) - (size_t)pos,
+                   "%s%s(%.2fms)", i > 0 ? " " : "", e->evaluator, e->time_ms);
+      if (e->decisive) {
+        pos += snprintf(pipeline + pos, sizeof(pipeline) - (size_t)pos, "*");
+        break; // steps after decisive didn't run
+      }
+    }
+    LOG_INFO("  scoring: %s", pipeline);
+  }
 
   // Serialize and return (pass scoring report if enabled)
   char *response_json = json_api_serialize_game_ex(
