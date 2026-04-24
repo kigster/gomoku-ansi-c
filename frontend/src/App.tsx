@@ -10,6 +10,7 @@ import GameStatus from './components/GameStatus'
 import ThinkingTimer from './components/ThinkingTimer'
 import PreviousGames from './components/PreviousGames'
 import JsonDebugModal from './components/JsonDebugModal'
+import RulesModal from './components/RulesModal'
 import logo from '../assets/images/logo.png'
 
 const STORAGE_KEY = 'gomoku_player_name'
@@ -127,8 +128,9 @@ export default function App() {
     prevPhaseRef.current = phase
   }, [phase, winner, playerName, settings.playerSide, humanTimeMs, aiTimeMs])
 
-  const [showHistory, setShowHistory] = useState(false)
-  const historyBtnRef = useRef<HTMLButtonElement>(null)
+  const [showNavMenu, setShowNavMenu] = useState(false)
+  const [showHistoryModal, setShowHistoryModal] = useState(false)
+  const [showRulesModal, setShowRulesModal] = useState(false)
   const isActive = phase === 'playing' || phase === 'thinking'
 
   if (!playerName) {
@@ -138,38 +140,116 @@ export default function App() {
   return (
     <div className="min-h-screen relative z-10">
       {/* Navigation Bar */}
-      <nav className="bg-neutral-900/95 backdrop-blur-sm border-b border-neutral-800 shadow-lg">
+      <nav className="relative z-[1100] bg-neutral-900/95 backdrop-blur-sm border-b border-neutral-800 shadow-lg">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={logo} alt="Gomoku" className="h-9 w-auto" />
             <h1 className="font-heading text-2xl font-bold text-amber-400">Gomoku</h1>
-            <JsonDebugModal />
           </div>
-          <button
-            ref={historyBtnRef}
-            onClick={() => setShowHistory(s => !s)}
-            className="text-neutral-400 hover:text-neutral-200 transition-colors cursor-pointer"
-          >
-            Hello, <span className="text-neutral-200 font-medium">{playerName}</span>
-            {gameHistory.length >= 2 && (
-              <span className="ml-1 text-neutral-500 text-xs">{showHistory ? '\u25B2' : '\u25BC'}</span>
-            )}
-          </button>
+
+          <div className="flex items-center gap-3">
+            <span className="hidden sm:block text-neutral-400 text-sm">
+              Hello, <span className="text-neutral-200 font-medium">{playerName}</span>
+            </span>
+            <div className="relative">
+              <button
+                onClick={() => setShowNavMenu(s => !s)}
+                aria-label="Menu"
+                aria-expanded={showNavMenu}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm
+                           transition-all cursor-pointer border
+                           ${showNavMenu
+                             ? 'bg-amber-500 text-neutral-900 border-amber-400'
+                             : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-200 border-neutral-600 hover:border-neutral-500'
+                           }`}
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
+                     stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M3 12h18" /><path d="M3 6h18" /><path d="M3 18h18" />
+                </svg>
+                <span>Menu</span>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+                     stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                     className={`transition-transform duration-200 ${showNavMenu ? 'rotate-180' : ''}`}>
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+
+              {showNavMenu && (
+                <div className="absolute top-full right-0 z-[1001] mt-1 min-w-[220px] overflow-hidden
+                                rounded-xl border border-neutral-700 bg-neutral-800 shadow-2xl shadow-black/50">
+                  <div className="py-1">
+                    <button
+                      onClick={() => { setShowNavMenu(false); setShowRulesModal(true) }}
+                      className="w-full px-4 py-3 text-left text-neutral-300 hover:text-white
+                                 hover:bg-neutral-700 transition-colors cursor-pointer text-[1.05rem] font-semibold"
+                    >
+                      Gomoku Rules
+                    </button>
+                    <button
+                      onClick={() => { setShowNavMenu(false); setShowHistoryModal(true) }}
+                      disabled={gameHistory.length === 0}
+                      className="w-full px-4 py-3 text-left text-neutral-300 hover:text-white
+                                 hover:bg-neutral-700 transition-colors cursor-pointer text-[1.05rem] font-semibold
+                                 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-neutral-300
+                                 disabled:hover:bg-transparent"
+                    >
+                      Game History {gameHistory.length > 0 && (
+                        <span className="text-neutral-500 font-normal text-sm">({gameHistory.length})</span>
+                      )}
+                    </button>
+                    <hr className="my-1 border-neutral-700" />
+                    <JsonDebugModal
+                      triggerLabel="API Debug"
+                      triggerClassName="w-full px-4 py-3 text-left text-neutral-300 hover:text-white
+                                        hover:bg-neutral-700 transition-colors cursor-pointer text-[1.05rem] font-semibold"
+                      onTriggerClick={() => setShowNavMenu(false)}
+                    />
+                    <button
+                      onClick={() => {
+                        setShowNavMenu(false)
+                        localStorage.removeItem(STORAGE_KEY)
+                        setPlayerName(null)
+                      }}
+                      className="w-full px-4 py-3 text-left text-red-400 hover:text-red-300
+                                 hover:bg-red-950/40 transition-colors cursor-pointer text-[1.05rem] font-semibold"
+                    >
+                      Change Player
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </nav>
 
-      {/* Previous Games dropdown — rendered outside nav to avoid backdrop-blur */}
-      {showHistory && gameHistory.length >= 2 && (
-        <>
-          <div className="fixed inset-0 z-[998]" onClick={() => setShowHistory(false)} />
-          <div className="fixed z-[999] w-80 shadow-2xl"
-               style={{
-                 top: (historyBtnRef.current?.getBoundingClientRect().bottom ?? 0) + 8,
-                 right: window.innerWidth - (historyBtnRef.current?.getBoundingClientRect().right ?? 0),
-               }}>
+      {/* Click-outside overlay for nav menu — sits below the nav (z-1100) so menu items receive clicks */}
+      {showNavMenu && (
+        <div className="fixed inset-0 z-[1050]" onClick={() => setShowNavMenu(false)} />
+      )}
+
+      {/* Rules modal */}
+      {showRulesModal && <RulesModal onClose={() => setShowRulesModal(false)} />}
+
+      {/* Game History modal */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+               onClick={() => setShowHistoryModal(false)} />
+          <div className="relative w-full max-w-md mx-4">
+            <button
+              onClick={() => setShowHistoryModal(false)}
+              aria-label="Close"
+              className="absolute -top-3 -right-3 z-10 w-8 h-8 rounded-full bg-neutral-700
+                         hover:bg-neutral-600 text-neutral-200 text-lg leading-none cursor-pointer
+                         border border-neutral-600 shadow-lg"
+            >
+              &times;
+            </button>
             <PreviousGames history={gameHistory} />
           </div>
-        </>
+        </div>
       )}
 
       {/* Main Content */}

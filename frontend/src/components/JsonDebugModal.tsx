@@ -38,14 +38,38 @@ function loadTheme(): string {
   return localStorage.getItem(THEME_STORAGE_KEY) || 'oneDark'
 }
 
-export default function JsonDebugModal() {
+interface JsonDebugModalProps {
+  triggerClassName?: string
+  triggerLabel?: React.ReactNode
+  onTriggerClick?: () => void
+}
+
+const DEFAULT_TRIGGER_CLASS =
+  'text-neutral-500 hover:text-amber-400 transition-colors cursor-pointer'
+
+const DEFAULT_TRIGGER_LABEL = (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M16 18l6-6-6-6" />
+    <path d="M8 6l-6 6 6 6" />
+  </svg>
+)
+
+export default function JsonDebugModal({
+  triggerClassName,
+  triggerLabel,
+  onTriggerClick,
+}: JsonDebugModalProps = {}) {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<'request' | 'response'>('request')
   const [themeKey, setThemeKey] = useState(loadTheme)
 
   const exchange = getLastExchange()
 
-  const handleOpen = useCallback(() => setOpen(true), [])
+  const handleOpen = useCallback(() => {
+    onTriggerClick?.()
+    setOpen(true)
+  }, [onTriggerClick])
   const handleClose = useCallback(() => setOpen(false), [])
   const handleThemeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     setThemeKey(e.target.value)
@@ -59,13 +83,9 @@ export default function JsonDebugModal() {
       <button
         onClick={handleOpen}
         title="View last API exchange"
-        className="text-neutral-500 hover:text-amber-400 transition-colors cursor-pointer"
+        className={triggerClassName ?? DEFAULT_TRIGGER_CLASS}
       >
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
-             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M16 18l6-6-6-6" />
-          <path d="M8 6l-6 6 6 6" />
-        </svg>
+        {triggerLabel ?? DEFAULT_TRIGGER_LABEL}
       </button>
 
       {open && createPortal(
