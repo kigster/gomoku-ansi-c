@@ -1,0 +1,34 @@
+{
+  "claude-code-plugins": {
+    "source": {
+      "source": "git",
+      "url": "https://github.com/anthropics/claude-code.git"
+    },
+    "installLocation": "/Users/kig/.claude/plugins/marketplaces/claude-code-plugins",
+    "lastUpdated": "2026-04-24T20:10:59.386Z"
+  },
+  "devops-skills": {
+    "source": {
+      "source": "github",
+      "repo": "ahmedasmar/devops-claude-skills"
+    },
+    "installLocation": "/Users/kig/.claude/plugins/marketplaces/devops-skills",
+    "lastUpdated": "2026-03-08T00:02:19.419Z"
+  },
+  "motlin-claude-code-plugins": {
+    "source": {
+      "source": "github",
+      "repo": "motlin/claude-code-plugins"
+    },
+    "installLocation": "/Users/kig/.claude/plugins/marketplaces/motlin-claude-code-plugins",
+    "lastUpdated": "2026-03-08T00:05:39.635Z"
+  },
+  "chrome-devtools-plugins": {
+    "source": {
+      "source": "github",
+      "repo": "ChromeDevTools/chrome-devtools-mcp"
+    },
+    "installLocation": "/Users/kig/.claude/plugins/marketplaces/chrome-devtools-plugins",
+    "lastUpdated": "2026-03-10T05:49:32.338Z"
+  }
+}

@@ -1,0 +1,222 @@
+{
+  "version": 2,
+  "plugins": {
+    "frontend-design@claude-code-plugins": [
+      {
+        "scope": "project",
+        "projectPath": "/Users/kig/workspace/sites/tb",
+        "installPath": "/Users/kig/.claude/plugins/cache/claude-code-plugins/frontend-design/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-02-11T02:52:28.629Z",
+        "lastUpdated": "2026-03-20T23:40:24.550Z",
+        "gitCommitSha": "be5d08fe5f8bcff6c1058fd4ddfce8cc3a32daa3"
+      },
+      {
+        "scope": "user",
+        "installPath": "/Users/kig/.claude/plugins/cache/claude-code-plugins/frontend-design/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-21T00:16:31.745Z",
+        "lastUpdated": "2026-03-21T00:16:31.745Z",
+        "gitCommitSha": "420a1884671fe09addc881f9a62624dae952d21c"
+      }
+    ],
+    "iac-terraform@devops-skills": [
+      {
+        "scope": "project",
+        "projectPath": "/Users/kig/workspace/sites/tb",
+        "installPath": "/Users/kig/.claude/plugins/cache/devops-skills/iac-terraform/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-16T01:30:24.602Z",
+        "lastUpdated": "2026-03-20T23:40:24.550Z",
+        "gitCommitSha": "b06435d5631e1dbe36e50a79631ea11b4b7ebd1d"
+      },
+      {
+        "scope": "user",
+        "installPath": "/Users/kig/.claude/plugins/cache/devops-skills/iac-terraform/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-21T00:16:31.801Z",
+        "lastUpdated": "2026-03-21T00:16:31.801Z",
+        "gitCommitSha": "b06435d5631e1dbe36e50a79631ea11b4b7ebd1d"
+      }
+    ],
+    "ci-cd@devops-skills": [
+      {
+        "scope": "project",
+        "projectPath": "/Users/kig/workspace/sites/tb",
+        "installPath": "/Users/kig/.claude/plugins/cache/devops-skills/ci-cd/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-16T01:30:24.865Z",
+        "lastUpdated": "2026-03-20T23:40:24.550Z",
+        "gitCommitSha": "b06435d5631e1dbe36e50a79631ea11b4b7ebd1d"
+      },
+      {
+        "scope": "user",
+        "installPath": "/Users/kig/.claude/plugins/cache/devops-skills/ci-cd/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-21T00:16:31.719Z",
+        "lastUpdated": "2026-03-21T00:16:31.719Z",
+        "gitCommitSha": "b06435d5631e1dbe36e50a79631ea11b4b7ebd1d"
+      }
+    ],
+    "justfile@motlin-claude-code-plugins": [
+      {
+        "scope": "project",
+        "projectPath": "/Users/kig/workspace/sites/tb",
+        "installPath": "/Users/kig/.claude/plugins/cache/motlin-claude-code-plugins/justfile/1.7.1",
+        "version": "1.7.1",
+        "installedAt": "2026-03-16T01:30:25.293Z",
+        "lastUpdated": "2026-03-20T23:40:24.550Z",
+        "gitCommitSha": "8119ddfc09190c40d155eace63b3aecd67215a00"
+      },
+      {
+        "scope": "user",
+        "installPath": "/Users/kig/.claude/plugins/cache/motlin-claude-code-plugins/justfile/1.7.1",
+        "version": "1.7.1",
+        "installedAt": "2026-03-21T00:16:31.812Z",
+        "lastUpdated": "2026-03-21T00:16:31.812Z",
+        "gitCommitSha": "8119ddfc09190c40d155eace63b3aecd67215a00"
+      }
+    ],
+    "git@motlin-claude-code-plugins": [
+      {
+        "scope": "project",
+        "projectPath": "/Users/kig/workspace/sites/tb",
+        "installPath": "/Users/kig/.claude/plugins/cache/motlin-claude-code-plugins/git/1.7.1",
+        "version": "1.7.1",
+        "installedAt": "2026-03-08T00:05:59.843Z",
+        "lastUpdated": "2026-03-20T23:40:24.550Z",
+        "gitCommitSha": "8119ddfc09190c40d155eace63b3aecd67215a00"
+      },
+      {
+        "scope": "user",
+        "installPath": "/Users/kig/.claude/plugins/cache/motlin-claude-code-plugins/git/1.7.1",
+        "version": "1.7.1",
+        "installedAt": "2026-03-21T00:16:31.762Z",
+        "lastUpdated": "2026-03-21T00:16:31.762Z",
+        "gitCommitSha": "8119ddfc09190c40d155eace63b3aecd67215a00"
+      }
+    ],
+    "build@motlin-claude-code-plugins": [
+      {
+        "scope": "project",
+        "projectPath": "/Users/kig/workspace/sites/tb",
+        "installPath": "/Users/kig/.claude/plugins/cache/motlin-claude-code-plugins/build/1.7.1",
+        "version": "1.7.1",
+        "installedAt": "2026-03-08T00:06:00.048Z",
+        "lastUpdated": "2026-03-20T23:40:24.550Z",
+        "gitCommitSha": "8119ddfc09190c40d155eace63b3aecd67215a00"
+      }
+    ],
+    "pr-review-toolkit@claude-code-plugins": [
+      {
+        "scope": "project",
+        "projectPath": "/Users/kig/workspace/sites/tb",
+        "installPath": "/Users/kig/.claude/plugins/cache/claude-code-plugins/pr-review-toolkit/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-08T00:52:42.324Z",
+        "lastUpdated": "2026-03-20T23:40:24.550Z",
+        "gitCommitSha": "53a5f3ee0703c2ab1b6d1dd18d8ab65187f9b8ad"
+      },
+      {
+        "scope": "user",
+        "installPath": "/Users/kig/.claude/plugins/cache/claude-code-plugins/pr-review-toolkit/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-21T00:16:31.848Z",
+        "lastUpdated": "2026-03-21T00:16:31.848Z",
+        "gitCommitSha": "420a1884671fe09addc881f9a62624dae952d21c"
+      }
+    ],
+    "chrome-devtools-mcp@chrome-devtools-plugins": [
+      {
+        "scope": "local",
+        "projectPath": "/Users/kig/workspace/sites/tb",
+        "installPath": "/Users/kig/.claude/plugins/cache/chrome-devtools-plugins/chrome-devtools-mcp/latest",
+        "version": "latest",
+        "installedAt": "2026-03-10T05:49:50.671Z",
+        "lastUpdated": "2026-03-21T00:59:20.985Z",
+        "gitCommitSha": "57e7d51e8ca1e2ee325a9e7a9c64c033acbe6d6a"
+      },
+      {
+        "scope": "user",
+        "installPath": "/Users/kig/.claude/plugins/cache/chrome-devtools-plugins/chrome-devtools-mcp/latest",
+        "version": "latest",
+        "installedAt": "2026-03-21T00:16:31.687Z",
+        "lastUpdated": "2026-03-21T00:16:31.687Z",
+        "gitCommitSha": "57e7d51e8ca1e2ee325a9e7a9c64c033acbe6d6a"
+      }
+    ],
+    "security-guidance@claude-code-plugins": [
+      {
+        "scope": "project",
+        "projectPath": "/Users/kig/workspace/sites/tb",
+        "installPath": "/Users/kig/.claude/plugins/cache/claude-code-plugins/security-guidance/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-16T02:04:40.869Z",
+        "lastUpdated": "2026-03-20T23:40:24.550Z",
+        "gitCommitSha": "420a1884671fe09addc881f9a62624dae952d21c"
+      }
+    ],
+    "feature-dev@claude-code-plugins": [
+      {
+        "scope": "project",
+        "projectPath": "/Users/kig/workspace/sites/tb",
+        "installPath": "/Users/kig/.claude/plugins/cache/claude-code-plugins/feature-dev/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-16T02:04:40.869Z",
+        "lastUpdated": "2026-03-20T23:40:24.550Z",
+        "gitCommitSha": "420a1884671fe09addc881f9a62624dae952d21c"
+      }
+    ],
+    "claude-opus-4-5-migration@claude-code-plugins": [
+      {
+        "scope": "user",
+        "installPath": "/Users/kig/.claude/plugins/cache/claude-code-plugins/claude-opus-4-5-migration/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-21T00:16:31.733Z",
+        "lastUpdated": "2026-03-21T00:16:31.733Z",
+        "gitCommitSha": "420a1884671fe09addc881f9a62624dae952d21c"
+      }
+    ],
+    "github@motlin-claude-code-plugins": [
+      {
+        "scope": "user",
+        "installPath": "/Users/kig/.claude/plugins/cache/motlin-claude-code-plugins/github/1.7.1",
+        "version": "1.7.1",
+        "installedAt": "2026-03-21T00:16:31.772Z",
+        "lastUpdated": "2026-03-21T00:16:31.772Z",
+        "gitCommitSha": "8119ddfc09190c40d155eace63b3aecd67215a00"
+      }
+    ],
+    "gitops-workflows@devops-skills": [
+      {
+        "scope": "user",
+        "installPath": "/Users/kig/.claude/plugins/cache/devops-skills/gitops-workflows/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-21T00:16:31.787Z",
+        "lastUpdated": "2026-03-21T00:16:31.787Z",
+        "gitCommitSha": "b06435d5631e1dbe36e50a79631ea11b4b7ebd1d"
+      }
+    ],
+    "markdown-tasks@motlin-claude-code-plugins": [
+      {
+        "scope": "user",
+        "installPath": "/Users/kig/.claude/plugins/cache/motlin-claude-code-plugins/markdown-tasks/1.7.1",
+        "version": "1.7.1",
+        "installedAt": "2026-03-21T00:16:31.826Z",
+        "lastUpdated": "2026-03-21T00:16:31.826Z",
+        "gitCommitSha": "8119ddfc09190c40d155eace63b3aecd67215a00"
+      }
+    ],
+    "agent-sdk-dev@claude-code-plugins": [
+      {
+        "scope": "project",
+        "installPath": "/Users/kig/.claude/plugins/cache/claude-code-plugins/agent-sdk-dev/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-03-31T03:53:10.719Z",
+        "lastUpdated": "2026-03-31T03:53:10.719Z",
+        "gitCommitSha": "420a1884671fe09addc881f9a62624dae952d21c",
+        "projectPath": "/Users/kig/workspace/gomokus/gomoku-ansi-c.2/iac"
+      }
+    ]
+  }
+}
