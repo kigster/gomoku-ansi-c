@@ -568,7 +568,7 @@ gomoku.start() {
 
   if cluster.is-running "[g]omoku-httpd" "gomoku-http-client"; then
     info "Stopping existing gomoku-httpd instances first..."
-    "$SCRIPT_DIR/gomoku-httpd-ctl" stop
+    "$SCRIPT_DIR/engine-ctl" stop
     sleep 1
   else
     inf "No existing gomoku-httpd instances found."
@@ -582,7 +582,7 @@ gomoku.start() {
     inf "No existing gomoku-httpd instances found."
   fi
 
-  "$SCRIPT_DIR/gomoku-httpd-ctl" start -w "$workers"
+  "$SCRIPT_DIR/engine-ctl" start -w "$workers"
   sleep 1
 
   if cluster.is-running "[g]omoku-httpd" "gomoku-http-client"; then
@@ -604,7 +604,7 @@ gomoku.stop() {
     return 0
   fi
 
-  "$SCRIPT_DIR/gomoku-httpd-ctl" stop
+  "$SCRIPT_DIR/engine-ctl" stop
   sleep 2
 
   if cluster.is-running "[g]omoku-httpd" "gomoku-http-client"; then

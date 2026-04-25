@@ -1,11 +1,12 @@
 # ─── C build artifacts ────────────────────────────────────────────────────────
 .secret
 /bin/gomoku*
-gomoku-c/bin/
-gomoku-c/tests/googletest/
-gomoku-c/tests/evals/results/*
-gomoku-c/src/vendor/json-c/build/
-gomoku-c/games/*.json
+/gomoku-c/bin/
+/gomoku-c/tests/googletest/
+/gomoku-c/tests/evals/results/*
+/gomoku-c/src/vendor/json-c/build/
+/gomoku-c/games/*.json
+/games/*.json
 **/*.o
 **/*.a
 **/*.so

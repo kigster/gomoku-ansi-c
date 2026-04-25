@@ -1,7 +1,0 @@
-Tournament: 20260204_235451
-Games per matchup: 2
-Depths: 2 3
-
-Depth        Wins   Losses    Draws     Win%
-D2              1        2        1    25.0%
-D3              2        1        1    50.0%

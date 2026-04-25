@@ -7,7 +7,7 @@ ______________________________________________________________________
 ## 1. "Go-Moku and Threat-Space Search" (1994, Allis, van den Herik, Huntjens)
 
 > [!TIP]
-> [Source Article as a PDF](1994-allis%E2%80%94go-moku-and-threat-space-search.pdf)
+> [Source Article as a PDF](1994--allis-gomoku-and-threat-space-search.pdf)
 
 ### Primary Context
 
@@ -37,7 +37,7 @@ ______________________________________________________________________
 ## 2. "AI Agent for Playing Gomoku" (2000s, Stanford University Poster)
 
 > [!TIP]
-> [Source Article as a PDF](2000s%E2%80%94stanford%E2%80%94ai-agent-for-playing-gomoku.pdf)
+> [Source Article as a PDF](2000--stanford--ai-agent-for-playing-gomoku.pdf)
 
 ### Primary Context
 
@@ -65,7 +65,7 @@ ______________________________________________________________________
 ## 3. "Solving Renju" (2001, Wágner, Virág)
 
 > [!TIP]
-> [Source Article as a PDF](2001%E2%80%94solving-renju-by-wagner-et-al.pdf)
+> [Source Article as a PDF](2001--solving-renju-by-wagner-et-al.pdf)
 
 ### Primary Context
 
