@@ -58,6 +58,12 @@ htmlcov/
 # ─── Node/Frontend ────────────────────────────────────────────────────────────
 node_modules/
 **/.vite
+
+# ─── Claude Code (auto-installed plugin artifacts) ────────────────────────────
+.claude/plugins/cache/
+.claude/plugins/marketplaces/
+.claude/plugins/data/
+.claude/settings.local.json
 # ─── OS / Misc ────────────────────────────────────────────────────────────────
 **/.DS_Store
 **/*.log
