@@ -4,7 +4,40 @@
 
 A full-stack Gomoku game: C99 AI engine, FastAPI backend, React frontend, global leaderboard. Play online at **[gomoku.games](https://app.gomoku.games)**.
 
+## Summary
+
+This repo contains two versions of the game: 
+
+1. A terminal version (TUI) that's played using arrow keys, space and Enter
+2. A networked version with ReactJS frontend, FastAPI server backend with PostgreSQL, and the actual stateless gaming engine running on the backend, written in C. 
+
+### Terminal Version
+
+Below is the screenshot of a terminal game played against the AI:
+
+<img src="doc/img/gomoku-human-vs-ai.png" width="700" border="1" style="border-radius: 10px"/>
+
+If you clone the repo, you can run `just build-game` and it builds three binaries:
+
+ * `gomoku` — the terminal game
+ * `gomoku-httpd` — the stateless networking service
+ * `gomoku-http-client` — the client for testing the networking service.
+
+### The Web Version
+
+The web version is a bit more sophisticated, in particular in its systems architecture, as it relies on FastAPI Python server, PostgreSQL for authentication and logging game statistics + the leaderboard, yet it proxies the requests for the AI moves directly to the swarm of stateless  `gomoku-httpd` daemons that are all single-threaded, and typically run behind an envoy proxy.
+
+Below is the screenshot of the web version of the game:
+
 <img src="doc/img/gomoku-web-version.png" width="700" border="1" style="border-radius: 10px"/>
+
+And the next image shows you the drop down menu that has a few options you can explore.
+
+<img src="doc/img/gomoku-web-menu.png" width="700" border="1" style="border-radius: 10px"/>
+
+Next, we are going to dive deeper into each of the versions.
+
+---
 
 ## 1. Build and Play the Terminal Game
 
