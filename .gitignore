@@ -1,6 +1,6 @@
 # ─── C build artifacts ────────────────────────────────────────────────────────
 .secret
-bin/gomoku*
+/bin/gomoku*
 gomoku-c/bin/
 gomoku-c/tests/googletest/
 gomoku-c/tests/evals/results/*
@@ -75,3 +75,6 @@ nohup.out
 api/public/**
 !api/public/.gitkeep
 api/.coverage
+/games/*.json
+.claude/plugins/install-counts-cache.json
+/tests/eval/results
