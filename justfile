@@ -27,6 +27,7 @@ rebuild:
 # Clean all build artifacts
 clean:
     make -C gomoku-c clean
+    find . -maxdepth 1 -type f -name 'gomoku*' -delete
 
 # Build frontend static assets into frontend/dist
 build-frontend:
