@@ -77,3 +77,18 @@ class GCPIdentityAuth(httpx.Auth):
         if token:
             request.headers["Authorization"] = f"Bearer {token}"
         yield request
+
+    def warm(self) -> bool:
+        """Eagerly fetch a token so startup logs show whether ADC is reachable.
+
+        Returns True on success, False otherwise. Safe to call from sync code.
+        """
+        token = self._maybe_token()
+        if token:
+            log.info(
+                "gcp_auth_ready",
+                audience=self.audience,
+                token_preview=f"{token[:16]}...",
+            )
+            return True
+        return False

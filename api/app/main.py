@@ -26,13 +26,17 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "public"
 @asynccontextmanager
 async def lifespan(fastapi_app: FastAPI):
     fastapi_app.state.db_pool = await create_pool()
+    # Engine has INGRESS_TRAFFIC_INTERNAL_ONLY in Cloud Run; an ID token bound
+    # to its URL is required. No-op locally (no ADC).
+    engine_auth = GCPIdentityAuth(settings.gomoku_httpd_url)
+    # Warm the token cache + log a startup line so the audit trail shows
+    # whether the metadata server is reachable from this Cloud Run instance.
+    engine_auth.warm()
     fastapi_app.state.httpx_client = httpx.AsyncClient(
         base_url=settings.gomoku_httpd_url,
         timeout=httpx.Timeout(connect=5.0, read=600.0, write=5.0, pool=5.0),
         limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
-        # Engine has INGRESS_TRAFFIC_INTERNAL_ONLY in Cloud Run; an ID token
-        # bound to its URL is required. No-op locally (no ADC).
-        auth=GCPIdentityAuth(settings.gomoku_httpd_url),
+        auth=engine_auth,
     )
     yield
     await fastapi_app.state.httpx_client.aclose()
