@@ -111,7 +111,7 @@ just eval-tournament    # AI vs AI depth tournament (depths 2,3,4)
 just evals-ruby         # Ruby tournament against httpd cluster via envoy
 ```
 
-See [doc/AI-ENGINE.md](doc/AI-ENGINE.md) for algorithm details and threat scoring.
+See [doc/ai-engine.md](doc/ai-engine.md) for algorithm details and threat scoring.
 
 ## 2. Run the Networked Cluster Locally
 
@@ -221,7 +221,7 @@ graph TB
     style PG fill:#7B68EE,color:#fff
 ```
 
-Each `gomoku-httpd` worker is single-threaded, so envoy distributes requests across the pool using least-request load balancing. See [doc/DEPLOYMENT.md](doc/DEPLOYMENT.md) for the full local cluster guide.
+Each `gomoku-httpd` worker is single-threaded, so envoy distributes requests across the pool using least-request load balancing. See [doc/deployment.md](doc/deployment.md) for the full local cluster guide.
 
 ### justfile Recipes
 
@@ -230,11 +230,14 @@ just --list             # See all recipes
 just build-game         # Build terminal game only
 just build              # Build everything (C + frontend + API assets)
 just test               # Run C tests + daemon tests + API tests + frontend tests
-just test-api           # Run API tests (43 tests)
-just test-frontend      # Run frontend tests (27 tests)
+just test-api           # Run API tests (89 tests, parallel across 4 workers)
+just test-frontend      # Run frontend tests
 just docker-build-all   # Build all Docker images
 just ci                 # Run all pre-commit checks (lefthook)
+just deploy             # Full Cloud Run deploy: migrate DB, build, push, apply
 ```
+
+For a fresh checkout, `bin/db-test-setup --recreate` drops/creates the local `gomoku_test` database and runs all migrations against it.
 
 ## 3. Deploy to Production
 
@@ -244,73 +247,72 @@ The application needs two containers and a PostgreSQL database. All three deploy
 
 [Neon](https://neon.tech) offers a generous free tier with serverless Postgres. Alternatives: [Supabase](https://supabase.com), [Aiven](https://aiven.io), Google Cloud SQL, AWS RDS.
 
-1. Create a Neon project and database named `gomoku`.
-2. Run the schema migration:
+1. Create a Neon project in the **AWS US East (Ohio)** region (closest to Cloud Run `us-central1` — ~25ms RT).
+2. Toggle "Pooled connection" on and copy the DSN.
+3. Save it as `PRODUCTION_DATABASE_URL` in your `.env` (see below). `just deploy` will run all Alembic migrations against it.
 
-   ```bash
-   psql "$NEON_DATABASE_URL" -f iac/cloud_sql/setup.sql
-   ```
-
-3. Copy the connection string — you'll set it as `DATABASE_URL` below.
-
-> The schema creates `users`, `games`, and `password_reset_tokens` tables plus leaderboard views. See [iac/README.md](iac/README.md) for details.
+> No manual schema setup needed. Migrations live under `api/db/migrations/versions/` and apply automatically as the first step of every deploy.
 
 ### Option A: Google Cloud Run (Recommended)
 
-Serverless, scales to zero, cheapest for low/medium traffic. Managed by Terraform.
+Serverless, scales to zero, cheapest for low/medium traffic. Managed by Terraform; orchestrated by `bin/deploy`.
 
 Two Cloud Run services:
 
-- **gomoku-api** — FastAPI + React SPA (nginx), handles auth, scoring, leaderboard, and proxies game moves
+- **gomoku-api** — FastAPI + React SPA, handles auth, scoring, leaderboard, and proxies game moves to the engine
 - **gomoku-httpd** — C game engine, single-threaded, concurrency=1, auto-scales per demand
 
 #### Prerequisites
 
 - GCP project with billing enabled
-- `gcloud` CLI authenticated (`gcloud auth login`)
-- Terraform installed
+- `gcloud` CLI authenticated (`gcloud auth login` and `gcloud auth application-default login`)
+- Terraform >= 1.0
 - Docker with `buildx` (for cross-compiling `linux/amd64` on Apple Silicon)
+- A [Honeycomb](https://www.honeycomb.io) account (free tier is plenty) for distributed tracing
+- A Neon (or other) Postgres connection string
 
-#### First-Time Deploy
+#### Configure secrets
 
-```bash
-# Generate a JWT signing secret
-export TF_VAR_jwt_secret="$(openssl rand -base64 32)"
-
-# Set your Neon (or other) database URL
-export TF_VAR_database_url="postgresql://user:pass@ep-xyz.us-east-2.aws.neon.tech/gomoku?sslmode=require"
-
-# Build Docker images (linux/amd64) and deploy via Terraform
-just cr-init
-```
-
-This runs `iac/cloud_run/deploy.sh`, which:
-
-1. Initializes Terraform and enables Cloud Run + Artifact Registry APIs
-2. Creates an Artifact Registry repository (`gomoku-repo`)
-3. Builds both Docker images for `linux/amd64` and pushes them
-4. Applies the full Terraform plan (Cloud Run services, IAM, networking)
-
-#### Subsequent Updates
+Copy `.env.sample` to `.env` at the repo root (gitignored) and fill in:
 
 ```bash
-just cr-update           # Rebuild images, push, update Cloud Run services
+cp .env.sample .env
+$EDITOR .env
 ```
 
-Or update individual services:
+| Key | What goes there |
+|---|---|
+| `PRODUCTION_DATABASE_URL` | Pooled Neon DSN |
+| `PRODUCTION_JWT_SECRET` | Generate with `just jwt-secret` |
+| `HONEYCOMB_INGEST_API_KEY` | "Ingest" key from Honeycomb → API Keys |
+| `HONEYCOMB_CONFIG_API_KEY` | "Configuration" key — used to post deploy markers |
+| `PROJECT_ID` | Your GCP project ID |
+| `REGION` | Default `us-central1` |
+
+Names use the `PRODUCTION_` prefix so they don't collide with the runtime config Pydantic reads inside the FastAPI app.
+
+#### Deploy
 
 ```bash
-cd iac/cloud_run
-./update.sh httpd        # Game engine only
-./update.sh api          # API + frontend only
-./update.sh httpd api    # Both
+just deploy
 ```
+
+That single command, via `bin/deploy`, runs in order:
+
+1. Verifies GCP application-default credentials (prompts login only if missing)
+2. Runs Alembic migrations against `PRODUCTION_DATABASE_URL`
+3. Builds the frontend → `api/public`
+4. Builds + pushes both Docker images for `linux/amd64` to Artifact Registry
+5. Applies Terraform (Cloud Run services, IAM, env vars)
+6. Posts a deploy marker to Honeycomb
+
+It's idempotent — safe to run on every deploy, picks up infra changes automatically.
 
 #### DNS
 
-Point your domain to the frontend service URL from the deploy output. Cloud Run handles TLS automatically.
+Point your domain to the frontend service URL from the Terraform output. Cloud Run provisions and renews TLS automatically. See [doc/deployment.md](doc/deployment.md#custom-domain) for the gcloud commands.
 
-See [iac/README.md](iac/README.md) for the full infrastructure reference, environment variables, and architecture diagram.
+See [iac/README.md](iac/README.md) for the full infrastructure reference and Terraform variables.
 
 ### Option B: AWS (ECS Fargate or App Runner)
 
@@ -358,17 +360,20 @@ Minimum setup: two containers (`gomoku-api:latest` on port 8000, `gomoku-httpd:l
 
 ## Configuration
 
-The FastAPI server reads environment variables from `api/.env`:
+The FastAPI app loads `api/.env.{development,test,ci}[.local]` based on the `ENVIRONMENT` env var (default `development`). Committed defaults live in `api/.env.development` and `api/.env.test`; `.local` overlays are gitignored for personal overrides (e.g., pointing local dev at Neon).
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `DATABASE_URL` | *(required)* | PostgreSQL DSN |
-| `GOMOKU_HTTPD_URL` | `http://localhost:8787` | Upstream game engine (or envoy at `:10000`) |
-| `JWT_SECRET` | `change-me-in-production` | HMAC signing key |
+| `ENVIRONMENT` | `development` | `development`, `test`, `ci`, or `production` — selects which `.env.{stage}` file Pydantic loads |
+| `DATABASE_URL` | from `.env.{stage}` | PostgreSQL DSN |
+| `GOMOKU_HTTPD_URL` | `http://localhost:10000` | Upstream game engine (envoy frontend) |
+| `JWT_SECRET` | from `.env.{stage}` | HMAC signing key |
 | `CORS_ORIGINS` | `["*"]` | Allowed origins (JSON array) |
 | `EMAIL_PROVIDER` | `stdout` | `stdout` or `sendgrid` |
+| `HONEYCOMB_API_KEY` | *(none)* | Honeycomb ingest key — enables OTel tracing when set |
+| `OTEL_SERVICE_NAME` | `gomoku-api` | Service name in Honeycomb traces |
 
-See the full configuration reference in the [Application Configuration](#application-configuration) section below.
+In production, all of these come from Cloud Run env vars set by Terraform (no `.env` file is read). See the [Application Configuration](#application-configuration) section below for the full reference.
 
 ## Project Structure
 
@@ -378,9 +383,10 @@ gomoku-c/               C game engine + HTTP daemon
   src/net/                Stateless HTTP daemon (JSON API)
   tests/                  Google Test suite + AI evals
 api/                    FastAPI service
-  app/                    Auth, scoring, leaderboard, game proxy
+  app/                    Auth, scoring, leaderboard, game proxy, telemetry
+  db/migrations/          Alembic migrations
   public/                 Frontend assets (built by justfile)
-  tests/                  43 integration tests
+  tests/                  89 integration tests (parallel via pytest-xdist)
 frontend/               React + TypeScript + Tailwind
 iac/                    Infrastructure (Cloud Run, Cloud SQL, nginx, envoy)
 bin/                    gctl cluster manager, helper scripts
@@ -392,18 +398,18 @@ justfile                Monorepo orchestration
 
 | Document | Description |
 |---|---|
-| [doc/DEPLOYMENT.md](doc/DEPLOYMENT.md) | Local cluster, Cloud Run, and GKE deployment |
-| [doc/DEVELOPER.md](doc/DEVELOPER.md) | C engine technical overview and architecture |
-| [doc/AI-ENGINE.md](doc/AI-ENGINE.md) | AI algorithm analysis, threat scoring, known issues |
-| [doc/HTTPD.md](doc/HTTPD.md) | HTTP daemon API reference and cluster setup |
-| [doc/GAME-RULES.md](doc/GAME-RULES.md) | Gomoku/Renju rules and variant support proposal |
-| [doc/DTRACE.md](doc/DTRACE.md) | DTrace investigation of CPU busy-spin fix |
+| [doc/deployment.md](doc/deployment.md) | Local cluster, Cloud Run, and GKE deployment |
+| [doc/developer.md](doc/developer.md) | C engine technical overview and architecture |
+| [doc/ai-engine.md](doc/ai-engine.md) | AI algorithm analysis, threat scoring, known issues |
+| [doc/httpd.md](doc/httpd.md) | HTTP daemon API reference and cluster setup |
+| [doc/game-rules.md](doc/game-rules.md) | Gomoku/Renju rules and variant support proposal |
+| [doc/dtrace.md](doc/dtrace.md) | DTrace investigation of CPU busy-spin fix |
 | [iac/README.md](iac/README.md) | Cloud Run infrastructure and Terraform |
 | [frontend/CLAUDE.md](frontend/CLAUDE.md) | Frontend architecture and API endpoints |
 
 ## Application Configuration
 
-The FastAPI server (`api/`) is configured via environment variables. Place them in `api/.env` for local development or set them in your Cloud Run / container environment.
+The FastAPI server (`api/`) is configured via environment variables. Locally, defaults come from `api/.env.{development,test,ci}` (committed) with optional `.env.{stage}.local` overrides (gitignored). In production, all values are set as Cloud Run env vars by Terraform — no `.env` file is read.
 
 ### Database
 
@@ -443,13 +449,24 @@ The FastAPI server (`api/`) is configured via environment variables. Place them 
 | `EMAIL_FROM` | `noreply@gomoku.games` | Sender address. |
 | `SENDGRID_API_KEY` | *(none)* | Required when `EMAIL_PROVIDER=sendgrid`. |
 
-### Example `.env` (Local)
+### Telemetry
+
+| Variable | Default | Description |
+|---|---|---|
+| `HONEYCOMB_API_KEY` | *(none)* | Honeycomb Ingest key — enables OTLP/HTTP export of traces. No-op when unset. |
+| `HONEYCOMB_DATASET` | *(none)* | Required only for Honeycomb classic 32-char keys. Modern env-aware keys route by `service.name`. |
+| `OTEL_SERVICE_NAME` | `gomoku-api` | Resource attribute on every span. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `https://api.honeycomb.io/v1/traces` | Override only if using a different OTel collector. |
+
+The `deployment.environment` resource attribute is set automatically from `ENVIRONMENT`, so a single Honeycomb environment can hold dev/test/prod traces filterable by `WHERE deployment.environment = "production"`.
+
+### Example `api/.env.development.local` (personal override)
 
 ```env
-DATABASE_URL=postgresql://postgres@localhost/gomoku
-GOMOKU_HTTPD_URL=http://localhost:10000
-JWT_SECRET=local-dev-secret-not-for-prod
-CORS_ORIGINS=["http://localhost:5173"]
+# Point local dev at Neon for prod-shape debugging — copy from `.env`'s
+# PRODUCTION_DATABASE_URL.
+DATABASE_URL=postgresql://...neon...
+HONEYCOMB_API_KEY=hcaik_xxx
 ```
 
 ## License

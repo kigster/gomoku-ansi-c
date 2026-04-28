@@ -14,6 +14,10 @@ from app.logger import get_logger
 from app.middleware.client_ip import ClientIPMiddleware
 from app.middleware.request_logging import RequestLoggingMiddleware
 from app.routers import auth, game, leaderboard, user
+from app.telemetry import instrument_app, setup_telemetry
+
+# Initialize tracing before any instrumentable client (httpx, asyncpg) is built.
+setup_telemetry("gomoku-api")
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "public"
 
@@ -69,6 +73,8 @@ fastapi_app.include_router(auth.router)
 fastapi_app.include_router(game.router)
 fastapi_app.include_router(leaderboard.router)
 fastapi_app.include_router(user.router)
+
+instrument_app(fastapi_app)
 
 
 @fastapi_app.get("/health")

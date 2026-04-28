@@ -49,3 +49,22 @@ variable "cors_origins" {
   type        = list(string)
   default     = ["*"]
 }
+
+variable "honeycomb_api_key" {
+  description = "Honeycomb ingest key for OTLP traces. Empty disables tracing."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "honeycomb_dataset" {
+  description = "Honeycomb dataset name for classic keys. Ignored for env-aware keys."
+  type        = string
+  default     = ""
+}
+
+variable "custom_domain" {
+  description = "Custom domain to map to gomoku-api (e.g. app.gomoku.games). Empty disables the mapping."
+  type        = string
+  default     = ""
+}

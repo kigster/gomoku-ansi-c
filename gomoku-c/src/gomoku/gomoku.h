@@ -17,7 +17,7 @@
 
 #define GAME_NAME "Gomoku"
 #define GAME_BINARY "gomoku"
-#define GAME_VERSION "2.0.1"
+#define GAME_VERSION "3.0.0"
 #define GAME_AUTHOR "Konstantin Gredeskoul"
 #define GAME_LICENSE "MIT License"
 #define GAME_URL "https://github.com/kigster/gomoku-ansi-c"
@@ -94,7 +94,7 @@ typedef enum {
 } player_type_t;
 
 #define MAX_SEARCH_RADIUS 6
-#define MAX_SEARCH_DEPTH 7
+#define MAX_SEARCH_DEPTH 8
 
 // Search parameters
 #define SEARCH_RADIUS 4

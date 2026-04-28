@@ -8,6 +8,8 @@ REPO_NAME="gomoku-repo"
 : "${PROJECT_ID:?Set PROJECT_ID to your GCP project ID}"
 : "${TF_VAR_jwt_secret:?Set TF_VAR_jwt_secret (openssl rand -base64 32)}"
 : "${TF_VAR_database_url:?Set TF_VAR_database_url to your Neon PostgreSQL DSN}"
+# TF_VAR_honeycomb_api_key and TF_VAR_honeycomb_dataset are optional; tracing
+# is disabled when honeycomb_api_key is empty.
 
 export PROJECT_ID
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

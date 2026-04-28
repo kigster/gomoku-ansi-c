@@ -1,19 +1,23 @@
-import os
+import sys
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
-from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
-load_dotenv()
+# Make app/ importable so we share the runtime config pipeline (ENVIRONMENT
+# selects which .env.{stage}[.local] to load). Avoids divergence between the
+# DSN alembic uses and the DSN the FastAPI app uses.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+from app.config import settings  # noqa: E402
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-database_url = os.environ.get("DATABASE_URL", "postgresql://postgres@localhost:5432/gomoku")
-config.set_main_option("sqlalchemy.url", database_url)
+config.set_main_option("sqlalchemy.url", settings.database_dsn)
 
 target_metadata = None
 

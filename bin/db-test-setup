@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# bin/db-test-setup — create/recreate gomoku_test on local Postgres and migrate.
+#
+# Usage:
+#   bin/db-test-setup            # idempotent: create if missing, then migrate
+#   bin/db-test-setup --recreate # DROP + CREATE + migrate (clean slate)
+#
+# The pytest conftest also creates the database on first use, but this script
+# is the canonical way to reset state after a schema-divergence incident
+# (e.g. a partial migration left the local DB at a stale revision).
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TEST_DB="${TEST_DB_NAME:-gomoku_test}"
+
+step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
+
+recreate=false
+[[ "${1:-}" == "--recreate" ]] && recreate=true
+
+step "Verifying local Postgres is reachable on localhost:5432"
+if ! psql -h localhost -U postgres -d postgres -c '\q' >/dev/null 2>&1; then
+  echo "ERROR: cannot connect to postgres@localhost:5432" >&2
+  echo "Ensure Postgres is running and that 'postgres' user has trust auth or set PGPASSWORD." >&2
+  exit 1
+fi
+
+if $recreate; then
+  step "Dropping ${TEST_DB} (--recreate)"
+  psql -h localhost -U postgres -d postgres -c "DROP DATABASE IF EXISTS ${TEST_DB}"
+fi
+
+step "Creating database ${TEST_DB} (idempotent)"
+psql -h localhost -U postgres -d postgres -tc \
+  "SELECT 1 FROM pg_database WHERE datname='${TEST_DB}'" | grep -q 1 || \
+  psql -h localhost -U postgres -d postgres -c "CREATE DATABASE ${TEST_DB}"
+
+step "Running Alembic migrations against ${TEST_DB}"
+( cd "${REPO_ROOT}/api" && ENVIRONMENT=test uv run alembic upgrade head )
+
+step "Test database ready at postgresql://postgres@localhost:5432/${TEST_DB}"

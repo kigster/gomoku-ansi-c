@@ -67,7 +67,7 @@ The codebase follows a clean modular design with clear separation of concerns. E
 ### Module Organization
 
 > [!NOTE]
-> This excludes the network/httpd part of this project. You can find the documentation about that in [this document](HTTPD.md).
+> This excludes the network/httpd part of this project. You can find the documentation about that in [this document](httpd.md).
 
 ```
 gomoku-c/src/

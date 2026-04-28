@@ -7,15 +7,14 @@ from pathlib import Path
 import asyncpg
 import pytest
 
-_api_dir = Path(__file__).resolve().parent.parent
+# Reuse the resolved test DSN from conftest. conftest already handles the
+# pytest-xdist per-worker DB naming, ENVIRONMENT pinning, and any local
+# overrides — duplicating that logic here previously caused orphan
+# `gomoku_test_gwN_test` databases to be created.
+from tests.conftest import TEST_DSN as _dsn  # noqa: E402
+from tests.conftest import _admin_dsn, _test_db
 
-# Reuse the test DSN from conftest
-_base_url = os.environ.get("DATABASE_URL", "postgresql://postgres@localhost:5432/gomoku")
-_parts = _base_url.rsplit("/", 1)
-_base_db = _parts[-1].split("?")[0]
-_test_db = _base_db if _base_db.endswith("_test") else f"{_base_db}_test"
-_dsn = f"{_parts[0]}/{_test_db}"
-_admin_dsn = f"{_parts[0]}/postgres"
+_api_dir = Path(__file__).resolve().parent.parent
 
 
 def _alembic(cmd: str, *args: str) -> subprocess.CompletedProcess:
