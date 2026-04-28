@@ -7,6 +7,7 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
     "asyncpg>=0.30",
+    "google-auth>=2.30",
     "httpx>=0.28",
     "pyjwt>=2.10",
     "bcrypt>=4.2",

@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.auth_gcp import GCPIdentityAuth
 from app.config import settings
 from app.database import close_pool, create_pool
 from app.logger import get_logger
@@ -29,6 +30,9 @@ async def lifespan(fastapi_app: FastAPI):
         base_url=settings.gomoku_httpd_url,
         timeout=httpx.Timeout(connect=5.0, read=600.0, write=5.0, pool=5.0),
         limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+        # Engine has INGRESS_TRAFFIC_INTERNAL_ONLY in Cloud Run; an ID token
+        # bound to its URL is required. No-op locally (no ADC).
+        auth=GCPIdentityAuth(settings.gomoku_httpd_url),
     )
     yield
     await fastapi_app.state.httpx_client.aclose()
