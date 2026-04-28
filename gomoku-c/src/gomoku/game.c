@@ -185,6 +185,10 @@ int make_move(game_state_t *game, int x, int y, int player, double time_taken,
   // Record move in history before placing it
   if (game->move_history_count < MAX_MOVE_HISTORY) {
     move_history_t *move = &game->move_history[game->move_history_count];
+    // Zero the slot first so fields not explicitly set below (e.g.
+    // queue_wait_ms — populated only by the JSON parser when the client
+    // sent it) don't leak garbage into the response on subsequent serialise.
+    memset(move, 0, sizeof(*move));
     move->x = x;
     move->y = y;
     move->player = player;
