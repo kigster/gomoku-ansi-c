@@ -49,7 +49,13 @@ resource "google_artifact_registry_repository" "repo" {
 resource "google_cloud_run_v2_service" "httpd" {
   name     = "gomoku-httpd"
   location = var.region
-  ingress  = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+  # INGRESS_TRAFFIC_ALL + IAM-restricted invoker is the canonical Cloud-Run-
+  # to-Cloud-Run pattern. INGRESS_TRAFFIC_INTERNAL_ONLY rejects the api's
+  # public-URL request (returning a stock 404) unless the api routes through
+  # a VPC connector — over-engineering for the security gain. Access is still
+  # tightly scoped: only google_cloud_run_service_iam_member.api_invokes_httpd
+  # below holds the invoker role; everyone else gets 403.
+  ingress = "INGRESS_TRAFFIC_ALL"
 
   template {
     scaling {
