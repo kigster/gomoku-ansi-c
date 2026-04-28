@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# bin/deploy — Full Cloud Run deploy in one shot.
+#
+# Reads secrets from .env at the repo root and maps them to the TF_VAR_*
+# names the Terraform stack expects. Then in order:
+#   1. Verifies GCP application-default credentials (prompts login if missing)
+#   2. Runs Alembic migrations against the configured Postgres
+#   3. Builds frontend → api/public
+#   4. Builds + pushes both Docker images and applies Terraform
+#
+# Idempotent — safe on first deploy and on every redeploy. Picks up infra
+# changes (new env vars, scaling tweaks, IAM bindings) via terraform apply.
+#
+# Required .env keys: DATABASE_URL, JWT_SECRET, HONEYCOMB_INGEST_API_KEY,
+# PROJECT_ID. Optional: REGION (default us-central1), HONEYCOMB_DATASET
+# (only needed for Honeycomb classic 32-char keys).
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENV_FILE="${REPO_ROOT}/.env"
+
+step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
+fail() { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
+
+[[ -f "${ENV_FILE}" ]] || fail "Missing ${ENV_FILE}. Copy .env.sample to .env and fill in values."
+
+set -a
+# shellcheck disable=SC1090
+source "${ENV_FILE}"
+set +a
+
+required=(PRODUCTION_DATABASE_URL PRODUCTION_JWT_SECRET HONEYCOMB_INGEST_API_KEY PROJECT_ID)
+missing=()
+for v in "${required[@]}"; do
+  [[ -z "${!v:-}" ]] && missing+=("${v}")
+done
+(( ${#missing[@]} == 0 )) || fail "Empty in .env: ${missing[*]}"
+
+# Map .env names → Terraform variable names. The PRODUCTION_ prefix in .env
+# prevents these from shadowing runtime config (DATABASE_URL, JWT_SECRET) when
+# `just` dotenv-loads the file or a developer sources it manually. Cloud Run's
+# runtime env still uses the unprefixed names — that mapping happens in
+# Terraform/main.tf via TF_VAR_*.
+export TF_VAR_database_url="${PRODUCTION_DATABASE_URL}"
+export TF_VAR_jwt_secret="${PRODUCTION_JWT_SECRET}"
+export TF_VAR_honeycomb_api_key="${HONEYCOMB_INGEST_API_KEY}"
+export TF_VAR_honeycomb_dataset="${HONEYCOMB_DATASET:-}"
+export TF_VAR_custom_domain="${CUSTOM_DOMAIN:-}"
+export PROJECT_ID
+export REGION="${REGION:-us-central1}"
+
+# Tag this deploy as production for Pydantic config + telemetry. The Cloud
+# Run service definition also sets ENVIRONMENT=production explicitly, but we
+# export here too so any out-of-band scripts in the deploy chain see it.
+export ENVIRONMENT=production
+
+step "Checking GCP application-default credentials"
+if ! gcloud auth application-default print-access-token >/dev/null 2>&1; then
+  echo "No application-default credentials found — launching login..."
+  gcloud auth application-default login
+fi
+
+step "Running Alembic migrations"
+(
+  cd "${REPO_ROOT}/api"
+  ENVIRONMENT=production DATABASE_URL="${PRODUCTION_DATABASE_URL}" \
+    uv run alembic upgrade head
+)
+
+step "Building frontend → api/public"
+( cd "${REPO_ROOT}" && just install-frontend )
+
+step "Building images, pushing to Artifact Registry, applying Terraform"
+( cd "${REPO_ROOT}/iac/cloud_run" && bash deploy.sh )
+
+step "Recording deploy marker in Honeycomb"
+if [[ -z "${HONEYCOMB_CONFIG_API_KEY:-}" ]]; then
+  echo "  (skipped — HONEYCOMB_CONFIG_API_KEY not set)"
+else
+  git_sha="$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  git_subject="$(git -C "${REPO_ROOT}" log -1 --pretty=format:'%s' 2>/dev/null || echo '')"
+  marker_msg="${git_sha} ${git_subject}"
+  marker_dataset="${HONEYCOMB_MARKER_DATASET:-__all__}"
+
+  if command -v jq >/dev/null 2>&1; then
+    payload="$(jq -nc --arg msg "${marker_msg}" '{message: $msg, type: "deploy"}')"
+  else
+    safe="${marker_msg//\"/\\\"}"
+    payload="{\"message\":\"${safe}\",\"type\":\"deploy\"}"
+  fi
+
+  http_code="$(curl -sS -o /tmp/honeycomb-marker.out -w '%{http_code}' \
+    -X POST "https://api.honeycomb.io/1/markers/${marker_dataset}" \
+    -H "X-Honeycomb-Team: ${HONEYCOMB_CONFIG_API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "${payload}" || echo 000)"
+
+  if [[ "${http_code}" =~ ^2 ]]; then
+    echo "  → marker posted: ${marker_msg}"
+  else
+    echo "  warn: Honeycomb marker request returned HTTP ${http_code} (deploy itself succeeded)"
+    echo "  response: $(cat /tmp/honeycomb-marker.out 2>/dev/null || true)"
+  fi
+fi
+
+step "Deploy complete"

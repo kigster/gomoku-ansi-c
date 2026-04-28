@@ -32,8 +32,11 @@ compile_commands.json
 *.VC.opendb
 *.VC.db
 # ─── Environment ──────────────────────────────────────────────────────────────
+# Committed: .env.development, .env.test, .env.ci (no secrets, defaults).
+# Ignored:   .env (deploy secrets), .env.*.local (personal overrides).
 .env
 .env.local
+.env.*.local
 
 # ─── Terraform ────────────────────────────────────────────────────────────────
 .terraform/

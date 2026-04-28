@@ -3,6 +3,11 @@
 
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
+# Load .env (PROJECT_ID, REGION, PRODUCTION_DATABASE_URL, HONEYCOMB_*, ...)
+# Belt-and-suspenders: direnv typically already exports these, but this lets
+# `just deploy` work in a fresh shell or CI runner where direnv is absent.
+set dotenv-load
+
 version := `grep 'GAME_VERSION' gomoku-c/src/gomoku/gomoku.h | awk '{print $3}' | tr -d '"'| tr -d '\n'`
 tag     := "v" + version
 
@@ -11,6 +16,10 @@ recipes:
     @just --choose
 
 # ─── Build ────────────────────────────────────────────────────────────────────
+
+# generates a JWT token and appends it to .env
+generate-jwt:
+    @grep -q JWT_SECRET .env && echo "Your JWT_SECRET is already in .env" || echo "JWT_SECRET=\"$(openssl rand -base64 32)\"" >> .env
 
 # Build terminal game only (no frontend/API dependencies)
 build-game:
@@ -33,10 +42,12 @@ clean:
 build-frontend:
     cd frontend && npm run build
 
-# Copy frontend dist into API public directory
+# Copy frontend dist into API public directory (preserve .gitkeep so the
+# directory remains tracked in git after the rm/cp dance).
 install-frontend: build-frontend
     rm -rf api/public
     cp -r frontend/dist api/public
+    touch api/public/.gitkeep
 
 # ─── Test ─────────────────────────────────────────────────────────────────────
 
@@ -51,9 +62,9 @@ test-gomoku-c:
 test-daemon:
     make -C gomoku-c test-daemon
 
-# Run API tests
+# Run API tests in parallel across 4 workers (each gets its own gomoku_test_gwN DB)
 test-api:
-    cd api && just install && just test
+    cd api && just install && just test -n 5
 
 # Run frontend tests
 test-frontend:
@@ -176,18 +187,29 @@ docker-run:
 
 # ─── Cloud Run ────────────────────────────────────────────────────────────────
 
-# Deploy to Cloud Run for the first time
+# Generate a fresh JWT signing secret. Paste into .env as JWT_SECRET=...
+jwt-secret:
+    @openssl rand -base64 32
+
+# Canonical deploy: .env → migrations → images → Terraform → Honeycomb marker.
+deploy:
+    bin/deploy
+
+# (legacy) Terraform-only deploy, no DB migrations. Prefer `just deploy`.
 cr-init: docker-build-all-amd64
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "Initial deploy..."
+    echo "WARNING: cr-init skips DB migrations. Prefer 'just deploy'."
+    export ENVIRONMENT=production
     gcloud auth application-default login
     cd ./iac/cloud_run && bash deploy.sh
 
-# Update Cloud Run with the latest code
+# (legacy) Push images + restart services, no migrations. Prefer `just deploy`.
 cr-update: docker-build-all-amd64
     #!/usr/bin/env bash
     set -euo pipefail
+    echo "WARNING: cr-update skips DB migrations. Prefer 'just deploy'."
+    export ENVIRONMENT=production
     gcloud auth application-default login
     cd ./iac/cloud_run && bash update.sh
 

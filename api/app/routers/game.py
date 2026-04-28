@@ -41,13 +41,29 @@ async def play(request: Request):
             content=body,
             headers={"Content-Type": "application/json"},
         )
-    except Exception:
+    except Exception as exc:
+        log.error("engine_request_failed", error=str(exc), error_type=type(exc).__name__)
         log_game_request(request, start_time, status.HTTP_503_SERVICE_UNAVAILABLE, len(body))
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "Game engine unavailable, please retry",
         )
     log_game_request(request, start_time, resp.status_code, len(body))
+
+    if resp.status_code != 200:
+        # Surface the engine's actual response so we can debug auth / routing
+        # issues without the JSON-decode crash that previously masked the cause.
+        log.error(
+            "engine_non_200",
+            status=resp.status_code,
+            content_type=resp.headers.get("content-type", "(none)"),
+            body_preview=resp.text[:500] if resp.text else "(empty)",
+        )
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            f"Game engine returned HTTP {resp.status_code}",
+        )
+
     return resp.json()
 
 

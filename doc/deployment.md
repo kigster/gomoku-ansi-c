@@ -190,47 +190,66 @@ sequenceDiagram
 ### Prerequisites
 
 - GCP project with billing enabled
-- `gcloud` CLI authenticated (`gcloud auth login`)
+- `gcloud` CLI authenticated (`gcloud auth login` and `gcloud auth application-default login`)
 - Terraform >= 1.0
-- Docker with `buildx`
-- A [Neon](https://neon.tech) database (free tier works)
+- Docker with `buildx` (for cross-compiling `linux/amd64` on Apple Silicon)
+- A [Neon](https://neon.tech) database (free tier works) — use the **AWS US East (Ohio)** region for lowest latency to GCP `us-central1`
+- A [Honeycomb](https://www.honeycomb.io) account (free tier is plenty) for distributed tracing
 
 ### Database Setup
 
-1. Create a Neon project and database named `gomoku`
-2. Apply the schema:
-   ```bash
-   psql "$NEON_DATABASE_URL" -f iac/cloud_sql/setup.sql
-   ```
-3. Save the connection string for the next step
+1. Create a Neon project in **AWS US East (Ohio)**, default Postgres version is fine.
+2. Toggle "Pooled connection" on and copy the DSN — it'll look like `postgresql://user:pass@ep-xxxx-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require`. The pooler is required because Cloud Run instances are short-lived and would otherwise exhaust direct connection limits.
+3. That's it — `just deploy` runs Alembic migrations against the DSN as its first step. There is no separate `psql -f setup.sql`.
+
+### Configure secrets
+
+Copy the deploy-time `.env` template at the repo root (gitignored) and fill it in:
+
+```bash
+cp .env.sample .env
+$EDITOR .env
+```
+
+| Key | What goes there |
+|---|---|
+| `PRODUCTION_DATABASE_URL` | Pooled Neon DSN from above |
+| `PRODUCTION_JWT_SECRET` | Generate with `just jwt-secret` |
+| `HONEYCOMB_INGEST_API_KEY` | "Ingest" key from Honeycomb → Environment Settings → API Keys |
+| `HONEYCOMB_CONFIG_API_KEY` | "Configuration" key — used to post deploy markers (optional but recommended) |
+| `PROJECT_ID` | Your GCP project ID |
+| `REGION` | Default `us-central1` |
+
+Names use the `PRODUCTION_` prefix so `just`'s dotenv-load can't accidentally export them into a runtime FastAPI process and shadow the runtime config Pydantic reads.
 
 ### Deploy
 
 ```bash
-# Set required environment variables
-export PROJECT_ID="your-gcp-project-id"
-export TF_VAR_jwt_secret="$(openssl rand -base64 32)"
-export TF_VAR_database_url="postgresql://user:pass@ep-xyz.neon.tech/gomoku?sslmode=require"
-
-# Build frontend, copy to api/public, build Docker images (linux/amd64)
-just cr-prepare
-
-# First-time: Terraform init + apply
-just cr-init
-
-# Subsequent updates: rebuild + push + gcloud update
-just cr-update
+just deploy
 ```
 
-Or update individual services:
+That single command, via `bin/deploy`, runs in order:
+
+1. Verifies GCP application-default credentials (prompts login only if missing).
+2. Runs Alembic migrations against `PRODUCTION_DATABASE_URL`.
+3. Builds the frontend → `api/public`.
+4. Builds + pushes both Docker images for `linux/amd64` to Artifact Registry.
+5. Applies Terraform (Cloud Run services, IAM bindings, Cloud Run env vars including `ENVIRONMENT=production`, `HONEYCOMB_API_KEY`, etc.).
+6. Posts a deploy marker to Honeycomb with the git SHA + commit subject so dashboard queries show a vertical line at deploy time.
+
+It's idempotent — safe to run on every deploy. New env vars or scaling changes in `iac/cloud_run/main.tf` are picked up automatically.
+
+#### Legacy escape hatches
+
+`just cr-init` and `just cr-update` are pre-`bin/deploy` recipes that **skip the migration step**. Useful only for emergency rollback or infra-only changes; prefer `just deploy` for everything else. If `cr-update` ships a new image that needs a column the live DB doesn't have, the new instance will crash on first request.
 
 ```bash
 cd iac/cloud_run
-./update.sh httpd        # Game engine only
-./update.sh api          # API + frontend only
+./update.sh httpd        # Game engine container only
+./update.sh api          # API + frontend container only
 ```
 
-See [iac/cloud_run/README.md](../iac/cloud_run/README.md) for the full reference.
+See [iac/cloud_run/README.md](../iac/cloud_run/README.md) for the full Terraform reference.
 
 ### Custom Domain
 
@@ -268,8 +287,43 @@ gcloud run services update gomoku-httpd --region=us-central1 --min-instances=1
 | Cloud Run | 2M requests/mo, 360K vCPU-sec |
 | Artifact Registry | 500MB storage |
 | Neon PostgreSQL | 0.5GB storage, 190 compute hours/mo |
+| Honeycomb | 20M events/mo |
 
-**Total for hobby traffic: $0/month.** Set `min-instances=1` on gomoku-httpd to avoid cold starts (~$10-15/month).
+**Total for hobby traffic: $0/month.** Set `min-instances=1` on `gomoku-api` (Python boot is ~3-5s cold) to avoid noticeable cold starts; that costs ~$5-10/month. The C engine cold-starts in <1s, so leave it at `min=0`.
+
+### Telemetry — Honeycomb tracing
+
+Every Cloud Run instance auto-instruments FastAPI, httpx, and asyncpg via OpenTelemetry, exporting to Honeycomb's OTLP/HTTP endpoint. You'll see one server span per inbound request, with child spans for each DB query and the outgoing call to `gomoku-httpd`. Disabling tracing is a no-op: just leave `HONEYCOMB_INGEST_API_KEY` unset (in dev or in your Cloud Run env) and the tracer initializer logs a "telemetry_disabled" line and exits.
+
+The `gomoku-httpd` C engine doesn't push OTLP itself. Instead, the FastAPI httpx client injects the W3C `traceparent` header, the engine reads it via `http_request_header()`, and logs the trace ID with each request line:
+
+```
+127.0.0.1 /gomoku/play 200 1234.5ms trace_id=4bf92f3577b34da6a3ce929d0e0e4736
+```
+
+So engine logs join to FastAPI traces by trace_id in Honeycomb queries.
+
+#### Per-environment routing
+
+Spans carry `deployment.environment` resource attributes set from the `ENVIRONMENT` env var (`production` in Cloud Run, `development`/`test`/`ci` locally). One Honeycomb environment can hold all three:
+
+```
+WHERE deployment.environment = "production"
+GROUP BY name
+```
+
+When traffic justifies the split, create a separate "production" Honeycomb environment with its own ingest key — change a single env var on the Cloud Run service and you're done.
+
+#### Deploy markers
+
+`bin/deploy` posts a marker to Honeycomb at the end of every successful deploy:
+
+```
+POST https://api.honeycomb.io/1/markers/__all__
+{ "message": "<sha> <commit subject>", "type": "deploy" }
+```
+
+These show as vertical lines on every graph in the affected dataset. Disabled silently when `HONEYCOMB_CONFIG_API_KEY` is unset. Override the dataset with `HONEYCOMB_MARKER_DATASET=gomoku-api` if you want markers limited to one dataset instead of `__all__`.
 
 ### Monitoring
 
@@ -303,5 +357,5 @@ gcloud run revisions list --service=gomoku-httpd --region=us-central1
 ### Links
 
 - [Cloud Run infrastructure](../iac/cloud_run/README.md) — Terraform config, deploy scripts, environment variables
-- [AI Engine](AI-ENGINE.md) — Algorithm details, threat scoring, known issues
-- [HTTP Daemon](HTTPD.md) — API reference and JSON schema
+- [AI Engine](ai-engine.md) — Algorithm details, threat scoring, known issues
+- [HTTP Daemon](httpd.md) — API reference and JSON schema

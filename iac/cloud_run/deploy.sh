@@ -8,6 +8,8 @@ REPO_NAME="gomoku-repo"
 : "${PROJECT_ID:?Set PROJECT_ID to your GCP project ID}"
 : "${TF_VAR_jwt_secret:?Set TF_VAR_jwt_secret (openssl rand -base64 32)}"
 : "${TF_VAR_database_url:?Set TF_VAR_database_url to your Neon PostgreSQL DSN}"
+# TF_VAR_honeycomb_api_key and TF_VAR_honeycomb_dataset are optional; tracing
+# is disabled when honeycomb_api_key is empty.
 
 export PROJECT_ID
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -36,17 +38,46 @@ terraform apply \
 gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
 
 # 4. Build and push Docker images
+# We push the :latest tag for human convenience but pass the immutable digest
+# (@sha256:...) to Terraform. Without the digest, Terraform sees the same
+# `:latest` string every deploy and concludes nothing changed — Cloud Run
+# keeps serving the old revision even though a new image is available.
 REGISTRY="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME"
 
-HTTPD_IMAGE="$REGISTRY/gomoku-httpd:latest"
-echo "Building and pushing gomoku-httpd..."
-docker buildx build --platform linux/amd64 -t "$HTTPD_IMAGE" --load "$REPO_ROOT/gomoku-c/"
-docker push "$HTTPD_IMAGE"
+resolve_digest() {
+    # Returns "registry/name@sha256:..." for the given pushed tag. Prefers
+    # docker inspect's RepoDigests (populated by docker push) and falls back
+    # to gcloud artifacts so the build works on hosts where the local image
+    # cache was pruned between push and digest lookup.
+    local image="$1"
+    local digest
+    digest=$(docker inspect --format='{{range .RepoDigests}}{{.}}{{"\n"}}{{end}}' "$image" 2>/dev/null \
+        | grep -F "${image%:*}@" | head -n1)
+    if [[ -z "$digest" ]]; then
+        digest=$(gcloud artifacts docker images describe "$image" \
+            --format="value(image_summary.digest)" 2>/dev/null)
+        [[ -n "$digest" ]] && digest="${image%:*}@${digest}"
+    fi
+    [[ -z "$digest" ]] && {
+        echo "ERROR: could not resolve digest for $image" >&2
+        exit 1
+    }
+    echo "$digest"
+}
 
-API_IMAGE="$REGISTRY/gomoku-api:latest"
+HTTPD_TAG="$REGISTRY/gomoku-httpd:latest"
+echo "Building and pushing gomoku-httpd..."
+docker buildx build --platform linux/amd64 -t "$HTTPD_TAG" --load "$REPO_ROOT/gomoku-c/"
+docker push "$HTTPD_TAG"
+HTTPD_IMAGE="$(resolve_digest "$HTTPD_TAG")"
+echo "  → $HTTPD_IMAGE"
+
+API_TAG="$REGISTRY/gomoku-api:latest"
 echo "Building and pushing gomoku-api..."
-docker buildx build --platform linux/amd64 -t "$API_IMAGE" --load "$REPO_ROOT/api/"
-docker push "$API_IMAGE"
+docker buildx build --platform linux/amd64 -t "$API_TAG" --load "$REPO_ROOT/api/"
+docker push "$API_TAG"
+API_IMAGE="$(resolve_digest "$API_TAG")"
+echo "  → $API_IMAGE"
 
 # 5. Deploy all Cloud Run services
 echo "Deploying Cloud Run services..."

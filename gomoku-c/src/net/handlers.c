@@ -35,13 +35,36 @@ static int report_scoring_enabled = 0;
 // REQUEST CONTEXT FOR LOGGING
 //===============================================================================
 
+// Length of a W3C traceparent trace-id (32 hex chars + NUL).
+#define TRACE_ID_LEN 33
+
 typedef struct {
   double start_time;
   char client_ip[INET_ADDRSTRLEN];
   const char *path;
+  // W3C traceparent trace-id ("" when absent). Logged on every request line so
+  // engine logs can be joined to FastAPI/Honeycomb traces by trace_id.
+  char trace_id[TRACE_ID_LEN];
 } request_context_t;
 
 static __thread request_context_t current_request = {0};
+
+/**
+ * Extract the trace-id from a W3C traceparent header.
+ *
+ * Format: "VV-TRACEID-SPANID-FF" where VV is two hex chars, TRACEID is 32 hex
+ * chars, SPANID is 16 hex chars, FF is two flag chars (55 chars total, dashes
+ * at positions 2, 35, 52). On any parse failure, writes "" to out.
+ */
+static void extract_trace_id(const char *header_buf, int header_len,
+                             char *out) {
+  out[0] = '\0';
+  if (header_len < 55 || header_buf[2] != '-' || header_buf[35] != '-') {
+    return;
+  }
+  memcpy(out, header_buf + 3, 32);
+  out[32] = '\0';
+}
 
 /**
  * Get client IP address from request socket.
@@ -82,9 +105,15 @@ static void send_json_response(struct http_request_s *request, int status,
   // Log request completion
   double elapsed_ms =
       (get_current_time() - current_request.start_time) * 1000.0;
-  LOG_INFO("%s %s %d %.3fms", current_request.client_ip,
-           current_request.path ? current_request.path : "/unknown", status,
-           elapsed_ms);
+  if (current_request.trace_id[0] != '\0') {
+    LOG_INFO("%s %s %d %.3fms trace_id=%s", current_request.client_ip,
+             current_request.path ? current_request.path : "/unknown", status,
+             elapsed_ms, current_request.trace_id);
+  } else {
+    LOG_INFO("%s %s %d %.3fms", current_request.client_ip,
+             current_request.path ? current_request.path : "/unknown", status,
+             elapsed_ms);
+  }
 }
 
 /**
@@ -166,6 +195,12 @@ void handle_request(struct http_request_s *request) {
   get_client_ip(request, current_request.client_ip,
                 sizeof(current_request.client_ip));
 
+  // Capture W3C traceparent for log/trace correlation. Honeycomb's FastAPI
+  // child span already records engine-call latency; this just makes the
+  // engine's own log lines joinable to that trace by trace_id.
+  struct http_string_s tp = http_request_header(request, "traceparent");
+  extract_trace_id(tp.buf, tp.len, current_request.trace_id);
+
   struct http_string_s method = http_request_method(request);
   struct http_string_s target = http_request_target(request);
 
@@ -197,8 +232,13 @@ void handle_request(struct http_request_s *request) {
     // Log CORS preflight
     double elapsed_ms =
         (get_current_time() - current_request.start_time) * 1000.0;
-    LOG_INFO("%s %s 204 %.3fms", current_request.client_ip, path_buf,
-             elapsed_ms);
+    if (current_request.trace_id[0] != '\0') {
+      LOG_INFO("%s %s 204 %.3fms trace_id=%s", current_request.client_ip,
+               path_buf, elapsed_ms, current_request.trace_id);
+    } else {
+      LOG_INFO("%s %s 204 %.3fms", current_request.client_ip, path_buf,
+               elapsed_ms);
+    }
     return;
   }
 

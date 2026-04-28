@@ -66,7 +66,6 @@ typedef struct {
 #define TT_LOWER_BOUND 1
 #define TT_UPPER_BOUND 2
 #define MAX_KILLER_MOVES 2
-#define MAX_SEARCH_DEPTH 10
 #define MAX_THREATS 100
 #define ASPIRATION_WINDOW 50
 #define NULL_MOVE_REDUCTION 2

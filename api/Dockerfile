@@ -20,6 +20,11 @@ ENV PORT=8000
 
 EXPOSE 8000
 
+# Builder did `COPY . app/`, so the FastAPI source lives at /app/app/app/main.py
+# and supporting files (alembic.ini, db/, public/) are at /app/app/. Run uvicorn
+# from /app/app so `app.main` resolves to /app/app/app/main.py.
+WORKDIR /app/app
+
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/health')" || exit 1
 

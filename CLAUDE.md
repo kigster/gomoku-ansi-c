@@ -28,12 +28,22 @@ Currently, building the game with `make clean all` results in:
 
 ### Current Deploy
 
-The primary deploy command is `just cr-update`, which builds Docker containers and deploys them to Google Cloud Run. For first-time setup use `just cr-init`.
+The canonical deploy command is **`just deploy`** — it sources `.env` at repo root, runs Alembic migrations against the production database, builds the frontend + Docker images for `linux/amd64`, applies Terraform, and posts a deploy marker to Honeycomb. The actual logic lives in `bin/deploy`.
 
-Manual steps if needed:
+Required `.env` keys at repo root (deploy-time only — never read at runtime):
 
-```bash
-gcloud auth login
-cd iac/cloud_run
-./update.sh
-```
+- `PRODUCTION_DATABASE_URL` — Neon pooled DSN
+- `PRODUCTION_JWT_SECRET` — HMAC key (`just jwt-secret` to generate)
+- `HONEYCOMB_INGEST_API_KEY` — runtime tracing
+- `HONEYCOMB_CONFIG_API_KEY` — deploy markers
+- `PROJECT_ID`, `REGION`
+
+Legacy `just cr-init` and `just cr-update` still exist as escape hatches but skip migrations — prefer `just deploy`.
+
+### Runtime Configuration
+
+The FastAPI app loads `api/.env.{development,test,ci}[.local]` based on the `ENVIRONMENT` env var (default `development`). The `.local` overlays are gitignored for personal overrides (e.g., pointing local dev at Neon). Production runtime config arrives via Cloud Run env vars set by Terraform; no `.env` file is read in production.
+
+### Tests
+
+`just test-api` runs the API test suite (89 tests) in parallel across 4 workers via pytest-xdist. Each worker gets its own `gomoku_test_gw{N}` database, dropped at session end. Sequential `just test` from `api/` also works for debugging.

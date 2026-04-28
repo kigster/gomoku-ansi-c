@@ -1,0 +1,24 @@
+# Local artifacts that shouldn't end up in the runtime image
+.venv/
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+logs/
+*.pyc
+*.pyo
+
+# Tests are not needed at runtime
+tests/
+
+# Local env overlays — Cloud Run injects production env vars at runtime
+.env
+.env.*.local
+
+# Editor / VCS
+.git/
+.idea/
+.vscode/
+*.swp

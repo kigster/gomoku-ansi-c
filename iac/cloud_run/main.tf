@@ -49,7 +49,13 @@ resource "google_artifact_registry_repository" "repo" {
 resource "google_cloud_run_v2_service" "httpd" {
   name     = "gomoku-httpd"
   location = var.region
-  ingress  = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+  # INGRESS_TRAFFIC_ALL + IAM-restricted invoker is the canonical Cloud-Run-
+  # to-Cloud-Run pattern. INGRESS_TRAFFIC_INTERNAL_ONLY rejects the api's
+  # public-URL request (returning a stock 404) unless the api routes through
+  # a VPC connector — over-engineering for the security gain. Access is still
+  # tightly scoped: only google_cloud_run_service_iam_member.api_invokes_httpd
+  # below holds the invoker role; everyone else gets 403.
+  ingress = "INGRESS_TRAFFIC_ALL"
 
   template {
     scaling {
@@ -64,7 +70,8 @@ resource "google_cloud_run_v2_service" "httpd" {
         container_port = 8787
       }
 
-      command = ["./gomoku-httpd"]
+      # Dockerfile WORKDIR is /app/source and the binary lives at bin/gomoku-httpd
+      command = ["./bin/gomoku-httpd"]
       args    = ["-b", "0.0.0.0:8787", "-L", "info"]
 
       startup_probe {
@@ -142,6 +149,26 @@ resource "google_cloud_run_v2_service" "api" {
         value = jsonencode(var.cors_origins)
       }
 
+      env {
+        name  = "ENVIRONMENT"
+        value = "production"
+      }
+
+      env {
+        name  = "OTEL_SERVICE_NAME"
+        value = "gomoku-api"
+      }
+
+      env {
+        name  = "HONEYCOMB_API_KEY"
+        value = var.honeycomb_api_key
+      }
+
+      env {
+        name  = "HONEYCOMB_DATASET"
+        value = var.honeycomb_dataset
+      }
+
       startup_probe {
         http_get {
           path = "/health"
@@ -187,4 +214,30 @@ resource "google_cloud_run_service_iam_member" "api_public_access" {
   service  = google_cloud_run_v2_service.api.name
   role     = "roles/run.invoker"
   member   = "allUsers"
+}
+
+# ──────────────────────────────────────────────
+# Custom domain mapping for gomoku-api
+# ──────────────────────────────────────────────
+# Created only when var.custom_domain is non-empty. Survives service
+# destroy/recreate cycles because it's part of the same `terraform apply` —
+# without this, a renamed/recreated service silently leaves the domain
+# pointing at a deleted target ("Page not found"). DNS verification still
+# happens out-of-band: add the CNAME from the `custom_domain_dns_records`
+# output at your DNS provider; Google then provisions the TLS cert.
+
+resource "google_cloud_run_domain_mapping" "api" {
+  count    = var.custom_domain != "" ? 1 : 0
+  name     = var.custom_domain
+  location = var.region
+
+  metadata {
+    namespace = var.project_id
+  }
+
+  spec {
+    route_name = google_cloud_run_v2_service.api.name
+  }
+
+  depends_on = [google_cloud_run_service_iam_member.api_public_access]
 }

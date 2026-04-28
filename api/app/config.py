@@ -1,8 +1,37 @@
-"""Settings for the application."""
+"""Settings for the application.
 
+Environment selection (Vite/Next-style layering):
+
+  ENVIRONMENT=development  →  .env.development  +  .env.development.local
+  ENVIRONMENT=test         →  .env.test         +  .env.test.local
+  ENVIRONMENT=ci           →  .env.ci           +  .env.ci.local
+  ENVIRONMENT=production   →  (no file; Cloud Run env vars are authoritative)
+
+The ``.local`` overlay is optional and gitignored — that's where you put
+personal overrides like a Neon DSN to debug a prod issue from a dev shell.
+Process-level env vars always win over files.
+"""
+
+import os
+from pathlib import Path
 from typing import Literal
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+API_DIR = Path(__file__).resolve().parent.parent
+
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
+
+def _env_files() -> tuple[Path, ...]:
+    """Files to feed into Pydantic, in load-order (later files override earlier)."""
+    if ENVIRONMENT == "production":
+        return ()
+    candidates = (
+        API_DIR / f".env.{ENVIRONMENT}",
+        API_DIR / f".env.{ENVIRONMENT}.local",
+    )
+    return tuple(p for p in candidates if p.is_file())
 
 
 class Settings(BaseSettings):
@@ -26,7 +55,7 @@ class Settings(BaseSettings):
     # JWT
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = 7 * 1440 # 1 week
+    jwt_expire_minutes: int = 7 * 1440  # 1 week
 
     # CORS
     cors_origins: list[str] = ["*"]
@@ -54,7 +83,11 @@ class Settings(BaseSettings):
             )
         return f"postgresql://{self.db_user}{password_part}@localhost/{self.db_name}"
 
-    model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore"}
+    model_config = SettingsConfigDict(
+        env_prefix="",
+        env_file=_env_files() or None,
+        extra="ignore",
+    )
 
 
 settings = Settings()
