@@ -26,7 +26,7 @@ export default function SettingsPanel ({ settings, onChange, disabled }: Setting
             <label className={labelCls}>AI Depth</label>
             <span className={valueBadge}>{settings.aiDepth}</span>
           </div>
-          <input type='range' min={2} max={5}
+          <input type='range' min={2} max={7}
             value={settings.aiDepth}
             onChange={e => update({ aiDepth: Number(e.target.value) })}
             disabled={disabled}
