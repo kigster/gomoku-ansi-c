@@ -59,10 +59,15 @@ DAEMON_TEST_TARGET = $(BINDIR)/test_daemon
 DAEMON_TEST_CXXFLAGS = $(ALL_CXXFLAGS)
 
 # Gomocup brain configuration
+#
+# The brain links the engine without json-c; -DNO_JSON strips the JSON
+# helpers in game.{c,h}. Engine objects are compiled to a separate
+# .nojson.o suffix so the TUI and daemon (which DO need json-c) keep
+# their own object files.
 GOMOCUP_DIR        = src/gomocup
 GOMOCUP_BIN        = $(BINDIR)/pbrain-kig-standard
 GOMOCUP_CFLAGS     = -Wall -Wextra -Wno-sign-compare -O3 -Isrc/gomoku -I$(GOMOCUP_DIR) -DNO_JSON
-GOMOCUP_CORE_OBJS  = src/gomoku/gomoku.o src/gomoku/board.o src/gomoku/game.o src/gomoku/ai.o
+GOMOCUP_CORE_OBJS  = src/gomoku/gomoku.nojson.o src/gomoku/board.nojson.o src/gomoku/game.nojson.o src/gomoku/ai.nojson.o
 GOMOCUP_OBJS       = $(GOMOCUP_DIR)/main.o $(GOMOCUP_DIR)/protocol.o $(GOMOCUP_DIR)/coords.o $(GOMOCUP_DIR)/time_budget.o
 GOMOCUP_TEST_TARGET= $(BINDIR)/test_gomocup
 GOMOCUP_TEST_CXXFLAGS = -Wall -Wunused-parameter -Wextra -std=c++17 -I$(GOMOCUP_DIR) -Itests/googletest/googletest/include -O2 $(MACOS_CXX_INCLUDE)
@@ -70,7 +75,7 @@ GOMOCUP_TEST_CXXFLAGS = -Wall -Wunused-parameter -Wextra -std=c++17 -I$(GOMOCUP_
 # CMake build directory
 BUILD_DIR = build
 
-.PHONY: all clean test tests rebuild json-c gomoku-httpd googletest test-client test-daemon cmake-clean
+.PHONY: all clean test tests rebuild json-c gomoku-httpd googletest test-client test-daemon cmake-clean gomocup pbrain-kig-standard test-gomocup-e2e
 
 $(BINDIR):
 		@mkdir -p $(BINDIR)
@@ -125,7 +130,7 @@ $(TEST_TARGET): googletest $(JSONC_LIB) tests/gomoku_test.o src/gomoku/gomoku.o 
 tests/gomoku_test.o: googletest tests/gomoku_test.cpp src/gomoku/gomoku.h src/gomoku/board.h src/gomoku/game.h src/gomoku/ai.h
 		$(CXX) $(ALL_CXXFLAGS) -c tests/gomoku_test.cpp -o tests/gomoku_test.o
 
-test: 		$(TEST_TARGET) $(DAEMON_TEST_TARGET) $(GOMOCUP_TEST_TARGET) $(TARGET)
+test: 		$(TEST_TARGET) $(DAEMON_TEST_TARGET) $(GOMOCUP_TEST_TARGET) $(TARGET) test-gomocup-e2e
 		@echo "=== Running Game Tests ==="
 		@./$(TEST_TARGET) | GREP_COLOR=32 grep --color=always -E 'GomokuTest\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
 		@echo ""
@@ -134,6 +139,13 @@ test: 		$(TEST_TARGET) $(DAEMON_TEST_TARGET) $(GOMOCUP_TEST_TARGET) $(TARGET)
 		@echo ""
 		@echo "=== Running Gomocup Tests ==="
 		@./$(GOMOCUP_TEST_TARGET) | GREP_COLOR=32 grep --color=always -E 'Gomocup[A-Za-z]*Test\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
+
+# End-to-end scripted protocol session against the native brain. Builds
+# the brain first if needed, then pipes a known scenario through it.
+test-gomocup-e2e: $(GOMOCUP_BIN)
+		@echo ""
+		@echo "=== Running Gomocup Protocol E2E ==="
+		@bash tests/gomocup_protocol_e2e.sh
 
 tests: 		test
 
@@ -149,6 +161,20 @@ tests/daemon_test.o: googletest tests/daemon_test.cpp src/net/cli.h src/net/json
 $(GOMOCUP_DIR)/%.o: $(GOMOCUP_DIR)/%.c
 		$(CC) $(GOMOCUP_CFLAGS) -c $< -o $@
 
+# Engine objects rebuilt with -DNO_JSON for the brain. Distinct .nojson.o
+# suffix prevents collision with the TUI's plain .o files.
+src/gomoku/%.nojson.o: src/gomoku/%.c
+		$(CC) $(GOMOCUP_CFLAGS) -c $< -o $@
+
+# Native brain target (macOS / Linux). Use this for development; the
+# Windows tournament binaries are built via the gomocup-win target.
+$(GOMOCUP_BIN): $(GOMOCUP_CORE_OBJS) $(GOMOCUP_OBJS) | $(BINDIR)
+		$(CC) $(GOMOCUP_CORE_OBJS) $(GOMOCUP_OBJS) -lm -o $(GOMOCUP_BIN)
+
+pbrain-kig-standard: $(GOMOCUP_BIN)
+
+gomocup: $(GOMOCUP_BIN)
+
 # Gomocup brain unit tests
 $(GOMOCUP_TEST_TARGET): googletest tests/gomocup_test.o $(GOMOCUP_DIR)/protocol.o $(GOMOCUP_DIR)/coords.o | $(BINDIR)
 		$(CXX) $(GOMOCUP_TEST_CXXFLAGS) tests/gomocup_test.o $(GOMOCUP_DIR)/protocol.o $(GOMOCUP_DIR)/coords.o $(GTEST_LIB) $(GTEST_MAIN_LIB) -pthread -o $(GOMOCUP_TEST_TARGET)
@@ -163,7 +189,7 @@ clean:  	cmake-clean
 		rm -rf $(BINDIR)
 		rm -f $(OBJECTS) tests/gomoku_test.o
 		rm -f $(DAEMON_CORE) $(DAEMON_NET) src/net/test_client_utils.o tests/daemon_test.o
-		rm -f $(GOMOCUP_OBJS) tests/gomocup_test.o
+		rm -f $(GOMOCUP_OBJS) $(GOMOCUP_CORE_OBJS) tests/gomocup_test.o
 		rm -rf tests/googletest
 		find . -name '*.a' -type f -delete || true
 
