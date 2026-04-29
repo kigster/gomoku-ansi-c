@@ -190,8 +190,13 @@ game_state_t *json_api_parse_game(const char *json_str, char *error_msg,
     return NULL;
   }
 
-  // Parse radius (cap to API_MAX_RADIUS)
-  int radius = 2;
+  // Parse radius (cap to API_MAX_RADIUS).
+  // Fallback matches the TUI CLI default in cli.c so a missing `radius`
+  // field doesn't silently weaken the AI relative to the command-line
+  // binary. "Radius" means "candidate moves within N empty cells of ANY
+  // non-empty cell on the board" (not just the last move) — see
+  // generate_moves_optimized in ai.c.
+  int radius = 3;
   json_object *radius_obj;
   if (json_object_object_get_ex(root, "radius", &radius_obj)) {
     radius = json_object_get_int(radius_obj);

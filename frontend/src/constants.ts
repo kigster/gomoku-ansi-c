@@ -2,7 +2,7 @@ import type { GameSettings } from './types'
 
 export const DEFAULT_SETTINGS: GameSettings = {
   aiDepth: 5,
-  aiRadius: 2,
+  aiRadius: 3,
   aiTimeout: 'none',
   displayMode: 'stones',
   playerSide: 'X',
