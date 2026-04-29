@@ -46,16 +46,20 @@ export default function RulesModal ({ onClose }: RulesModalProps) {
       </Section>
 
       <Section title='Game Variants'>
-        <h4 className='mb-1 mt-2 font-semibold text-amber-400'>Freestyle Gomoku</h4>
+        <h4 className='mb-1 mt-2 font-semibold text-amber-400'>Standard Gomoku</h4>
         <p>
-          The simplest variant. Five or more stones in a row wins. No restrictions
-          on opening moves. This is what we play by default in this app.
+          A line of <em>exactly</em> five wins. An overline of six or more
+          stones does <em>not</em> count as a win &mdash; if you fill a gap
+          and end up with six in a row, the game continues.
+          {' '}<strong>This is what we play by default in this app</strong>,
+          for both human and AI sides.
         </p>
 
-        <h4 className='mb-1 mt-4 font-semibold text-amber-400'>Standard Gomoku</h4>
+        <h4 className='mb-1 mt-4 font-semibold text-amber-400'>Freestyle Gomoku</h4>
         <p>
-          Same as freestyle, but a line of <em>exactly</em> five wins. An
-          overline of six or more does <em>not</em> count as a win.
+          The simplest variant. Five <em>or more</em> stones in a row wins.
+          No restrictions on opening moves. We do not play this variant here
+          &mdash; the engine treats overlines as sterile rather than winning.
         </p>
 
         <h4 className='mb-1 mt-4 font-semibold text-amber-400'>Renju</h4>
@@ -68,13 +72,16 @@ export default function RulesModal ({ onClose }: RulesModalProps) {
           <li><strong>Double-four:</strong> Black cannot create two rows of four at the same time.</li>
           <li><strong>Overline:</strong> A line of six or more does not count as a win for Black.</li>
         </ul>
-        <p className='mt-1'>White has no such restrictions and can win with an overline.</p>
+        <p className='mt-1'>
+          White has no such restrictions and can win with an overline. Renju
+          rules are <em>not</em> enforced by this app.
+        </p>
 
         <h4 className='mb-1 mt-4 font-semibold text-amber-400'>Swap / Swap2 Opening</h4>
         <p>
           To further balance the game, some tournaments use opening rules where the
           first player places one or more stones and the opponent can choose to
-          swap colors.
+          swap colors. Not implemented here.
         </p>
       </Section>
 
@@ -94,9 +101,11 @@ export default function RulesModal ({ onClose }: RulesModalProps) {
           positions that force your opponent to respond defensively.
         </p>
         <ul className='mt-2 list-disc space-y-1'>
-          <li><strong>Open Four:</strong> Four in a row with both ends empty. This is effectively unstoppable.</li>
-          <li><strong>Four:</strong> Four in a row with one end blocked. Forces an immediate answer.</li>
-          <li><strong>Open Three:</strong> Three in a row with both ends open. Often the start of a winning sequence.</li>
+          <li><strong>Open Four</strong> (<code>_XXXX_</code>): four in a row with both ends empty. Unstoppable.</li>
+          <li><strong>Closed Four</strong> (<code>OXXXX_</code>): four in a row with one end blocked. Forces an immediate answer.</li>
+          <li><strong>Broken Four</strong> (<code>XX_XX</code> or <code>X_XXX</code>): four stones with one gap. Filling the gap makes five &mdash; must block, just like a closed four.</li>
+          <li><strong>Open Three</strong> (<code>_XXX_</code>): three in a row with both ends open. Often the start of a winning sequence &mdash; either extension creates an open four.</li>
+          <li><strong>Broken Three</strong> (<code>_XX_X_</code>) with both ends open: looks innocent, but filling the gap creates an open four. Treat it as seriously as an open three.</li>
         </ul>
 
         <h4 className='mb-2 mt-4 font-semibold text-amber-400'>Threat Sequences</h4>
