@@ -122,7 +122,7 @@ Before submitting, manually exercise the binaries against the Piskvork tournamen
 - `INFO` keys honoured: `timeout_turn`, `timeout_match`, `time_left`. All other keys are silently consumed per spec.
 - `time_left` from the manager is authoritative; the brain's internal estimate is overwritten on every `INFO time_left` it sees.
 - The brain reserves a 200 ms safety margin against the manager's deadline so transmission delay or a context switch does not cause a forfeit.
-- Default search depth is 7 with iterative deepening; default search radius is 3. The first move on `BEGIN` is the centre square (7, 7).
+- Default search depth is 5 with iterative deepening; default search radius is 3. See the long comment over `BRAIN_DEFAULT_DEPTH` in `main.c` for why 5 (not 7) is the chosen baseline. The first move on `BEGIN` is the centre square (7, 7).
 
 ## Licence
 

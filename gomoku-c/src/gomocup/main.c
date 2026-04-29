@@ -25,7 +25,27 @@
 // the brain uses a separate constant to avoid the macro collision and to
 // document that the Standard tournament category is fixed at 15x15.
 #define BRAIN_BOARD_SIZE       15
-#define BRAIN_DEFAULT_DEPTH    7
+
+// Default search depth. We use 5 (not 7) deliberately:
+//
+// The engine's find_best_ai_move pipeline (see doc/ai-engine.md §1) handles
+// every meaningful tactical situation BEFORE minimax via Steps 1-6: own
+// winning move, blocking opponent's win, compound threats, VCT search,
+// blocking open threes, playing forcing fours. Depth only matters for
+// Step 7 (minimax), which runs in QUIET positions where neither side has
+// a forcing line. In quiet positions, the static evaluator is the
+// dominant signal, and depth 5 vs 7 changes the move chosen rarely.
+//
+// An adaptive "depth 5 normally, depth 7 when the position is hot" rule
+// would need a position-classifier that the existing pipeline doesn't
+// already provide cheaply (steps 1-6 already short-circuit on hot
+// positions, so by the time we reach the depth choice we're in quiet
+// territory by definition). Implementing such a classifier well would
+// add real complexity for marginal strength gain. Depth 5 with the
+// improved heuristic from PR #86 (broken-three / broken-four / overline
+// fixes) is a strong baseline that fits comfortably inside the 30s
+// per-turn tournament budget on a 15x15 board.
+#define BRAIN_DEFAULT_DEPTH    5
 #define BRAIN_SEARCH_RADIUS    3
 
 // Brain-side identification of the two engine players. self_color is whichever
