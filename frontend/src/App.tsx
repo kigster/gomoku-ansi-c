@@ -471,7 +471,7 @@ export default function App () {
                   <button
                     onClick={() => setShowSettings(s => !s)}
                     className='lg:hidden w-full mb-3 py-2 rounded-lg bg-neutral-700 hover:bg-neutral-600
-                           font-medium transition-all duration-200 hover:scale-[1.02]'
+                           font-medium transition-all duration-200 hover:scale-[1.01]'
                   >
                     {showSettings ? 'Hide Settings' : 'Settings'}
                   </button>
@@ -515,7 +515,7 @@ export default function App () {
                                bg-amber-600 hover:bg-amber-500 active:bg-amber-700
                                ring-1 ring-amber-500/30 shadow-lg shadow-amber-900/40
                                transition-all duration-200 hover:shadow-amber-600/25
-                               hover:shadow-xl hover:scale-[1.02]'
+                               hover:shadow-xl hover:scale-[1.01]'
                       >
                         Start Game
                       </button>
@@ -525,7 +525,7 @@ export default function App () {
                         onClick={handleAbort}
                         className='w-full py-3 rounded-xl text-lg font-semibold font-heading
                                glass-card border-neutral-600 hover:border-neutral-500
-                               hover:bg-neutral-800/90 text-neutral-300 transition-all duration-200 hover:scale-[1.02]'
+                               hover:bg-neutral-800/90 text-neutral-300 transition-all duration-200 hover:scale-[1.01]'
                       >
                         New Game
                       </button>
@@ -542,7 +542,7 @@ export default function App () {
                           className='w-full py-3 rounded-xl text-lg font-bold font-heading
                                  bg-sky-700 hover:bg-sky-600 active:bg-sky-800
                                  text-white shadow-md shadow-sky-900/40 transition-all duration-200
-                                 hover:scale-[1.03] disabled:opacity-30 disabled:cursor-not-allowed'
+                                 hover:scale-[1.01] disabled:opacity-30 disabled:cursor-not-allowed'
                         >
                           Undo
                         </button>
@@ -552,7 +552,7 @@ export default function App () {
                         onClick={handleAbort}
                         className='w-full mt-3 py-3 rounded-xl text-lg font-bold font-heading
                                bg-red-700 hover:bg-red-600 active:bg-red-800
-                               text-white shadow-md shadow-red-900/40 transition-all duration-200 hover:scale-[1.03]'
+                               text-white shadow-md shadow-red-900/40 transition-all duration-200 hover:scale-[1.01]'
                       >
                         Abort Game
                       </button>
@@ -588,7 +588,7 @@ export default function App () {
                           onClick={handleAbort}
                           className='w-[30%] py-2 rounded-xl text-sm font-bold font-heading
                                  bg-red-700 hover:bg-red-600 active:bg-red-800
-                                 text-white shadow-md shadow-red-900/40 transition-all duration-200 hover:scale-[1.05]'
+                                 text-white shadow-md shadow-red-900/40 transition-all duration-200 hover:scale-[1.02]'
                         >
                           Abort
                         </button>
@@ -599,7 +599,7 @@ export default function App () {
                             className='w-[30%] py-2 rounded-xl text-sm font-bold font-heading
                                    bg-sky-700 hover:bg-sky-600 active:bg-sky-800
                                    text-white shadow-md shadow-sky-900/40 transition-all duration-200
-                                   hover:scale-[1.05] disabled:opacity-30 disabled:cursor-not-allowed'
+                                   hover:scale-[1.02] disabled:opacity-30 disabled:cursor-not-allowed'
                           >
                             Undo
                           </button>

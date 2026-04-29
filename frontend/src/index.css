@@ -67,7 +67,7 @@ h1, h2, h3, .font-heading {
   will-change: transform;
 }
 .game-panel:hover {
-  transform: scale(1.07);
+  transform: scale(1.03);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.08),
     0 24px 72px rgba(0, 0, 0, 0.65),
@@ -112,7 +112,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 input[type="range"]:not(:disabled)::-webkit-slider-thumb:hover {
   box-shadow: 0 0 0 5px rgba(245, 158, 11, 0.22);
-  transform: scale(1.15);
+  transform: scale(1.06);
 }
 input[type="range"]::-moz-range-thumb {
   width: 14px;
