@@ -174,10 +174,10 @@ TEST_F(DaemonJsonTest, CapsDepthAndRadius) {
 
   ASSERT_NE(game, nullptr) << "Parse failed: " << error;
 
-  // Depth should be capped to API_MAX_DEPTH (4)
+  // Depth should be capped to API_MAX_DEPTH (current ceiling, see json_api.h)
   EXPECT_LE(game->depth_for_player[1], API_MAX_DEPTH);
 
-  // Radius should be capped to API_MAX_RADIUS (3)
+  // Radius should be capped to API_MAX_RADIUS (current ceiling, see json_api.h)
   EXPECT_LE(game->search_radius, API_MAX_RADIUS);
 
   cleanup_game(game);

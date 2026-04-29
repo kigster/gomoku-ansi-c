@@ -214,7 +214,7 @@ int make_move(game_state_t *game, int x, int y, int player, double time_taken,
   game->board[x][y] = player;
 
   // Update optimization caches
-  update_interesting_moves(game, x, y);
+  update_post_move_state(game, x, y);
 
   // Check for game end conditions
   check_game_state(game);
@@ -401,29 +401,10 @@ void add_ai_history_entry(game_state_t *game, int moves_evaluated) {
 //===============================================================================
 
 void init_optimization_caches(game_state_t *game) {
-  // Initialize interesting moves cache
-  game->interesting_move_count = 0;
   game->stones_on_board = 0;
   game->winner_cache_valid = 0;
   game->has_winner_cache[0] = 0;
   game->has_winner_cache[1] = 0;
-
-  // If board is empty, only center area is interesting
-  if (game->stones_on_board == 0) {
-    int center = game->board_size / 2;
-    int count = 0;
-    for (int i = center - 2; i <= center + 2; i++) {
-      for (int j = center - 2; j <= center + 2; j++) {
-        if (i >= 0 && i < game->board_size && j >= 0 && j < game->board_size) {
-          game->interesting_moves[count].x = i;
-          game->interesting_moves[count].y = j;
-          game->interesting_moves[count].is_active = 1;
-          count++;
-        }
-      }
-    }
-    game->interesting_move_count = count;
-  }
 
   // Initialize transposition table
   init_transposition_table(game);
@@ -440,44 +421,11 @@ static void rebuild_optimization_caches(game_state_t *game) {
   int size = game->board_size;
 
   game->stones_on_board = 0;
-  game->interesting_move_count = 0;
-  memset(game->interesting_moves, 0, sizeof(game->interesting_moves));
-
-  unsigned char candidate[19][19];
-  memset(candidate, 0, sizeof(candidate));
-
   for (int x = 0; x < size; x++) {
     for (int y = 0; y < size; y++) {
-      if (game->board[x][y] == AI_CELL_EMPTY) {
-        continue;
+      if (game->board[x][y] != AI_CELL_EMPTY) {
+        game->stones_on_board++;
       }
-      game->stones_on_board++;
-
-      for (int dx = -3; dx <= 3; dx++) {
-        for (int dy = -3; dy <= 3; dy++) {
-          int nx = x + dx;
-          int ny = y + dy;
-          if (nx < 0 || nx >= size || ny < 0 || ny >= size) {
-            continue;
-          }
-          if (game->board[nx][ny] != AI_CELL_EMPTY) {
-            continue;
-          }
-          candidate[nx][ny] = 1;
-        }
-      }
-    }
-  }
-
-  for (int x = 0; x < size; x++) {
-    for (int y = 0; y < size; y++) {
-      if (!candidate[x][y]) {
-        continue;
-      }
-      game->interesting_moves[game->interesting_move_count].x = x;
-      game->interesting_moves[game->interesting_move_count].y = y;
-      game->interesting_moves[game->interesting_move_count].is_active = 1;
-      game->interesting_move_count++;
     }
   }
 
@@ -485,11 +433,14 @@ static void rebuild_optimization_caches(game_state_t *game) {
   game->current_hash = compute_zobrist_hash(game);
 }
 
-void update_interesting_moves(game_state_t *game, int x, int y) {
-  // Update stone count
+void update_post_move_state(game_state_t *game, int x, int y) {
+  // Stone count (used by minimax draw detection in ai.c and the null-move
+  // pruning gate in is_null_move_allowed).
   game->stones_on_board++;
 
-  // Update zobrist hash incrementally
+  // Incremental zobrist hash update for the just-placed stone, so
+  // transposition table lookups stay correct without recomputing from
+  // scratch each ply.
   int cell = game->board[x][y];
   if (cell != AI_CELL_EMPTY) {
     int player_index = (cell == AI_CELL_CROSSES) ? 0 : 1;
@@ -497,46 +448,7 @@ void update_interesting_moves(game_state_t *game, int x, int y) {
     game->current_hash ^= game->zobrist_keys[player_index][pos];
   }
 
-  // Invalidate winner cache
   invalidate_winner_cache(game);
-
-  // Add new interesting moves around the placed stone
-  const int radius = 2; // MAX_RADIUS
-
-  for (int i = max(0, x - radius); i <= min(game->board_size - 1, x + radius);
-       i++) {
-    for (int j = max(0, y - radius); j <= min(game->board_size - 1, y + radius);
-         j++) {
-      if (game->board[i][j] == AI_CELL_EMPTY) {
-        // Check if this position is already in the interesting moves
-        int found = 0;
-        for (int k = 0; k < game->interesting_move_count; k++) {
-          if (game->interesting_moves[k].x == i &&
-              game->interesting_moves[k].y == j &&
-              game->interesting_moves[k].is_active) {
-            found = 1;
-            break;
-          }
-        }
-
-        if (!found && game->interesting_move_count < 361) {
-          game->interesting_moves[game->interesting_move_count].x = i;
-          game->interesting_moves[game->interesting_move_count].y = j;
-          game->interesting_moves[game->interesting_move_count].is_active = 1;
-          game->interesting_move_count++;
-        }
-      }
-    }
-  }
-
-  // Remove the move that was just played from interesting moves
-  for (int k = 0; k < game->interesting_move_count; k++) {
-    if (game->interesting_moves[k].x == x &&
-        game->interesting_moves[k].y == y) {
-      game->interesting_moves[k].is_active = 0;
-      break;
-    }
-  }
 }
 
 void invalidate_winner_cache(game_state_t *game) {

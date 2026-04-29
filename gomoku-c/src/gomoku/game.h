@@ -41,14 +41,6 @@ typedef struct {
 } move_history_t;
 
 /**
- * Structure to represent interesting moves for AI search optimization
- */
-typedef struct {
-    int x, y;
-    int is_active;         // Whether this move is still interesting
-} interesting_move_t;
-
-/**
  * Transposition table entry for caching evaluated positions
  */
 typedef struct {
@@ -135,8 +127,6 @@ typedef struct {
     int search_timed_out;
 
     // Optimization caches
-    interesting_move_t interesting_moves[361]; // Max for 19x19 board
-    int interesting_move_count;
     int stones_on_board;                       // Cached stone count
     int has_winner_cache[2];                   // Cache for winner detection [player1, player2]
     int winner_cache_valid;                    // Whether winner cache is valid
@@ -235,13 +225,16 @@ void undo_last_moves(game_state_t *game);
 void init_optimization_caches(game_state_t *game);
 
 /**
- * Updates the interesting moves cache after a move is made.
- * 
+ * Refreshes per-move bookkeeping after a stone is placed: increments the
+ * stone count, applies the incremental zobrist update for the placed stone,
+ * and invalidates the winner cache. Call after writing the stone to the
+ * board, before calling check_game_state.
+ *
  * @param game The game state
- * @param x X coordinate of the move
- * @param y Y coordinate of the move
+ * @param x X coordinate of the placed stone
+ * @param y Y coordinate of the placed stone
  */
-void update_interesting_moves(game_state_t *game, int x, int y);
+void update_post_move_state(game_state_t *game, int x, int y);
 
 /**
  * Invalidates the winner cache when a move is made.

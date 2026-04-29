@@ -202,28 +202,37 @@ distant threats.
 ### How Candidates Are Generated
 
 `generate_moves_optimized()` marks all empty cells within
-`game->search_radius` squares of ANY occupied cell as candidates.
+`game->search_radius` squares of **any** occupied cell as candidates —
+not just cells near the last move. The scan iterates over every
+non-empty cell on the board and unions their `radius`-neighbourhoods.
+This is the original design intent: the radius defines a "halo" of
+playable cells around the entire stone configuration.
 
 ```
-search_radius = 2 (default)
+search_radius = 3 (default)
 
 For each occupied cell at (x, y):
-    All empty cells in [x-2, x+2] x [y-2, y+2] are candidates
+    All empty cells in [x-3, x+3] x [y-3, y+3] are added to candidates
 ```
+
+This is distinct from the leaf-evaluator radius (a fixed 3 around the
+*last* move, used by `evaluate_position_incremental_fast()` — see §3.4).
+The two should not be conflated.
 
 ### Impact of Radius
 
 | Radius | Candidates (mid-game) | Behavior |
 |--------|----------------------|----------|
 | 1 | Very few | Misses most blocking moves |
-| 2 | Moderate (default) | Good balance for most positions |
-| 3 | Many | Better defense, slower search |
-| 4 | Very many | Thorough but potentially too slow |
+| 2 | Moderate | Faster, but may overlook spread-out threats |
+| 3 | Many (default) | Original design intent — full halo around all stones |
+| 4 | Very many | Thorough but slower; 99% same moves as 3 |
 
-A radius of 2 means a blocking move must be within 2 cells of an
-existing stone. In most Gomoku positions this is sufficient, but
-in rare cases where stones are spread across the board, critical
-blocking positions could fall outside the radius.
+Radius 3 is the default for both the TUI binary (`cli.c`) and the
+JSON API (`json_api.c`); the frontend sends 3 by default, and the API
+falls back to 3 when the field is omitted. A radius of 1 or 2 narrows
+attention enough that in positions with stones spread across the
+board, critical blocking moves can fall outside the halo.
 
 ## 5. Move Priority Ordering
 
