@@ -75,7 +75,7 @@ GOMOCUP_TEST_CXXFLAGS = -Wall -Wunused-parameter -Wextra -std=c++17 -I$(GOMOCUP_
 # CMake build directory
 BUILD_DIR = build
 
-.PHONY: all clean test tests rebuild json-c gomoku-httpd googletest test-client test-daemon cmake-clean gomocup pbrain-kig-standard test-gomocup-e2e gomocup-win pbrain-kig-standard64.exe pbrain-kig-standard-x86.exe
+.PHONY: all clean test tests rebuild json-c gomoku-httpd googletest test-client test-daemon cmake-clean gomocup pbrain-kig-standard test-gomocup-e2e gomocup-win pbrain-kig-standard64.exe pbrain-kig-standard-x86.exe gomocup-zip
 
 $(BINDIR):
 		@mkdir -p $(BINDIR)
@@ -200,6 +200,30 @@ pbrain-kig-standard64.exe: $(BINDIR)/pbrain-kig-standard64.exe
 pbrain-kig-standard-x86.exe: $(BINDIR)/pbrain-kig-standard-x86.exe
 
 gomocup-win: $(BINDIR)/pbrain-kig-standard64.exe $(BINDIR)/pbrain-kig-standard-x86.exe
+
+# Submission zip. Per plan §10, the archive contains both .exe files plus a
+# README.txt stamped with git SHA + build timestamp. The zip is shallow
+# (-j) so the .exe files land at the archive root, which is what Piskvork
+# expects when it scans for brain executables.
+gomocup-zip: gomocup-win
+		@echo "Generating bin/README.txt with build provenance..."
+		@printf 'pbrain-kig-standard\n' > $(BINDIR)/README.txt
+		@printf 'Author : Konstantin Gredeskoul <kigster@gmail.com>\n' >> $(BINDIR)/README.txt
+		@printf 'WWW    : https://kig.re\n' >> $(BINDIR)/README.txt
+		@printf 'Version: 1.0.0\n' >> $(BINDIR)/README.txt
+		@printf 'Git SHA: %s\n' "$$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" >> $(BINDIR)/README.txt
+		@printf 'Built  : %s\n' "$$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $(BINDIR)/README.txt
+		@printf '\nFiles:\n' >> $(BINDIR)/README.txt
+		@printf '  pbrain-kig-standard64.exe   Win64 brain (filename contains "64" per Gomocup rule)\n' >> $(BINDIR)/README.txt
+		@printf '  pbrain-kig-standard-x86.exe Win32 brain\n' >> $(BINDIR)/README.txt
+		rm -f $(BINDIR)/pbrain-kig-standard.zip
+		zip -j $(BINDIR)/pbrain-kig-standard.zip \
+			$(BINDIR)/pbrain-kig-standard64.exe \
+			$(BINDIR)/pbrain-kig-standard-x86.exe \
+			$(BINDIR)/README.txt
+		@echo ""
+		@echo "Submission archive ready: $(BINDIR)/pbrain-kig-standard.zip"
+		@ls -la $(BINDIR)/pbrain-kig-standard.zip
 
 # Gomocup brain unit tests
 $(GOMOCUP_TEST_TARGET): googletest tests/gomocup_test.o $(GOMOCUP_DIR)/protocol.o $(GOMOCUP_DIR)/coords.o | $(BINDIR)
