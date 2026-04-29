@@ -58,6 +58,15 @@ GTEST_MAIN_LIB  	= tests/googletest/build/lib/libgtest_main.a
 DAEMON_TEST_TARGET = $(BINDIR)/test_daemon
 DAEMON_TEST_CXXFLAGS = $(ALL_CXXFLAGS)
 
+# Gomocup brain configuration
+GOMOCUP_DIR        = src/gomocup
+GOMOCUP_BIN        = $(BINDIR)/pbrain-kig-standard
+GOMOCUP_CFLAGS     = -Wall -Wextra -Wno-sign-compare -O3 -Isrc/gomoku -I$(GOMOCUP_DIR) -DNO_JSON
+GOMOCUP_CORE_OBJS  = src/gomoku/gomoku.o src/gomoku/board.o src/gomoku/game.o src/gomoku/ai.o
+GOMOCUP_OBJS       = $(GOMOCUP_DIR)/main.o $(GOMOCUP_DIR)/protocol.o $(GOMOCUP_DIR)/coords.o $(GOMOCUP_DIR)/time_budget.o
+GOMOCUP_TEST_TARGET= $(BINDIR)/test_gomocup
+GOMOCUP_TEST_CXXFLAGS = -Wall -Wunused-parameter -Wextra -std=c++17 -I$(GOMOCUP_DIR) -Itests/googletest/googletest/include -O2 $(MACOS_CXX_INCLUDE)
+
 # CMake build directory
 BUILD_DIR = build
 
@@ -116,12 +125,15 @@ $(TEST_TARGET): googletest $(JSONC_LIB) tests/gomoku_test.o src/gomoku/gomoku.o 
 tests/gomoku_test.o: googletest tests/gomoku_test.cpp src/gomoku/gomoku.h src/gomoku/board.h src/gomoku/game.h src/gomoku/ai.h
 		$(CXX) $(ALL_CXXFLAGS) -c tests/gomoku_test.cpp -o tests/gomoku_test.o
 
-test: 		$(TEST_TARGET) $(DAEMON_TEST_TARGET) $(TARGET)
+test: 		$(TEST_TARGET) $(DAEMON_TEST_TARGET) $(GOMOCUP_TEST_TARGET) $(TARGET)
 		@echo "=== Running Game Tests ==="
 		@./$(TEST_TARGET) | GREP_COLOR=32 grep --color=always -E 'GomokuTest\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
 		@echo ""
 		@echo "=== Running Daemon Tests ==="
 		@./$(DAEMON_TEST_TARGET) | GREP_COLOR=32 grep --color=always -E 'Daemon[A-Za-z]*Test\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
+		@echo ""
+		@echo "=== Running Gomocup Tests ==="
+		@./$(GOMOCUP_TEST_TARGET) | GREP_COLOR=32 grep --color=always -E 'Gomocup[A-Za-z]*Test\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
 
 tests: 		test
 
@@ -132,6 +144,18 @@ $(DAEMON_TEST_TARGET): googletest $(JSONC_LIB) tests/daemon_test.o $(DAEMON_CORE
 tests/daemon_test.o: googletest tests/daemon_test.cpp src/net/cli.h src/net/json_api.h
 		$(CXX) $(DAEMON_TEST_CXXFLAGS) -c tests/daemon_test.cpp -o tests/daemon_test.o
 
+# Gomocup brain object compilation (separate from the engine's generic rule
+# because the brain links against -DNO_JSON-built engine objects).
+$(GOMOCUP_DIR)/%.o: $(GOMOCUP_DIR)/%.c
+		$(CC) $(GOMOCUP_CFLAGS) -c $< -o $@
+
+# Gomocup brain unit tests
+$(GOMOCUP_TEST_TARGET): googletest tests/gomocup_test.o $(GOMOCUP_DIR)/protocol.o $(GOMOCUP_DIR)/coords.o | $(BINDIR)
+		$(CXX) $(GOMOCUP_TEST_CXXFLAGS) tests/gomocup_test.o $(GOMOCUP_DIR)/protocol.o $(GOMOCUP_DIR)/coords.o $(GTEST_LIB) $(GTEST_MAIN_LIB) -pthread -o $(GOMOCUP_TEST_TARGET)
+
+tests/gomocup_test.o: googletest tests/gomocup_test.cpp $(GOMOCUP_DIR)/protocol.h $(GOMOCUP_DIR)/coords.h
+		$(CXX) $(GOMOCUP_TEST_CXXFLAGS) -c tests/gomocup_test.cpp -o tests/gomocup_test.o
+
 test-daemon: 	$(DAEMON_TEST_TARGET)
 		./$(DAEMON_TEST_TARGET) | GREP_COLOR=32 grep --color=always -E 'Daemon[A-Za-z]*Test\.([A-Za-z_]*)|tests|results|PASSED|FAILED'
 
@@ -139,6 +163,7 @@ clean:  	cmake-clean
 		rm -rf $(BINDIR)
 		rm -f $(OBJECTS) tests/gomoku_test.o
 		rm -f $(DAEMON_CORE) $(DAEMON_NET) src/net/test_client_utils.o tests/daemon_test.o
+		rm -f $(GOMOCUP_OBJS) tests/gomocup_test.o
 		rm -rf tests/googletest
 		find . -name '*.a' -type f -delete || true
 
