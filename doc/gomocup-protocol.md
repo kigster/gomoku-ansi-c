@@ -48,9 +48,22 @@ via `setvbuf(stdout, NULL, _IOLBF, 0)` (or `_IONBF` for safety on Windows).
 
 - Gomocup field 1 = brain's stone, 2 = opponent, 3 = winning line (renju forbidden).
 - Engine uses `AI_CELL_CROSSES` (1) and `AI_CELL_NAUGHTS` (-1).
-- Inside the brain, "self" is whichever side the manager asks us to play first (determined by the first `BEGIN` vs `TURN`). Map self → CROSSES, opponent → NAUGHTS for engine calls. The engine doesn't care which side it's playing — `find_best_ai_move` takes the player as argument.
+- Inside the brain, "self" is whichever side the manager asks us to play first (determined by the first `BEGIN` vs `TURN`). Map self → CROSSES, opponent → NAUGHTS.
+- **Important**: `find_best_ai_move(game_state_t *game, int *best_x, int *best_y, scoring_report_t *report)` does NOT take a player argument — the engine reads `game->current_player` and the move-history to decide whose turn it is. So the brain must keep the engine's `game->current_player` in sync by replaying every opponent move through `make_move(game, x, y, NAUGHTS, ...)` (which alternates `current_player` on success). This means each `TURN [X,Y]` and each `BOARD ... DONE` cell with field=2 must call `make_move` with the right side, in the right order, before invoking `find_best_ai_move`.
 
 ## 3. Scope and Reuse
+
+### Self-containment
+
+**Hard rule**: every source file, header, test, fixture, build script, and submission artifact for this brain must live under `gomoku-c/` so the directory could be extracted from the monorepo and built standalone. The only artifact outside `gomoku-c/` is this planning doc itself (`doc/gomocup-protocol.md`), which is a project-level note, not a build dependency. Specifically:
+
+- All new sources go under `gomoku-c/src/gomocup/`.
+- All new tests go under `gomoku-c/tests/`.
+- A new `gomoku-c/src/gomocup/README.md` describes building, testing, packaging, and submitting the brain — readable by someone who only has the `gomoku-c/` directory.
+- The new Makefile targets live in `gomoku-c/Makefile` (no root-level `justfile` recipes — the gomocup work-flow stays inside `gomoku-c/`).
+- Cross-compile cache directories, generated `.exe` binaries, and the submission `.zip` all stay under `gomoku-c/bin/`.
+
+
 
 ### Reuse from existing engine
 
@@ -58,6 +71,11 @@ via `setvbuf(stdout, NULL, _IOLBF, 0)` (or `_IONBF` for safety on Windows).
 - `gomoku-c/src/gomoku/board.{h,c}` — board allocation
 - `gomoku-c/src/gomoku/game.{h,c}` — `game_state_t`, `make_move`, `init_game`, `cleanup_game`, transposition table, killer moves
 - `gomoku-c/src/gomoku/ai.{h,c}` — `find_best_ai_move`, threat eval, minimax, iterative deepening, time bookkeeping (`search_start_time`, `search_timed_out`)
+- `gomoku-c/src/gomoku/cli.h` — **header only** — defines `cli_config_t`, which `init_game()` consumes by value. We do NOT link `cli.c` (POSIX-heavy `getopt`-based arg parsing). The new `main.c` constructs a `cli_config_t` literal directly with `headless = 1`, `stateless_mode = 0`, `enable_undo = 1`, `max_depth = 7`, `search_radius = 3`, etc.
+
+### Engine board-size considerations
+
+The engine has compile-time `[19][19]` candidate buffers in `ai.c` and `[361]` move arrays (= 19²). 15×15 fits inside these without any change. The brain will therefore allocate `game_state_t` with `board_size = 15` (Standard tournament category) and the oversized auxiliary buffers will simply have unused cells. **This is intentional, not a bug.** Size 20 (which the protocol spec says brains should support) would require lifting these buffers; we deliberately punt that to v2 because the Standard tournament uses 15×15 only — see §12.
 
 ### Do NOT link
 
@@ -85,17 +103,17 @@ All under `gomoku-c/src/gomocup/`:
 
 | Command | Status | Response |
 |---------|--------|----------|
-| `START [size]` | Required | `OK` if we support `size`, else `ERROR unsupported board size` |
-| `BEGIN` | Required | `[X],[Y]` (centre square) |
+| `START [size]` | Required | `OK` only when `size == 15` (Standard category); else `ERROR unsupported board size`. **Known deviation**: the protocol spec says brains "must support size 20" but the Standard tournament fixes 15×15, so this binary intentionally accepts only 15. |
+| `BEGIN` | Required | `[X],[Y]` — the canonical centre square. For board size N, that is `floor((N-1)/2), floor((N-1)/2)`. On 15×15 = `7,7`. |
 | `TURN [X],[Y]` | Required | `[X],[Y]` |
 | `BOARD ... DONE` | Required | `[X],[Y]` |
 | `INFO [key] [value]` | Required | No response — store key for later |
 | `END` | Required | exit cleanly with code 0 |
-| `ABOUT` | Required | `name="kig-standard", version="1.0.0", author="Konstantin Gredeskoul", country="USA", www="https://kig.re", email="kigster@gmail.com"` |
+| `ABOUT` | Required | One single line with comma-separated `key="value"` pairs (no embedded newlines): `name="kig-standard", version="1.0.0", author="Konstantin Gredeskoul", country="USA", www="https://kig.re", email="kigster@gmail.com"` |
 | `RESTART` | Optional but supported | `OK` — clear board, keep config |
 | `TAKEBACK [X],[Y]` | Optional but supported | `OK` — undo last move at cell |
 | `RECTSTART [w],[h]` | Decline | `ERROR rectangular boards not supported` |
-| `SWAP2BOARD` | Decline initially | `UNKNOWN swap2 not supported` (Standard tournament does not require it) |
+| `SWAP2BOARD` | Decline initially | `ERROR swap2 not supported` — `SWAP2BOARD` is a *known* command in the spec, so the spec-correct way to refuse a known-but-unimplemented command is `ERROR`, not `UNKNOWN`. Standard tournament does not invoke Swap2; Freestyle does. |
 | `PLAY` | Decline | We never issue `SUGGEST`, so `PLAY` should not arrive |
 
 ### Brain-initiated outputs
@@ -112,9 +130,9 @@ All under `gomoku-c/src/gomocup/`:
 
 | Key | Action |
 |-----|--------|
-| `timeout_turn` | Store as max ms for the next move (0 = play instantly) |
-| `timeout_match` | Store as overall match budget |
-| `time_left` | Update remaining match time (sent before each move) |
+| `timeout_turn` | Store as max ms for the next move (0 = play instantly). Default if never sent: 30000 ms (the tournament cap). |
+| `timeout_match` | Store as overall match budget in ms. Default if never sent: 180000 ms. |
+| `time_left` | Manager's authoritative remaining match time in ms, sent before each move. **Replaces** the locally-tracked match clock — do not just decrement our estimate when this arrives. |
 | `max_memory` | Log only — we'll never approach the 70 MB floor |
 | `game_type` | Log only |
 | `rule` | Bitmask: 1 = exactly 5 (Standard, what we play), 2 = continuous, 4 = renju, 8 = caro. We accept rule = 1 silently. For 4 (renju) or 8 (caro) we'd want to log a warning; submitting our binary in non-Standard categories is a future concern. |
@@ -125,14 +143,24 @@ Unknown INFO keys: silently ignored per spec.
 
 ## 5. Time Management
 
-The engine already has `game->search_start_time`, `game->move_timeout`, `game->search_timed_out`, and an iterative-deepening loop that checks `search_timed_out` between depths. We hook into this instead of building a parallel timer:
+The engine has `game->search_start_time` (a `double` wall-clock seconds), `game->move_timeout` (currently typed `int` seconds — see below), `game->search_timed_out` (flipped inside the search), and an iterative-deepening loop that checks the flag between depths.
 
-1. On `BEGIN`/`TURN`/`BOARD`, compute the budget for this move:
-   - `budget_ms = min(timeout_turn, time_left - safety_margin)`, where `safety_margin = 200ms` to leave room for response transmission and protocol overhead.
+**Engine-side prerequisite (BLOCKER from review)**: `move_timeout` is declared `int` in `game.h` and the search-timeout check `is_search_timed_out` does `elapsed >= move_timeout` against a `double` elapsed in seconds. Sub-second budgets (any `timeout_turn < 1000ms`) would round to 0 and behave as "no timeout" — wrong. **Fix as the very first implementation step**: widen `move_timeout` to `double` (seconds, fractional). One-line change in `game.h`, plus updates to:
+
+- `game.c::is_search_timed_out` — already does `double` arithmetic; just stop casting through `int`.
+- `cli.c` and `net/json_api.c` — both assign integer seconds to this field; assigning an int-to-double is automatic so no rewrite needed beyond a re-test.
+- TUI tests in `tests/gomoku_test.cpp` — `cli_config_t.move_timeout` will need to widen too if it is set there. Check during the refactor.
+
+This change is independent of the gomocup brain and could be backported even without the brain.
+
+After the widening:
+
+1. On `BEGIN` / `TURN` / `BOARD`, compute the budget for this move:
+   - `budget_s = min(timeout_turn / 1000.0, (time_left - safety_margin) / 1000.0)` where `safety_margin_ms = 200` to leave room for response transmission and protocol overhead.
    - If `timeout_turn == 0` ("play instantly"), set `game->max_depth = 2` and skip iterative deepening.
-2. Set `game->search_start_time` to wall-clock now; convert `budget_ms` into `game->move_timeout` (the engine treats this in seconds — keep millisecond precision through a helper).
-3. Run `find_best_ai_move`. The engine will short-circuit to the deepest completed depth when `search_timed_out` flips.
-4. Subtract elapsed wall clock from our local `time_left` cache so the next turn is computed correctly even if no `INFO time_left` arrives.
+2. Set `game->search_start_time = get_current_time()`; set `game->move_timeout = budget_s`.
+3. Call `find_best_ai_move`. The engine short-circuits to the deepest completed depth when `search_timed_out` flips.
+4. Subtract elapsed wall clock from our local `time_left` cache so the next turn is computed correctly even if no `INFO time_left` arrives. **When the next `INFO time_left` does arrive, it overrides our estimate** — the manager's value is authoritative.
 
 Default `max_depth = 7`. Iterative deepening guarantees we always have a usable move from depth 1 even if depth 2+ time out.
 
@@ -140,11 +168,12 @@ Default `max_depth = 7`. Iterative deepening guarantees we always have a usable 
 
 The transposition table and zobrist hash live on `game_state_t` and persist across `make_move` calls. The plan:
 
-- One `game_state_t` is allocated at process start (or on `START`) and reused for all `BEGIN` / `TURN` / `BOARD` calls in the same game.
-- On `START`, `RESTART`, or a fresh `BOARD`, reset the board cells but keep the config.
-- On `BOARD`, replay all submitted stones into the engine via `make_move` so the zobrist hash and TT remain consistent. (Naive alternative: reset TT on `BOARD`. Slightly slower but simpler. We'll start with reset-on-BOARD and only optimise if perf data justifies it.)
+- One `game_state_t` is allocated at process `START` and reused for the whole match.
+- On `START` and `RESTART`, reset the board cells AND call `init_transposition_table(game)` (which `init_game` already does; `RESTART` should follow the same path). Killer moves and the zobrist hash are also reset here.
+- On `BOARD ... DONE`, **replay every stone through `make_move`** with the correct alternating player. `make_move` triggers `update_post_move_state`, which keeps the zobrist hash incrementally correct and invalidates the winner cache. The TT does NOT need to be flushed because every position the search visits is keyed on the same hash space — entries from previous turns are still valid for the current move and just won't match unless reached via the same hash.
+- Killer moves are stored per-search-depth on `game->killer_moves[MAX_SEARCH_DEPTH][MAX_KILLER_MOVES][2]`. They are populated within a single search and stay; this is fine — they're guesses, not invariants.
 
-Killer moves are depth-local and naturally reset.
+This is simpler than the original draft (which reset TT on every BOARD) and gives us free reuse of any prior position-evaluation work the manager replays.
 
 ## 7. Build Plan
 
@@ -162,7 +191,14 @@ $(GOMOCUP_TARGET): $(GOMOCUP_CORE) $(GOMOCUP_SRC) | $(BINDIR)
 	$(CC) $(GOMOCUP_CORE) $(GOMOCUP_SRC) -lm -o $(GOMOCUP_TARGET)
 ```
 
-Note `-DNO_JSON`: the AI core currently includes `json.h` for `json_ms_from_seconds` etc. We'll guard those JSON-only helpers with `#ifndef NO_JSON` so the core compiles without json-c when building the gomocup brain.
+Note `-DNO_JSON`: only `gomoku-c/src/gomoku/game.c` includes `json.h` (line 10). `ai.c`, `gomoku.c`, `board.c`, and their headers are JSON-clean. The dirty surface inside `game.c` is concentrated:
+
+- `json_ms_from_seconds` helper (top of file)
+- `write_game_json` (~line 733)
+- `load_game_json` (~line 908)
+- the `replay_data_t` plumbing in `game.h` (around lines 466 and 488)
+
+We add `#ifndef NO_JSON ... #endif` brackets around all four sections plus the `#include "json.h"`. The TUI binary (`bin/gomoku`) will continue to define those functions because it is built without `-DNO_JSON`. The gomocup brain is built with `-DNO_JSON` and the json-c static lib is not in its link line.
 
 ### 7.2 Windows cross-compile (mingw-w64 on macOS)
 
@@ -196,6 +232,18 @@ gomocup-win: pbrain-kig-standard64.exe pbrain-kig-standard-x86.exe
 
 `-static` and `-static-libgcc` are critical — Gomocup judges run binaries on standard Windows installs that may not have any mingw runtime DLLs.
 
+### POSIX-header audit (cross-compile risks)
+
+| File | Headers | Cross-compile risk |
+|------|---------|--------------------|
+| `gomoku.{h,c}`, `board.{h,c}`, `ai.{h,c}` | `<stdio.h>`, `<stdlib.h>`, `<string.h>`, `<time.h>`, `<math.h>`, `<ctype.h>`, `<stddef.h>`, `<stdint.h>` | None — all portable |
+| `game.c::get_current_time` | `clock_gettime(CLOCK_MONOTONIC, ...)` | Supported by mingw-w64's winpthreads since ~2017 — verify at first build, fall back to `QueryPerformanceCounter` only if the build fails |
+| `ansi.h` | macros only, no headers | None — the brain's `main.c` won't `printf` ANSI escapes anyway |
+| `cli.c` | `<unistd.h>`, `<getopt.h>` | POSIX-only — **not linked** into the brain (we use `cli.h` for the type only, not the parser) |
+| `net/*` | `<sys/socket.h>`, `httpserver.h`, json-c | **Not linked** into the brain |
+
+Only one wrinkle is unknown until first build: `clock_gettime`. If mingw-w64 15.2 doesn't provide it out of the box, the fix is a small `get_current_time()` shim in `gomoku-c/src/gomocup/` using `QueryPerformanceCounter` on Windows and `clock_gettime` elsewhere.
+
 ### 7.3 Smoke-testing Windows binaries on the Mac
 
 `wine64` and `wine` (32-bit) are available via `brew install --cask --no-quarantine wine-stable`. After cross-build:
@@ -212,7 +260,7 @@ Pipe a scripted protocol session in (see §9) to verify both binaries respond co
 ```
 gomoku-c/
 ├── src/
-│   ├── gomocup/                    NEW
+│   ├── gomocup/                    NEW — fully self-contained
 │   │   ├── main.c
 │   │   ├── protocol.h
 │   │   ├── protocol.c
@@ -220,17 +268,19 @@ gomoku-c/
 │   │   ├── coords.c
 │   │   ├── time_budget.h
 │   │   ├── time_budget.c
-│   │   └── metadata.h
+│   │   ├── metadata.h
+│   │   └── README.md               build, test, package, submit instructions
 │   ├── gomoku/                     existing, lightly modified
-│   │   ├── ai.{h,c}                guard json includes with NO_JSON
-│   │   ├── game.{h,c}              same
-│   │   └── ...
-│   └── net/                        unchanged, not linked
+│   │   ├── game.{h,c}              guard json includes with NO_JSON; widen move_timeout
+│   │   └── ...                     ai.c, board.c, gomoku.c untouched
+│   └── net/                        unchanged, not linked into the brain
 ├── tests/
 │   ├── gomocup_test.cpp            NEW: googletest cases for parser + coords
 │   └── gomocup_protocol_e2e.sh     NEW: scripted-stdin integration test
 └── Makefile                        new targets: gomocup, gomocup-win, gomocup-zip
 ```
+
+Everything the brain needs lives under `gomoku-c/`. No root-level `justfile`, no monorepo `bin/`, no shared assets. The `gomoku-c/src/gomocup/README.md` is the standalone-readable entry point for anyone working on the brain alone.
 
 ## 9. Testing Plan
 
@@ -287,18 +337,21 @@ pbrain-kig-standard.zip
 └── README.txt                      (brain name, version, author, build provenance)
 ```
 
-`just gomocup-zip` recipe:
+`make gomocup-zip` recipe (lives in `gomoku-c/Makefile`, no monorepo `justfile` involvement):
 
-1. `make gomocup-win` (produces both `.exe` files)
-2. Generate `README.txt` from a template + git SHA
-3. `zip -j pbrain-kig-standard.zip bin/pbrain-kig-standard64.exe bin/pbrain-kig-standard-x86.exe README.txt`
+1. `make gomocup-win` (produces both `.exe` files in `gomoku-c/bin/`)
+2. Generate `bin/README.txt` from a template + git SHA + build timestamp
+3. `zip -j bin/pbrain-kig-standard.zip bin/pbrain-kig-standard64.exe bin/pbrain-kig-standard-x86.exe bin/README.txt`
 4. Verify total < 256 MB (will be a few MB)
 
 ## 11. Step-by-Step Execution Order
 
 The following order minimises risk by building outwards from a working core:
 
-1. **Refactor the AI core to compile without JSON**. Add `NO_JSON` guards around the JSON-only helpers in `ai.c` and `game.c`. Verify the existing TUI binary still builds and tests still pass.
+1. **Engine pre-work** (independent of the brain itself; could land in its own commit):
+   - Widen `game_state_t.move_timeout` from `int` to `double` (seconds, fractional). Update `is_search_timed_out` accordingly. Existing int-second assignments in `cli.c` and `net/json_api.c` keep working via implicit promotion.
+   - Add `NO_JSON` guards around the JSON-only helpers in `game.c` and the JSON prototypes in `game.h` (only `game.c` actually includes `json.h`; `ai.c` does not).
+   - Verify the existing TUI binary, daemon binary, and existing tests still build and pass.
 2. **Implement `coords.h/c`** with unit tests for the (column,row) ↔ (x,y) mapping. This is the smallest, most-error-prone piece; getting it right first prevents whole-system bugs later.
 3. **Implement `protocol.h/c`** with a parser-only first pass (no engine calls). Unit-test parsing in isolation.
 4. **Implement `metadata.h`** and the `ABOUT` response.
