@@ -118,7 +118,13 @@ resource "google_cloud_run_v2_service" "api" {
 
   template {
     scaling {
-      min_instance_count = 0
+      # Keep at least one instance warm so app.gomoku.games loads instantly.
+      # FastAPI cold-start under uvicorn + asyncpg pool init + telemetry SDK
+      # bootstrap is several seconds — long enough that an unwarmed visitor
+      # hits a blank tab while the container spins up. The cost of one
+      # always-on small Cloud Run instance is marginal compared to the UX
+      # hit, especially while traffic is low.
+      min_instance_count = 1
       max_instance_count = 5
     }
 
