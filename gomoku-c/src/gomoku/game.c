@@ -7,7 +7,9 @@
 
 #include "game.h"
 #include "ai.h"
+#ifndef NO_JSON
 #include "json.h"
+#endif
 #include <ctype.h>
 #include <math.h>
 #include <stdio.h>
@@ -15,6 +17,7 @@
 #include <string.h>
 #include <time.h>
 
+#ifndef NO_JSON
 // Helper to create a JSON number string with exactly 3 decimal places for
 // milliseconds
 static json_object *json_ms_from_seconds(double seconds) {
@@ -23,7 +26,9 @@ static json_object *json_ms_from_seconds(double seconds) {
   snprintf(buf, sizeof(buf), "%.3f", ms);
   return json_object_new_double_s(atof(buf), buf);
 }
+#endif
 
+#ifndef NO_JSON
 static int column_index_from_char(char c) {
   static const char *columns = "ABCDEFGHJKLMNOPQRST";
   char upper = (char)toupper((unsigned char)c);
@@ -67,6 +72,7 @@ static int notation_to_coord(const char *s, int board_size, int *x, int *y) {
   *y = col;
   return 1;
 }
+#endif // NO_JSON
 
 uint64_t compute_zobrist_hash(game_state_t *game);
 void invalidate_winner_cache(game_state_t *game);
@@ -730,6 +736,7 @@ int try_null_move_pruning(game_state_t *game, int depth, int beta,
 // JSON EXPORT
 //===============================================================================
 
+#ifndef NO_JSON
 int write_game_json(game_state_t *game, const char *filename) {
   if (!filename || strlen(filename) == 0) {
     return 0;
@@ -1036,3 +1043,4 @@ int load_game_json(const char *filename, replay_data_t *data) {
   json_object_put(root);
   return 1;
 }
+#endif // NO_JSON

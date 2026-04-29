@@ -1084,7 +1084,7 @@ void find_best_ai_move(game_state_t *game, int *best_x, int *best_y,
   strcpy(game->ai_status_message, "");
   if (game->config.skip_welcome && !game->config.headless) {
     if (game->move_timeout > 0) {
-      printf("%s%c%s It's AI's Turn... Please wait... (timeout: %ds)\n",
+      printf("%s%c%s It's AI's Turn... Please wait... (timeout: %.1fs)\n",
              ai_color, ai_symbol, COLOR_RESET, game->move_timeout);
     } else {
       printf("%s%c%s It's AI's Turn... Please wait...\n", ai_color, ai_symbol,
