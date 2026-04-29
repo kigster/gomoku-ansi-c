@@ -75,7 +75,7 @@ GOMOCUP_TEST_CXXFLAGS = -Wall -Wunused-parameter -Wextra -std=c++17 -I$(GOMOCUP_
 # CMake build directory
 BUILD_DIR = build
 
-.PHONY: all clean test tests rebuild json-c gomoku-httpd googletest test-client test-daemon cmake-clean gomocup pbrain-kig-standard test-gomocup-e2e
+.PHONY: all clean test tests rebuild json-c gomoku-httpd googletest test-client test-daemon cmake-clean gomocup pbrain-kig-standard test-gomocup-e2e gomocup-win pbrain-kig-standard64.exe pbrain-kig-standard-x86.exe
 
 $(BINDIR):
 		@mkdir -p $(BINDIR)
@@ -174,6 +174,32 @@ $(GOMOCUP_BIN): $(GOMOCUP_CORE_OBJS) $(GOMOCUP_OBJS) | $(BINDIR)
 pbrain-kig-standard: $(GOMOCUP_BIN)
 
 gomocup: $(GOMOCUP_BIN)
+
+# Windows cross-build (mingw-w64 on macOS / Linux). The two .exe files are
+# the actual tournament artefacts; native binaries above are for development
+# only. Both are statically linked so the Gomocup judges can run them on a
+# stock Windows install with no mingw runtime DLLs available.
+WIN64_CC      = x86_64-w64-mingw32-gcc
+WIN32_CC      = i686-w64-mingw32-gcc
+WIN_CFLAGS    = -Wall -Wextra -Wno-sign-compare -O3 -Isrc/gomoku -I$(GOMOCUP_DIR) -DNO_JSON -static -static-libgcc
+
+GOMOCUP_WIN64_DIR = $(GOMOCUP_DIR)/win64
+GOMOCUP_WIN32_DIR = $(GOMOCUP_DIR)/win32
+
+# All sources we need to compile into per-target object directories.
+GOMOCUP_WIN_SRCS  = src/gomoku/gomoku.c src/gomoku/board.c src/gomoku/game.c src/gomoku/ai.c \
+                    $(GOMOCUP_DIR)/main.c $(GOMOCUP_DIR)/protocol.c $(GOMOCUP_DIR)/coords.c $(GOMOCUP_DIR)/time_budget.c
+
+$(BINDIR)/pbrain-kig-standard64.exe: $(GOMOCUP_WIN_SRCS) | $(BINDIR)
+		$(WIN64_CC) $(WIN_CFLAGS) $(GOMOCUP_WIN_SRCS) -o $@
+
+$(BINDIR)/pbrain-kig-standard-x86.exe: $(GOMOCUP_WIN_SRCS) | $(BINDIR)
+		$(WIN32_CC) $(WIN_CFLAGS) -m32 $(GOMOCUP_WIN_SRCS) -o $@
+
+pbrain-kig-standard64.exe: $(BINDIR)/pbrain-kig-standard64.exe
+pbrain-kig-standard-x86.exe: $(BINDIR)/pbrain-kig-standard-x86.exe
+
+gomocup-win: $(BINDIR)/pbrain-kig-standard64.exe $(BINDIR)/pbrain-kig-standard-x86.exe
 
 # Gomocup brain unit tests
 $(GOMOCUP_TEST_TARGET): googletest tests/gomocup_test.o $(GOMOCUP_DIR)/protocol.o $(GOMOCUP_DIR)/coords.o | $(BINDIR)
