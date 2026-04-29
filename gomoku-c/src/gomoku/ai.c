@@ -225,16 +225,19 @@ static direction_info_t analyze_direction(int **board, int x, int y, int dx,
         info.open_end = 1;
         break;
       }
-      // First gap - check if there are more stones after
-      found_hole = 1;
-      info.holes++;
-      // Look one more step to see if there's a stone after the gap
+      // Look one more step to see if there's a stone after the gap.
+      // Only count this as an internal hole when the run actually continues;
+      // a boundary empty (no player stone after) is just open space and must
+      // not contribute to `holes`, otherwise `XX_X` open-both-ends scores 0
+      // because both the internal gap and the boundary empty get counted.
       int nnx = nx + dx, nny = ny + dy;
       if (nnx >= 0 && nnx < board_size && nny >= 0 && nny < board_size &&
           board[nnx][nny] == player) {
-        // Continue scanning
+        // Real internal gap with player stones beyond - count it.
+        found_hole = 1;
+        info.holes++;
       } else {
-        // No stone after gap - end is open
+        // No stone after gap - this is the open end, not a hole.
         info.open_end = 1;
         break;
       }
@@ -284,9 +287,17 @@ int evaluate_threat_fast(int **board, int x, int y, int player,
     // Evaluate threat level with consideration for holes and openness
     int threat = 0;
 
-    // Only contiguous >= 5 is a true win. total >= 5 with holes is NOT a win.
-    if (contiguous >= 5) {
-      threat = 1000000; // Win
+    // Standard gomoku: exactly five contiguous wins. Six or more (overline)
+    // is NOT a win — has_winner() in gomoku.c uses `count == 5` strictly,
+    // so a gap-fill that jumps from 4-contiguous to 6-contiguous (e.g.,
+    // XXXX_X → XXXXXX) is a sterile move, not a winning one. Without this
+    // distinction the AI would falsely mark such moves as wins (1000000)
+    // and possibly pick them over an actual five-in-a-row extension.
+    if (contiguous == 5) {
+      threat = 1000000; // Win - exactly five
+    } else if (contiguous >= 6) {
+      threat = 0; // Overline - not a win, and the broken-four / total>=4
+                  // branches below would otherwise misclassify it.
     } else if (contiguous == 4) {
       if (open_ends >= 2) {
         threat = 500000; // Open four - guaranteed win
@@ -295,8 +306,13 @@ int evaluate_threat_fast(int **board, int x, int y, int player,
       }
       dir_is_four[d] = 1;
     } else if (total >= 4 && holes <= 1) {
-      // Four with a hole (like XX_XX or X_XXX)
-      threat = 8000;
+      // Broken four (XX_XX, X_XXX, XXX_X) - filling the gap creates
+      // five-in-a-row, so this is a "must block" pattern equivalent
+      // to a closed four. Both ends open is even more dangerous: the
+      // opponent has multiple winning continuations (gap-fill plus
+      // either end extension), but 100000 already triggers the
+      // immediate-block path in find_best_ai_move.
+      threat = 100000;
       dir_is_four[d] = 1;
     } else if (contiguous == 3) {
       if (open_ends >= 2) {
@@ -307,9 +323,17 @@ int evaluate_threat_fast(int **board, int x, int y, int player,
       }
       dir_is_three[d] = 1;
     } else if (total >= 3 && holes <= 1) {
-      // Three with a hole (like X_XX or XX_X)
-      if (open_ends >= 1) {
-        threat = 400; // Broken three with open end
+      // Broken three (X_XX, XX_X). With both ends open, filling the
+      // gap creates an OPEN four (500000) - exactly as dangerous as
+      // an open three (XXX both ends open), which is why we score it
+      // the same. With one end closed, opponent can still win the
+      // race but is more constrained, so a smaller threat is fine.
+      if (open_ends >= 2) {
+        threat = 1500; // Open broken three
+        dir_is_open_three[d] = 1;
+        dir_is_three[d] = 1;
+      } else if (open_ends == 1) {
+        threat = 400; // Half-open broken three
         dir_is_three[d] = 1;
       }
     } else if (contiguous == 2 && open_ends >= 2) {
