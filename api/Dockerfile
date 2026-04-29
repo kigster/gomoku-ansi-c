@@ -28,4 +28,10 @@ WORKDIR /app/app
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/health')" || exit 1
 
-CMD uvicorn app.main:app --workers 4 --host 0.0.0.0 --port ${PORT}
+# Single-worker async on purpose. Cloud Run gives each instance 1 vCPU
+# and 512Mi memory; running 4 uvicorn workers OOMs (each loads asyncpg
+# + httpx + telemetry independently) and starves the startup probe.
+# FastAPI is async-native — concurrency comes from instance scaling
+# (max_instance_request_concurrency = 80) and additional Cloud Run
+# instances, not from cramming workers into one container.
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT}
