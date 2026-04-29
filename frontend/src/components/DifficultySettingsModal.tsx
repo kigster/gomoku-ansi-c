@@ -36,36 +36,73 @@ export default function DifficultySettingsModal ({
         <p className='font-semibold text-amber-300'>AI Difficulty Settings</p>
         <p className='mt-2'>
           The following elements are in your control:
-          <ul className='list-disc ml-4 mt-2 space-y-1'>
-            <li>
-              <strong>AI Depth</strong> — how far deep into the future the AI
-              will search for the best move. Values of 5 and 6 generalluy
-              produce a formidable opponent, but may take a bit longer. This is
-              a part of the mini-max algorithm that AI uses.
-            </li>
-            <li>
-              <strong>AI Radius</strong> — this determines how far from the
-              existing placed stones should the AI search for potential best
-              move. A Value of 2+ means it's actualluy looking around the
-              current configuration. Increasing this also increases the search
-              time.
-            </li>
-            <li>
-              <strong>AI Timeout</strong> — this determines how long the AI is
-              allowed to search for the best move. If you set it to 30 seconds,
-              and AI is still looking for best move, at 30 seconds it will
-              interrupt it's search and place the best move found so far. Use
-              this only if AI is taking forever and you'd rather move along :)
-            </li>
-            <li>
-              Who moves first. There is a strong first mover advantage so if you
-              want to play on extra hard mode, play as the white player.
-            </li>
-            <li>
-              Finally, you can choose whether you'd like to play using black and
-              white stones, or X's and O's.
-            </li>
-          </ul>
+        </p>
+        <ul className='list-disc ml-4 mt-2 space-y-3'>
+          <li>
+            <strong>AI Depth</strong> (range <span className='font-mono'>2–7</span>, default <span className='font-mono'>5</span>) —
+            imagine playing chess in your head: "if I go here, then my
+            opponent will probably go there, then I'll go here…" Each one of
+            those steps is called a <em>ply</em>. AI Depth is just how many
+            plies the AI looks ahead before it picks a move. Depth 2 means
+            it only thinks "my move, your move." Depth 5 means it thinks
+            five moves into the future. Higher depth = stronger play, but
+            also more thinking time (each extra ply roughly multiplies the
+            work).
+            <div className='mt-2 rounded-lg border border-amber-500/15 bg-neutral-950/40 p-3 text-sm'>
+              <strong className='text-amber-200'>Why odd vs. even depth matters:</strong>{' '}
+              this is a real quirk of the minimax algorithm called the{' '}
+              <em>odd–even effect</em>. At an <strong>odd</strong> depth (3, 5, 7) the
+              search ends right after the AI makes a move — so the AI sees
+              its own attack land but doesn't see your reply to it. That
+              makes attacks look extra shiny, so the AI plays more
+              aggressively (it favors <em>the attacker</em>). At an{' '}
+              <strong>even</strong> depth (2, 4, 6) the search ends with{' '}
+              <em>your</em> reply, meaning the AI always checks whether you
+              can shut down its threats. That makes it more cautious and
+              defensive (it favors <em>the defender</em>). So if you want a
+              hyper-aggressive opponent, pick 5 or 7. If you want a careful,
+              hard-to-beat wall, pick 4 or 6.
+            </div>
+          </li>
+          <li>
+            <strong>AI Radius</strong> (range <span className='font-mono'>1–4</span>, default <span className='font-mono'>2</span>) —
+            the board has 361 intersections (19×19), and checking every
+            empty one every turn would take forever. So the AI only looks
+            at empty spots that are within <em>Radius</em> squares of a
+            stone that's already on the board. Radius 1 = only the
+            squares right next to existing stones (super fast, but the AI
+            misses long-range traps). Radius 2 (the default) is the sweet
+            spot — it sees most useful moves without slowing down. Radius
+            3 or 4 lets the AI consider sneakier, farther-away moves, but
+            the search gets dramatically slower because there are way more
+            squares to think about.
+          </li>
+          <li>
+            <strong>AI Timeout</strong> — how long the AI is allowed to
+            think before it has to commit. If you set it to 30 seconds and
+            the AI is still searching when the timer hits zero, it stops
+            and plays the best move it found so far. Use this only if the
+            AI is taking forever and you'd rather move along :)
+          </li>
+          <li>
+            <strong>Who moves first.</strong> Gomoku has a strong first-mover
+            advantage, so if you want extra hard mode, play as the second
+            player (white / O).
+          </li>
+          <li>
+            Finally, you can choose whether to play with black-and-white
+            stones or X's and O's — purely a visual preference.
+          </li>
+        </ul>
+        <p className='mt-4 text-sm text-neutral-400'>
+          <strong className='text-amber-300'>Quick recipe:</strong> for a
+          balanced game, depth <span className='font-mono'>5</span> + radius{' '}
+          <span className='font-mono'>2</span> is the default and plays
+          well. For a brutal attacker, try depth <span className='font-mono'>7</span>{' '}
+          + radius <span className='font-mono'>2</span>. For a stubborn
+          defender that's hard to beat, try depth <span className='font-mono'>6</span>{' '}
+          + radius <span className='font-mono'>3</span> (and bring a snack —
+          it'll think for a while).
         </p>
         <p className='font-semibold text-amber-300 mt-4'>Leaderboard Scoring</p>
         <p className='mt-2'>
