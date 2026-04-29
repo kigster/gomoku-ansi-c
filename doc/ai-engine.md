@@ -224,15 +224,20 @@ The two should not be conflated.
 | Radius | Candidates (mid-game) | Behavior |
 |--------|----------------------|----------|
 | 1 | Very few | Misses most blocking moves |
-| 2 | Moderate | Faster, but may overlook spread-out threats |
-| 3 | Many (default) | Original design intent — full halo around all stones |
-| 4 | Very many | Thorough but slower; 99% same moves as 3 |
+| 2 | Moderate (SPA default) | Faster; may overlook spread-out threats |
+| 3 | Many (TUI / API default) | Original design intent — full halo around all stones |
+| 4 | Very many | Thorough but slower; ~99% same moves as 3 |
 
-Radius 3 is the default for both the TUI binary (`cli.c`) and the
-JSON API (`json_api.c`); the frontend sends 3 by default, and the API
-falls back to 3 when the field is omitted. A radius of 1 or 2 narrows
-attention enough that in positions with stones spread across the
-board, critical blocking moves can fall outside the halo.
+Defaults differ on purpose:
+
+- **TUI binary** (`cli.c`) and **JSON API fallback** (`json_api.c`): 3.
+  Matches the original design intent — a full halo around every stone.
+- **SPA** (`frontend/src/constants.ts`): 2. Move latency under interactive
+  play matters more than catching the rare spread-out threat that radius 3
+  would; users wanting deeper analysis can move the slider.
+
+A radius of 1 narrows attention enough that in positions with stones
+spread across the board, critical blocking moves fall outside the halo.
 
 ## 5. Move Priority Ordering
 
