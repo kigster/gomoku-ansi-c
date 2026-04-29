@@ -36,17 +36,25 @@ Computed by `evaluate_threat_fast()` in `gomoku-c/src/gomoku/ai.c`.
 
 ### Per-Direction Scores
 
-| Pattern | Contiguous | Open Ends | Score | Category |
-|---------|-----------|-----------|-------|----------|
-| Five+ in a row | >= 5 | any | 1,000,000 | Instant win |
-| Open four | 4 | 2 | 500,000 | Guaranteed win (unblockable) |
-| Closed four | 4 | 1 | 100,000 | Forcing (opponent must block) |
-| Dead four | 4 | 0 | 0 | No threat (both ends blocked) |
-| Gapped four | total >= 4, holes <= 1 | any | 8,000 | Forcing (like XX_XX) |
-| Open three | 3 | 2 | 1,500 | Serious developing threat |
-| Closed three | 3 | 1 | 500 | Weak threat |
-| Broken three | total >= 3, holes <= 1 | >= 1 | 400 | Gapped threat |
-| Open two | 2 | 2 | 100 | Early development |
+| Pattern                          | Contiguous              | Open Ends | Score     | Category                                      |
+|----------------------------------|-------------------------|-----------|-----------|-----------------------------------------------|
+| Five in a row                    | == 5                    | any       | 1,000,000 | Win — exactly five (overlines do NOT win)     |
+| Overline                         | >= 6                    | any       | 0         | Sterile — standard gomoku rule                |
+| Open four                        | 4                       | 2         | 500,000   | Guaranteed win (unblockable)                  |
+| Closed four                      | 4                       | 1         | 100,000   | Forcing (opponent must block)                 |
+| Dead four                        | 4                       | 0         | 0         | No threat (both ends blocked)                 |
+| Broken four (XX_XX, X_XXX)       | total >= 4, holes <= 1  | any       | 100,000   | Must block — gap-fill makes five              |
+| Open three                       | 3                       | 2         | 1,500     | Serious developing threat                     |
+| Closed three                     | 3                       | 1         | 500       | Weak threat                                   |
+| Broken three (open both ends)    | total >= 3, holes <= 1  | 2         | 1,500     | Gap-fill makes open four — same as open three |
+| Broken three (half-open)         | total >= 3, holes <= 1  | 1         | 400       | One end blocked                               |
+| Open two                         | 2                       | 2         | 100       | Early development                             |
+
+`holes` counts only true internal gaps — boundary empties contribute to
+`open_end` instead. Without that distinction, `_XX_X_` (broken three open
+both ends) would have `holes = 2` from counting the gap AND the open-end
+empty cell, falling through every `holes <= 1` branch and scoring 0.
+See BUG-004 below.
 
 ### Compound (Cross-Direction) Bonuses
 
@@ -62,16 +70,16 @@ Computed by `evaluate_threat_fast()` in `gomoku-c/src/gomoku/ai.c`.
 ### Score Ranges and Their Meaning
 
 ```
-1,000,000  = Actual win (5 in a row on the board)
+1,000,000  = Actual win (exactly 5 in a row; overline does NOT win)
   500,000  = Open four (guaranteed win next move, cannot be blocked)
-  100,000  = Closed four (must block, but CAN be blocked)
+  100,000  = Closed four OR broken four (must block — gap-fill makes five)
    48,000  = Double four (nearly winning compound)
    40,000+ = Compound threats (opponent can only block one)
-    8,000  = Gapped four (forcing move)
-    1,500  = Open three (needs attention)
+    1,500  = Open three OR broken three with both ends open
       500  = Closed three
-      400  = Broken three
+      400  = Half-open broken three
       100  = Open two
+        0  = Overline (>= 6 contiguous) — sterile in standard gomoku
 ```
 
 ## 3. Minimax Implementation
@@ -222,15 +230,19 @@ blocking positions could fall outside the radius.
 `get_move_priority_optimized()` assigns priorities for move ordering
 in both pre-minimax steps and within the minimax search.
 
-| Condition | Priority | Notes |
-|-----------|----------|-------|
-| `my_threat >= 100000` | 2,000,000,000 | **(BUG: includes closed fours)** |
-| `opp_threat >= 100000` | 1,500,000,000 | **(BUG: same threshold issue)** |
-| `my_threat >= 40000` | 1,200,000,000 + threat | Compound threats |
-| `opp_threat >= 40000` | 1,100,000,000 + threat | Block compound threats |
-| Killer move | +1,000,000 | Depth-local heuristic |
-| `opp_threat >= 1500` | `my*10 + opp*12` | Defensive weighting |
-| `opp_threat < 1500` | `my*15 + opp*5` | Offensive bias (3:1 ratio) |
+| Condition              | Priority               | Notes                                  |
+|------------------------|------------------------|----------------------------------------|
+| `my_threat >= 500000`  | 2,000,000,000          | Open four or five (winning move)       |
+| `opp_threat >= 500000` | 1,500,000,000          | Block opponent open four or five       |
+| `my_threat >= 40000`   | 1,200,000,000 + threat | Compound threats                       |
+| `opp_threat >= 40000`  | 1,100,000,000 + threat | Block compound threats                 |
+| Killer move            | +1,000,000             | Depth-local heuristic                  |
+| `opp_threat >= 1500`   | `my*10 + opp*12`       | Defensive weighting                    |
+| `opp_threat < 1500`    | `my*15 + opp*5`        | Offensive bias (3:1 ratio)             |
+
+The `>= 500000` thresholds are the post-BUG-001 values. The earlier
+`>= 100000` thresholds incorrectly classified closed fours as winning
+moves; see BUG-001 below.
 
 ### Offensive Bias
 
@@ -247,7 +259,10 @@ threats are developing.
 `find_forced_win()` searches for a sequence of forcing moves
 (creating fours) that lead to an unstoppable compound threat.
 
-**Algorithm**: For each candidate move that creates a four (threat >= 8000):
+**Algorithm**: For each candidate move that creates a four (the code uses
+`threat >= 8000` as the cutoff — historically the broken-four pattern score;
+post-BUG-004 broken fours score 100,000, so the 8,000 threshold now functions
+as a pure separator above the open-three / broken-three band):
 1. Place the stone.
 2. If it creates a compound threat (>= 40000), it's a forced win.
 3. Find the ONE cell the opponent must block.
@@ -320,10 +335,20 @@ convention. See BUG-002 below for details.
 
 ### 8.2 Overline Rule
 
-The engine correctly implements the standard Gomoku overline rule:
-exactly five in a row wins, six or more does not. This is enforced in
-both `is_five_from_last_move()` (which checks `count == 5`) and
-`has_winner()`.
+The engine implements the standard Gomoku overline rule: **exactly five in a
+row wins, six or more does not**. This is enforced in three places that must
+agree:
+
+- `has_winner()` in `gomoku.c` — `count == 5` strict
+- `is_five_from_last_move()` in `ai.c` — `count == 5` strict
+- `evaluate_threat_fast()` in `ai.c` — `contiguous == 5` returns 1,000,000;
+  `contiguous >= 6` returns 0 (sterile)
+
+Previously the threat evaluator used `contiguous >= 5` and treated overlines
+as wins, while `has_winner()` correctly required exactly five. Combined with
+`find_best_ai_move()`'s random selection from the `winning_moves` pool, the
+AI could pick a gap-fill creating six-in-a-row over an actual five-in-a-row
+extension. See BUG-005 below.
 
 ### 8.3 Local Region Evaluation
 
@@ -343,21 +368,28 @@ different strategic value not captured by the scoring.
 
 ## 9. Test Coverage Gaps
 
-The following scenarios lack test coverage:
+### Now covered
 
 1. **AI must block opponent's closed four over creating own closed four**
-   — This is the exact BUG-001 scenario.
+   (BUG-001) — covered by `AIBlocksOpponentClosedFour`,
+   `AIBlocksFiveInARowOverOwnClosedFour`, and `AIPlaysImmediateWinOverBlocking`.
+2. **Broken-three gap blocking** (BUG-004) — covered by
+   `AIBlocksBrokenThreeGap` and `BrokenThreeBuilderIsRecognizedThreat`.
+3. **Broken-four threat scoring** (BUG-004) — covered by
+   `BrokenFourIsMustBlock`.
+4. **Overline (six-in-a-row) is not a win** (BUG-005) — covered by
+   `OverlineIsNotAWin`, which cross-checks `evaluate_threat_fast` against
+   `has_winner` so the rules can't drift apart.
 
-2. **Step ordering: compound three vs defensive VCT** — Step 2b vs Step 4
+### Still missing
+
+1. **Step ordering: compound three vs defensive VCT** — Step 2b vs Step 4
    priority conflict.
-
-3. **Even vs odd depth minimax quality** — No tests compare move quality
+2. **Even vs odd depth minimax quality** — No tests compare move quality
    at different search depths.
-
-4. **Search radius edge cases** — No tests verify that blocking moves
+3. **Search radius edge cases** — No tests verify that blocking moves
    just at the radius boundary are found.
-
-5. **VCT threshold issues** — `post_threat >= 100000` in
+4. **VCT threshold issues** — `post_threat >= 100000` in
    `find_forced_win_recursive` may prematurely declare victory.
 
 ---
@@ -559,6 +591,111 @@ The step ordering is:
 
 Moved Step 2b after Step 4 (defensive VCT), ensuring the AI checks for
 opponent forced wins before committing to a compound three.
+
+---
+
+### BUG-004: Broken Patterns Underweighted Due to Hole Mis-counting (Fixed)
+
+**Status**: Fixed
+**Severity**: High — caused AI to ignore developing broken-three / broken-four
+patterns, allowing opponents to build forced-win forks unchallenged
+**File**: `gomoku-c/src/gomoku/ai.c`, function `analyze_direction()` plus the
+broken-three and broken-four branches in `evaluate_threat_fast()`
+**Discovered**: production game on 2026-04-27 — opponent built `XX_X` on
+column H undisturbed and converted it into a double-four fork.
+
+#### Summary
+
+`analyze_direction()` incremented `holes` whenever it encountered a first
+empty cell while scanning outward, regardless of whether the run actually
+continued past that gap. Combined with how the function is called from both
+directions, an open-both-ends broken three (`_XX_X_`) ended up with
+`holes = 2` — one count from the genuine internal gap and one from the
+boundary empty on the other side. Every broken-pattern branch in
+`evaluate_threat_fast()` requires `holes <= 1`, so the threat scored 0.
+
+The same flaw silently zeroed out broken fours (`XX_XX`, `X_XXX`) when both
+ends were open.
+
+#### Threat values pre-fix vs post-fix
+
+| Pattern                            | Pre-fix score | Post-fix score |
+|------------------------------------|---------------|----------------|
+| `_XX_X_` broken three, both open   | 0             | 1,500          |
+| `XX_X` broken three, half-open     | 400           | 400            |
+| `_XX_XX_` broken four, both open   | 0             | 100,000        |
+| `XX_XX` broken four, half-open     | 8,000         | 100,000        |
+
+#### Fix Applied
+
+1. `analyze_direction()` now only increments `holes` when the run actually
+   continues past the gap (i.e., the next cell is a player stone). Boundary
+   empties just set `open_end` instead.
+2. Broken three with both ends open scores 1,500 (parity with open three —
+   the gap-fill creates an open four, equivalent danger).
+3. Broken four scores 100,000 regardless of openness — a gap-fill makes
+   five-in-a-row, so it's a "must block" pattern and crosses the
+   immediate-block threshold in `find_best_ai_move()`.
+
+#### Tests
+
+- `AIBlocksBrokenThreeGap` — full board state with `XX_X` open both ends;
+  AI must play the gap.
+- `BrokenThreeBuilderIsRecognizedThreat` — verifies the move that
+  *creates* the `XX_X` pattern from `XX` scores >= 1,500.
+- `BrokenFourIsMustBlock` — `XX_XX` pattern and the move that builds it
+  both score >= 100,000.
+
+---
+
+### BUG-005: Threat Evaluator Treated Overlines as Wins (Fixed)
+
+**Status**: Fixed
+**Severity**: Medium — coin-flip chance the AI plays a sterile six-in-a-row
+instead of an actual five-in-a-row when both moves exist
+**File**: `gomoku-c/src/gomoku/ai.c`, function `evaluate_threat_fast()`
+
+#### Summary
+
+`evaluate_threat_fast()` used `contiguous >= 5` for the win threshold while
+`has_winner()` in `gomoku.c` and `is_five_from_last_move()` in `ai.c` both
+use `count == 5` strictly. Standard Gomoku does not award the win for an
+overline (six or more contiguous stones) — only exactly five wins.
+
+The mismatch became dangerous when combined with `find_best_ai_move()`'s
+"winning move" pool: every move with `threat >= 1,000,000` was added to
+`winning_moves`, and one was selected at random. In a position like
+`XXXX_X`, the AI saw two "winning" candidates:
+
+- Extend the left end (`-1`): contiguous = 5 → real win.
+- Fill the gap (`4`): contiguous = 6 → sterile, game does not end.
+
+About half the time the AI chose the gap-fill, the game continued, and the
+opponent received a free turn.
+
+#### Fix Applied
+
+```c
+if (contiguous == 5) {
+  threat = 1000000;     // Win - exactly five
+} else if (contiguous >= 6) {
+  threat = 0;           // Overline - sterile in standard gomoku
+}
+```
+
+The explicit `>= 6` branch is required because the broken-four path
+(`total >= 4 && holes <= 1`) would otherwise misclassify a contiguous-six
+position as a 100,000 broken four.
+
+#### Tests
+
+`OverlineIsNotAWin` cross-checks `evaluate_threat_fast` against
+`has_winner` so the rules can't drift apart again. It asserts:
+
+- Gap-fill creating six-in-a-row scores `< 1,000,000`.
+- Genuine five-in-a-row extension scores `>= 1,000,000`.
+- `has_winner()` reports no winner for the six-stone position and a
+  winner for the five-stone position.
 
 ---
 
