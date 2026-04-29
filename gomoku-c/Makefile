@@ -75,7 +75,7 @@ GOMOCUP_TEST_CXXFLAGS = -Wall -Wunused-parameter -Wextra -std=c++17 -I$(GOMOCUP_
 # CMake build directory
 BUILD_DIR = build
 
-.PHONY: all clean test tests rebuild json-c gomoku-httpd googletest test-client test-daemon cmake-clean gomocup pbrain-kig-standard test-gomocup-e2e gomocup-win pbrain-kig-standard64.exe pbrain-kig-standard-x86.exe gomocup-zip
+.PHONY: all clean test tests rebuild json-c gomoku-httpd googletest test-client test-daemon cmake-clean gomocup pbrain-kig-standard test-gomocup-e2e gomocup-win pbrain-kig-standard-x86-64.exe pbrain-kig-standard-x86-32.exe gomocup-zip
 
 $(BINDIR):
 		@mkdir -p $(BINDIR)
@@ -190,16 +190,16 @@ GOMOCUP_WIN32_DIR = $(GOMOCUP_DIR)/win32
 GOMOCUP_WIN_SRCS  = src/gomoku/gomoku.c src/gomoku/board.c src/gomoku/game.c src/gomoku/ai.c \
                     $(GOMOCUP_DIR)/main.c $(GOMOCUP_DIR)/protocol.c $(GOMOCUP_DIR)/coords.c $(GOMOCUP_DIR)/time_budget.c
 
-$(BINDIR)/pbrain-kig-standard64.exe: $(GOMOCUP_WIN_SRCS) | $(BINDIR)
+$(BINDIR)/pbrain-kig-standard-x86-64.exe: $(GOMOCUP_WIN_SRCS) | $(BINDIR)
 		$(WIN64_CC) $(WIN_CFLAGS) $(GOMOCUP_WIN_SRCS) -o $@
 
-$(BINDIR)/pbrain-kig-standard-x86.exe: $(GOMOCUP_WIN_SRCS) | $(BINDIR)
+$(BINDIR)/pbrain-kig-standard-x86-32.exe: $(GOMOCUP_WIN_SRCS) | $(BINDIR)
 		$(WIN32_CC) $(WIN_CFLAGS) -m32 $(GOMOCUP_WIN_SRCS) -o $@
 
-pbrain-kig-standard64.exe: $(BINDIR)/pbrain-kig-standard64.exe
-pbrain-kig-standard-x86.exe: $(BINDIR)/pbrain-kig-standard-x86.exe
+pbrain-kig-standard-x86-64.exe: $(BINDIR)/pbrain-kig-standard-x86-64.exe
+pbrain-kig-standard-x86-32.exe: $(BINDIR)/pbrain-kig-standard-x86-32.exe
 
-gomocup-win: $(BINDIR)/pbrain-kig-standard64.exe $(BINDIR)/pbrain-kig-standard-x86.exe
+gomocup-win: $(BINDIR)/pbrain-kig-standard-x86-64.exe $(BINDIR)/pbrain-kig-standard-x86-32.exe
 
 # Submission zip. Per plan §10, the archive contains both .exe files plus a
 # README.txt stamped with git SHA + build timestamp. The zip is shallow
@@ -214,12 +214,12 @@ gomocup-zip: gomocup-win
 		@printf 'Git SHA: %s\n' "$$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" >> $(BINDIR)/README.txt
 		@printf 'Built  : %s\n' "$$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $(BINDIR)/README.txt
 		@printf '\nFiles:\n' >> $(BINDIR)/README.txt
-		@printf '  pbrain-kig-standard64.exe   Win64 brain (filename contains "64" per Gomocup rule)\n' >> $(BINDIR)/README.txt
-		@printf '  pbrain-kig-standard-x86.exe Win32 brain\n' >> $(BINDIR)/README.txt
+		@printf '  pbrain-kig-standard-x86-64.exe Win64 brain (filename contains "64" per Gomocup rule)\n' >> $(BINDIR)/README.txt
+		@printf '  pbrain-kig-standard-x86-32.exe Win32 brain\n' >> $(BINDIR)/README.txt
 		rm -f $(BINDIR)/pbrain-kig-standard.zip
 		zip -j $(BINDIR)/pbrain-kig-standard.zip \
-			$(BINDIR)/pbrain-kig-standard64.exe \
-			$(BINDIR)/pbrain-kig-standard-x86.exe \
+			$(BINDIR)/pbrain-kig-standard-x86-64.exe \
+			$(BINDIR)/pbrain-kig-standard-x86-32.exe \
 			$(BINDIR)/README.txt
 		@echo ""
 		@echo "Submission archive ready: $(BINDIR)/pbrain-kig-standard.zip"
