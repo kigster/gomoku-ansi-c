@@ -1080,6 +1080,158 @@ TEST_F(GomokuTest, AIBlocksBeforeCreatingOpenFour) {
       << "AI should block X's five-in-a-row at col 8, not play col " << best_y;
 }
 
+/**
+ * Regression: broken-three (XX_X with both ends open) must score as a
+ * legitimate threat, and the AI must block the gap because filling it
+ * creates an open four (forced win).
+ *
+ * Bug observed in production game on 2026-04-27: opponent built X stones
+ * at column H, rows 6, 7 and 9 (gap at H8). The AI didn't see the broken
+ * three building up because evaluate_threat_fast scored XX_X as 0 — the
+ * `holes` counter incorrectly treated boundary empties as internal gaps,
+ * so the `total >= 3 && holes <= 1` branch never matched a fully-open
+ * broken three. Opponent then got a double-four fork; AI lost.
+ *
+ * Two assertions here:
+ *   1. evaluate_threat_fast(gap, X) returns 500000 (open four creator).
+ *      This is what triggers the immediate-block path.
+ *   2. evaluate_threat_fast(extending stone, X) on a position one move
+ *      earlier (XX with X about to play to make XX_X) returns >= 1500,
+ *      so that minimax notices the developing pattern instead of
+ *      pruning it as harmless.
+ */
+TEST_F(GomokuTest, AIBlocksBrokenThreeGap) {
+  // X at column 7 (col H equivalent), rows 6, 7, 9. Gap at row 8.
+  game->board[6][7] = AI_CELL_CROSSES;
+  game->board[7][7] = AI_CELL_CROSSES;
+  game->board[9][7] = AI_CELL_CROSSES;
+  // [8][7] is the gap, [5][7] and [10][7] are empty boundaries.
+
+  // Verify: filling the gap creates an open four for X.
+  int gap_threat =
+      evaluate_threat_fast(game->board, 8, 7, AI_CELL_CROSSES, BOARD_SIZE);
+  EXPECT_GE(gap_threat, 500000)
+      << "X at the gap [8][7] should create an open four (>= 500,000), got "
+      << gap_threat;
+
+  // Set O as the AI player.
+  game->current_player = AI_CELL_NAUGHTS;
+  game->max_depth = 4;
+
+  int best_x = -1, best_y = -1;
+  find_best_ai_move(game, &best_x, &best_y, NULL);
+
+  EXPECT_EQ(best_x, 8) << "AI should block the gap at row 8, played row "
+                       << best_x;
+  EXPECT_EQ(best_y, 7) << "AI should block the gap at col 7, played col "
+                       << best_y;
+}
+
+/**
+ * Regression: when X has just two stones in a row (XX) and is about to
+ * extend with a non-adjacent third stone (creating XX_X), the AI's
+ * threat eval must recognize that extending move as dangerous (>= 1500),
+ * not score it as harmless (0). Without this signal, minimax prunes the
+ * developing pattern and lets opponent build the broken three for free.
+ */
+TEST_F(GomokuTest, BrokenThreeBuilderIsRecognizedThreat) {
+  // X has two contiguous stones: rows 6, 7 in column 7.
+  game->board[6][7] = AI_CELL_CROSSES;
+  game->board[7][7] = AI_CELL_CROSSES;
+
+  // Evaluating the move that creates the XX_X pattern at row 9.
+  int extend_threat =
+      evaluate_threat_fast(game->board, 9, 7, AI_CELL_CROSSES, BOARD_SIZE);
+  EXPECT_GE(extend_threat, 1500)
+      << "X at [9][7] forms broken-three open both ends (XX_X). Filling "
+         "the gap next move creates an open four, so this should be at "
+         "least as dangerous as an open three (1500). Got "
+      << extend_threat;
+}
+
+/**
+ * Regression: broken-four (XX_XX, X_XXX, XXX_X) — filling the gap is
+ * five-in-a-row, so the pattern must be flagged as a closed-four-level
+ * threat (>= 100000), not the legacy 8000 which let minimax happily
+ * ignore it.
+ */
+TEST_F(GomokuTest, BrokenFourIsMustBlock) {
+  // X at columns 5, 6, 8, 9 in row 7 (XX_XX with both ends open).
+  game->board[7][5] = AI_CELL_CROSSES;
+  game->board[7][6] = AI_CELL_CROSSES;
+  game->board[7][8] = AI_CELL_CROSSES;
+  game->board[7][9] = AI_CELL_CROSSES;
+
+  // The gap-fill at [7][7] creates five-in-a-row.
+  int gap_fill =
+      evaluate_threat_fast(game->board, 7, 7, AI_CELL_CROSSES, BOARD_SIZE);
+  EXPECT_GE(gap_fill, 1000000)
+      << "Gap-fill should be five-in-a-row (1,000,000), got " << gap_fill;
+
+  // From a different perspective: evaluating the move that BUILDS the
+  // broken four. With X already at 5, 6, 8 (X_X_X from a position with a
+  // missing right-most stone), placing X at col 9 creates the broken
+  // four pattern. That move must also score as a strong threat.
+  game->board[7][9] = AI_CELL_EMPTY;
+  int build_threat =
+      evaluate_threat_fast(game->board, 7, 9, AI_CELL_CROSSES, BOARD_SIZE);
+  EXPECT_GE(build_threat, 100000)
+      << "Move building XX_XX broken-four (extending from XX_X) should "
+         "score >= closed four (100,000), got "
+      << build_threat;
+}
+
+/**
+ * Standard gomoku: exactly five in a row wins; six or more (an "overline")
+ * does NOT win. has_winner() in gomoku.c uses `count == 5` strictly.
+ *
+ * The threat evaluator must agree. Specifically, for a position like
+ * XXXX_X (four contiguous + one isolated, gap between):
+ *   - Extending the left end (-1) makes a five-in-a-row → real win.
+ *   - Filling the gap makes XXXXXX (six contiguous) → NOT a win.
+ *
+ * Before the fix, evaluate_threat_fast scored both as 1,000,000 because
+ * it used `contiguous >= 5`. find_best_ai_move collects all 1,000,000-
+ * threat moves and picks one at random, so the AI had a coin-flip chance
+ * of playing the sterile gap-fill instead of the actual winning move.
+ */
+TEST_F(GomokuTest, OverlineIsNotAWin) {
+  // X at columns 5, 6, 7, 8, and 10 in row 9. Gap at col 9.
+  game->board[9][5] = AI_CELL_CROSSES;
+  game->board[9][6] = AI_CELL_CROSSES;
+  game->board[9][7] = AI_CELL_CROSSES;
+  game->board[9][8] = AI_CELL_CROSSES;
+  game->board[9][10] = AI_CELL_CROSSES;
+
+  // Filling the gap at [9][9] would make six-contiguous. NOT a win.
+  int gap_fill =
+      evaluate_threat_fast(game->board, 9, 9, AI_CELL_CROSSES, BOARD_SIZE);
+  EXPECT_LT(gap_fill, 1000000)
+      << "Gap-fill creating six-in-a-row must NOT be scored as a win in "
+         "standard gomoku. Got "
+      << gap_fill;
+
+  // Extending the left end at [9][4] makes a real five-in-a-row.
+  int extend_left =
+      evaluate_threat_fast(game->board, 9, 4, AI_CELL_CROSSES, BOARD_SIZE);
+  EXPECT_GE(extend_left, 1000000)
+      << "Left-end extension creates five-in-a-row, must score as a win. Got "
+      << extend_left;
+
+  // And cross-check against the actual win detector (the source of truth).
+  // Place the gap-fill stone and verify has_winner says no.
+  game->board[9][9] = AI_CELL_CROSSES;
+  EXPECT_EQ(has_winner(game->board, BOARD_SIZE, AI_CELL_CROSSES), 0)
+      << "has_winner must report no winner for six-in-a-row (overline rule)";
+  game->board[9][9] = AI_CELL_EMPTY;
+
+  // And confirm five-in-a-row IS a winner.
+  game->board[9][4] = AI_CELL_CROSSES;
+  EXPECT_EQ(has_winner(game->board, BOARD_SIZE, AI_CELL_CROSSES), 1)
+      << "has_winner must report a winner for five-in-a-row";
+  game->board[9][4] = AI_CELL_EMPTY;
+}
+
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
