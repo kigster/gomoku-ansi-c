@@ -118,8 +118,14 @@ The codebase has five critical issues requiring immediate attention: a hardcoded
 #### C-16: `notation_to_coord()` Silent Parse Failures
 - **File:** `gomoku-c/src/gomoku/game.c:49-69`
 
-#### C-17: Hardcoded `interesting_moves[361]` Array Size
+#### C-17: Hardcoded `interesting_moves[361]` Array Size — RESOLVED
 - **File:** `gomoku-c/src/gomoku/game.c:139`
+- **Resolution:** The `interesting_moves[]` cache was removed. It was
+  populated by `update_interesting_moves()` after every stone placement
+  but never consumed by any production code path — `generate_moves_optimized()`
+  in `ai.c` is the only live move generator and it scans the board directly
+  from `game->board[]`. Removing the cache eliminated the hardcoded `[361]`
+  size assumption along with it.
 
 #### C-18: No Null-Termination Guarantee After `strncpy()`
 - **File:** `gomoku-c/src/gomoku/game.c:1043`
