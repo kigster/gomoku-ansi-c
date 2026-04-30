@@ -4,6 +4,8 @@ import WaitingForOpponent from './WaitingForOpponent'
 import {
   joinGame,
   isParticipantView,
+  MultiplayerApiError,
+  type Color,
   type MultiplayerGameView,
 } from '../lib/multiplayerClient'
 import { useMultiplayerPolling } from '../hooks/useMultiplayerPolling'
@@ -13,6 +15,24 @@ interface MultiplayerGamePageProps {
   token: string
   code: string
   username: string
+}
+
+/**
+ * Map API `detail` strings to user-friendly messages. Per
+ * `doc/multiplayer-bugs.md` item #6 — every join failure must surface as
+ * something the user can read and act on.
+ */
+function joinDetailToMessage(status: number, detail: string): string {
+  const map: Record<string, string> = {
+    multiplayer_game_not_found: 'This invitation link is not valid.',
+    game_already_full: 'Someone has already joined this game.',
+    cannot_join_own_game: 'You cannot join your own invitation.',
+    game_cancelled: 'This invitation was cancelled or expired.',
+    game_not_in_waiting_state: 'This game has already started.',
+    chosen_color_required: 'Please choose your color before joining.',
+    chosen_color_not_allowed: 'The host already picked the color.',
+  }
+  return map[detail] ?? `Could not join (${status}). Please try again.`
 }
 
 function buildBoard(
@@ -34,10 +54,13 @@ export default function MultiplayerGamePage({
   code,
   username,
 }: MultiplayerGamePageProps) {
-  const { game, loading, error, sendMove, sendResign, refresh } =
+  const { game, loading, error, expired, sendMove, sendResign, refresh } =
     useMultiplayerPolling(token, code)
   const [joining, setJoining] = useState(false)
   const [joinError, setJoinError] = useState<string | null>(null)
+  // Guest's chosen color for `color_chosen_by='guest'` games. Set via the
+  // pick-color screen before the auto-join fires.
+  const [guestPickedColor, setGuestPickedColor] = useState<Color | null>(null)
 
   // If the loaded game is in `waiting` state and the caller isn't the host,
   // automatically POST /join.
@@ -46,16 +69,27 @@ export default function MultiplayerGamePage({
     if (game.state !== 'waiting') return
     if (game.your_color !== null) return
     if (game.host.username === username) return
+    // If the host wants the guest to pick the color, wait for the user.
+    if (game.color_chosen_by === 'guest' && guestPickedColor === null) return
+
     let cancelled = false
     setJoining(true)
-    joinGame(token, code)
+    setJoinError(null)
+    joinGame(token, code, {
+      chosen_color:
+        game.color_chosen_by === 'guest' ? (guestPickedColor as Color) : undefined,
+    })
       .then(() => {
         if (cancelled) return
         return refresh()
       })
       .catch((err) => {
         if (cancelled) return
-        setJoinError(err instanceof Error ? err.message : String(err))
+        if (err instanceof MultiplayerApiError) {
+          setJoinError(joinDetailToMessage(err.status, err.detail))
+        } else {
+          setJoinError(err instanceof Error ? err.message : String(err))
+        }
       })
       .finally(() => {
         if (!cancelled) setJoining(false)
@@ -63,7 +97,7 @@ export default function MultiplayerGamePage({
     return () => {
       cancelled = true
     }
-  }, [game, joining, token, code, username, refresh])
+  }, [game, joining, token, code, username, refresh, guestPickedColor])
 
   const handleCellClick = useCallback(
     (row: number, col: number) => {
@@ -89,17 +123,47 @@ export default function MultiplayerGamePage({
   }
 
   if (!game) {
+    return <ErrorPage message={error ?? 'Could not load game.'} />
+  }
+
+  // Cancelled/abandoned games — read-only result panel.
+  if (game.state === 'cancelled' || game.state === 'abandoned') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-neutral-300 gap-4">
-        <p>Could not load game.</p>
-        {error && <p className="text-red-400 text-sm">{error}</p>}
-        <a
-          href="/"
-          className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-neutral-900 font-semibold"
-        >
-          Back home
-        </a>
+      <ErrorPage message="This invitation was cancelled or expired." />
+    )
+  }
+
+  // Guest-picks-color step — show a small inline picker.
+  const needsGuestColorPick =
+    game.state === 'waiting' &&
+    game.color_chosen_by === 'guest' &&
+    game.host.username !== username &&
+    guestPickedColor === null
+
+  if (needsGuestColorPick) {
+    return (
+      <GuestColorPicker
+        hostUsername={game.host.username}
+        onPick={setGuestPickedColor}
+      />
+    )
+  }
+
+  if (joining) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-neutral-300">
+        Joining game…
       </div>
+    )
+  }
+
+  if (joinError) {
+    return <ErrorPage message={joinError} />
+  }
+
+  if (expired) {
+    return (
+      <ErrorPage message="This game session has expired. Please start a new one." />
     )
   }
 
@@ -121,9 +185,7 @@ export default function MultiplayerGamePage({
           Gomoku — Game {game.code}
         </h1>
 
-        {game.state === 'waiting' && (
-          <WaitingForOpponent code={game.code} />
-        )}
+        {game.state === 'waiting' && <WaitingForOpponent code={game.code} />}
 
         {(game.state === 'in_progress' || game.state === 'finished') && (
           <>
@@ -141,9 +203,7 @@ export default function MultiplayerGamePage({
             {isParticipantView(game) && game.state === 'in_progress' && (
               <div className="flex flex-col items-center gap-2 mt-2">
                 <p className="text-neutral-300">
-                  {game.your_turn
-                    ? 'Your move.'
-                    : 'Waiting for opponent…'}
+                  {game.your_turn ? 'Your move.' : 'Waiting for opponent…'}
                 </p>
                 <button
                   onClick={() => {
@@ -180,9 +240,50 @@ export default function MultiplayerGamePage({
             {error}
           </p>
         )}
-        {joinError && (
-          <p className="text-red-400 text-sm mt-2">{joinError}</p>
-        )}
+      </div>
+    </div>
+  )
+}
+
+function ErrorPage({ message }: { message: string }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center text-neutral-200 gap-4 px-4 text-center">
+      <p className="max-w-md">{message}</p>
+      <a
+        href="/"
+        className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-neutral-900 font-semibold"
+      >
+        Back home
+      </a>
+    </div>
+  )
+}
+
+function GuestColorPicker({
+  hostUsername,
+  onPick,
+}: {
+  hostUsername: string
+  onPick: (c: Color) => void
+}) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center text-neutral-100 gap-6 px-4">
+      <h1 className="font-heading text-2xl font-bold text-amber-400 text-center">
+        @{hostUsername} invited you — pick your color
+      </h1>
+      <div className="flex gap-3">
+        <button
+          onClick={() => onPick('X')}
+          className="px-6 py-3 rounded-lg bg-neutral-100 text-neutral-900 font-bold border-2 border-amber-400 hover:bg-amber-100"
+        >
+          Black (X) — moves first
+        </button>
+        <button
+          onClick={() => onPick('O')}
+          className="px-6 py-3 rounded-lg bg-neutral-700 text-neutral-100 font-bold border-2 border-amber-400 hover:bg-neutral-600"
+        >
+          White (O)
+        </button>
       </div>
     </div>
   )
@@ -190,9 +291,9 @@ export default function MultiplayerGamePage({
 
 function PlayerHeader({ game }: { game: MultiplayerGameView }) {
   const yourSide = game.your_color
-  const hostLabel = `${game.host.username} (${game.host.color})`
+  const hostLabel = `${game.host.username} (${game.host.color ?? '?'})`
   const guestLabel = game.guest
-    ? `${game.guest.username} (${game.guest.color})`
+    ? `${game.guest.username} (${game.guest.color ?? '?'})`
     : '— waiting —'
   return (
     <div className="flex flex-wrap gap-4 justify-center text-neutral-300 text-sm">
