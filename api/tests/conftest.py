@@ -184,6 +184,48 @@ def auth_headers(registered_user):
     return {"Authorization": f"Bearer {token}"}
 
 
+@pytest.fixture
+async def make_user(client: AsyncClient):
+    """Factory: create a fresh user with a unique username, return (username, token, headers).
+
+    Usage:
+        async def test_x(make_user):
+            host = await make_user("alice")
+            guest = await make_user("bob")
+            await client.post("/foo", headers=host["headers"])
+    """
+
+    async def _factory(name: str, *, password: str = "pass1234", email: str | None = None):
+        if email is None:
+            email = f"{name}@example.com"
+        resp = await client.post(
+            "/auth/signup",
+            json={"username": name, "password": password, "email": email},
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        return {
+            "username": data["username"],
+            "token": data["access_token"],
+            "headers": {"Authorization": f"Bearer {data['access_token']}"},
+        }
+
+    return _factory
+
+
+@pytest.fixture
+async def second_registered_user(make_user):
+    """A second authenticated user, distinct from `registered_user` ('testplayer').
+
+    Returns a dict with keys `username`, `token`, `headers` so multiplayer tests
+    can address the two participants by name without re-deriving headers each
+    time. Mirrors the `registered_user` pattern but doesn't break it: the
+    usernames/emails are different so the per-test TRUNCATE keeps both rows
+    isolated.
+    """
+    return await make_user("secondplayer", email="second@example.com")
+
+
 SAMPLE_GAME_JSON = {
     "X": {"player": "human", "depth": 3, "time_ms": 5000},
     "O": {"player": "AI", "depth": 5, "time_ms": 3000},
