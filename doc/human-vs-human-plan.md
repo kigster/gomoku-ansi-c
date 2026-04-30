@@ -22,8 +22,8 @@ without round-tripping for clarification.
 | Engine                                | **Pure Postgres** — no Redis, no WebSockets        | One source of truth. Replaceable later.                                                   |
 | Game state location                   | **`multiplayer_games.moves` JSONB column**         | Move list is small (≤225 entries). Re-derive board state from moves on read.              |
 | Game code format                      | **6-char Crockford base32** (no I/L/O/U/0/1)       | ~1B codespace; readable when shared verbally. Collision-resistant for our scale.          |
-| Rule set                              | **Freestyle 15×15 only** for v1                    | Matches the existing default. 19×19 / Renju added later under the same schema.            |
-| Win detection                         | **Server-side after every move**                   | Don't trust the client. Reuse the C engine's check via a small helper or pure-Python re-impl. |
+| Rule set                              | **Standard 15×15** (`count == 5`, no overline)     | Matches the C engine (`gomoku-c/src/gomoku/gomoku.c:180`). Freestyle/Renju added later.   |
+| Win detection                         | **Server-side, pure-Python (~30 LOC)** after every move | Don't trust the client. Re-implement `count == 5` from `gomoku.c:149-188` directly in Python — cheaper than cffi. |
 | Disconnect / abandonment              | **No special handling in v1** (game stays open)    | Reconnection is automatic since state is on the server. Resignation = v1.1.               |
 | Elo integration                       | **Out of scope for this PR** (write game row only) | Elo lands in a separate follow-up per `doc/gomocup-elo-rankings.md`.                      |
 | Frontend scope                        | **Minimal but complete** — `/play/[code]` route   | Reuses existing Board component; adds polling + waiting-for-opponent state.                |
@@ -53,6 +53,9 @@ without round-tripping for clarification.
 ### New table — `multiplayer_games`
 
 Migration file: `api/db/migrations/versions/20260501-120100-create-multiplayer-games.py`
+with `revision = "0006"` and `down_revision = "0005"`. The migration body
+**must** wrap the SQL in `op.execute("""…""")` blocks (raw-SQL convention,
+matching `20260404-120000-create-users.py:19-31` — never `op.create_table`).
 
 ```sql
 CREATE TABLE multiplayer_games (
@@ -82,22 +85,32 @@ CREATE INDEX multiplayer_games_active_idx   ON multiplayer_games (state) WHERE s
 
 ### Existing `games` table — no schema change
 
-When a multiplayer game finishes, write a row to `games` with:
+When a multiplayer game finishes, write **two rows** to `games`, one per
+participant, so each user's `/game/history` lists the game. Per row:
 
-- `username` = winner's username (or host's, on draw)
-- `user_id` = winner's id (or host's)
-- `winner`, `human_player`, `board_size`, `total_moves`, `human_time_s` derived from the multiplayer row
+- `username` / `user_id` — that participant's identity
+- `human_player` — that participant's color in this game
+- `winner`, `board_size`, `total_moves`, `human_time_s` derived from the multiplayer row
 - `depth = 0`, `radius = 0` (signals "human opponent, not AI")
 - `score = 0` (legacy field; Elo will replace this)
 - `game_json = { multiplayer_game_id, host_username, guest_username, moves }`
 
-This keeps the existing leaderboard / history endpoints working without
-schema churn.
+This keeps existing leaderboard / history endpoints working without schema churn.
 
 ## 4. API surface
 
 All endpoints under prefix `/multiplayer`, all require auth (existing JWT
-middleware). All return the same `MultiplayerGameView` shape (defined below).
+dependency `app.security.get_current_user`). All return the same
+`MultiplayerGameView` shape (defined below) **except** that
+`GET /multiplayer/{code}` returns a slim *preview* view (only `code`,
+`state`, `board_size`, `rule_set`, `host`, `guest`, `version`) when the
+caller is neither host nor guest, so a guest can render the join screen
+before posting `/join`.
+
+`GET /multiplayer/{code}` also supports HTTP conditional fetch:
+when the request includes `?since_version=N` and `version <= N`, the
+server returns **`304 Not Modified`** with no body. This makes the
+1.5 s polling loop cheap on the wire.
 
 | Method | Path                          | Body                                          | Returns                              |
 | ------ | ----------------------------- | --------------------------------------------- | ------------------------------------ |
@@ -136,6 +149,7 @@ class MultiplayerGameView(BaseModel):
 | Auth missing                                             | 401    | (existing middleware)                   |
 | Joining a game you already host                          | 409    | `cannot_join_own_game`                  |
 | Joining a game that already has a guest                  | 409    | `game_already_full`                     |
+| Joining when caller's `user_id == host_user_id`          | 409    | `cannot_join_own_game` (same-user guard) |
 | Move when game is not `in_progress`                      | 409    | `game_not_in_progress`                  |
 | Move when not your turn                                  | 409    | `not_your_turn`                         |
 | Move with `expected_version` ≠ current version           | 409    | `version_conflict`                      |
@@ -145,23 +159,54 @@ class MultiplayerGameView(BaseModel):
 
 ## 5. Concurrency
 
-The interesting race is two clients submitting moves at the same time. The
-move endpoint must atomically:
+The codebase uses **asyncpg directly via `asyncpg.Pool`** (see
+`api/app/database.py:10`; routers depend on `pool=Depends(get_pool)`).
+There is no SQLAlchemy. Every transactional path opens a connection from the
+pool and wraps the work in `async with conn.transaction(): ...`.
 
-1. Lock the row (`SELECT ... FOR UPDATE`).
-2. Re-validate that `state = 'in_progress'`, `next_to_move = caller's color`,
-   `expected_version = version`, and the square is empty.
-3. Append to `moves`, recompute `next_to_move`, run win detection.
-4. Bump `version`, set `updated_at`.
-5. If win: set `state='finished'`, `winner`, `finished_at`, and write a row to
-   the existing `games` table in the same transaction.
+### Move race
 
-Use one SQLAlchemy session / transaction for the whole sequence.
+Two clients submitting moves at once. The move endpoint must atomically:
+
+1. `async with pool.acquire() as conn: async with conn.transaction():`
+2. `SELECT ... FROM multiplayer_games WHERE code=$1 FOR UPDATE` — locks the row.
+3. Re-validate `state = 'in_progress'`, `next_to_move = caller's color`,
+   `expected_version = version`, square is empty, caller is host or guest.
+4. Append to `moves`, recompute `next_to_move`, run win detection.
+5. `UPDATE multiplayer_games SET moves=$1, next_to_move=$2, version=version+1,
+   updated_at=NOW(), [state, winner, finished_at if win] WHERE id=$3`.
+6. On win: insert two `games` rows (one per participant, see §3) in the same
+   transaction.
+
+### Join race
+
+Two browsers POSTing `/join` for the same code at the same instant — solve
+without a row lock by relying on a conditional UPDATE:
+
+```sql
+UPDATE multiplayer_games
+SET    guest_user_id = $1,
+       state         = 'in_progress',
+       version       = version + 1,
+       updated_at    = NOW()
+WHERE  code = $2
+  AND  guest_user_id IS NULL
+  AND  host_user_id <> $1   -- can't join your own game
+RETURNING *;
+```
+
+If `RETURNING` produces no row, look up the row and emit the right 409
+(`game_already_full`, `cannot_join_own_game`, or `multiplayer_game_not_found`).
 
 ## 6. Game-code generation
 
+Lives in a new module `api/app/multiplayer/codes.py`:
+
 ```python
+import secrets
+
 ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ"  # Crockford base32 minus I, L, O, U
+
 def new_code() -> str:
     return "".join(secrets.choice(ALPHABET) for _ in range(6))
 ```
@@ -171,7 +216,12 @@ on collision (effectively never with a 30^6 ≈ 729M codespace).
 
 ## 7. Frontend
 
-### New route — `/play/[code]`
+`frontend/package.json` has **no router library**, and `App.tsx` already
+inspects `window.location` directly (see `App.tsx:62`). Stay consistent with
+that: parse the pathname in `App.tsx`, render `MultiplayerGamePage` when it
+matches `^/play/([A-Z0-9]{6})$`. **Do not** add `react-router-dom`.
+
+### New route — `/play/[code]` (parsed manually, not via a router)
 
 | File                                                          | Role                                                                  |
 | ------------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -223,24 +273,29 @@ conversation) as the orchestrator.
 - **Goal**: write a comprehensive failing test suite for the API.
 - **Scope**:
   - `api/tests/test_multiplayer.py` covering every endpoint, every error
-    case from §4, and the concurrency case from §5.
-  - One frontend integration test (Playwright or Vitest+jsdom) for the
-    `useMultiplayerPolling` hook is nice-to-have; skip if it would balloon
-    scope.
+    case from §4, and both races (move + join) from §5.
+  - Add a `second_registered_user` fixture to `api/tests/conftest.py` (the
+    existing `registered_user` fixture is single-user only — see verifier
+    finding #13).
+  - Frontend tests are out of scope for this stage; skip them.
   - All new tests **must fail** at this stage (red).
 - **Output**: a single commit `Add failing tests for human-vs-human multiplayer`.
 
 ### Stage 3 — Implementer
 - **Goal**: make the Stage 2 tests pass.
 - **Scope**:
-  - Alembic migration (§3).
-  - SQLAlchemy model + Pydantic schemas.
-  - `api/app/routers/multiplayer.py` — all six endpoints (§4) wired into
-    `app/main.py`.
-  - `api/app/multiplayer/` — code generator, win detector (port the
-    5-in-a-row check from `gomoku-c/src/`), state-transition logic.
-  - Minimal frontend: page + polling hook + waiting screen, enough to
-    actually play a game in two browser windows.
+  - Alembic migration (§3) — `revision="0006"`, `down_revision="0005"`,
+    `op.execute("""…""")` body.
+  - Pydantic request/response schemas (NOT SQLAlchemy — codebase is asyncpg).
+  - `api/app/routers/multiplayer.py` — all six endpoints (§4), each opening
+    a connection from the `asyncpg.Pool` injected via `Depends(get_pool)`.
+    Wire the router into `api/app/main.py:80-83` *before* the SPA catch-all
+    block at `main.py:101-106` so production routing isn't shadowed.
+  - `api/app/multiplayer/` — `codes.py` (§6), `win_detector.py`
+    (~30 LOC port of `gomoku-c/src/gomoku/gomoku.c:149-188`,
+    `count == 5` semantics), `state.py` (turn-toggle, view assembly).
+  - Minimal frontend: `App.tsx` pathname-parser + `MultiplayerGamePage` +
+    `useMultiplayerPolling` + waiting screen, enough to play in two tabs.
 - **Verification**: every Stage 2 test passes; manual two-tab smoke test of
   the frontend; `just test-api` is green for new tests.
 - **Output**: one or more commits implementing the feature.
