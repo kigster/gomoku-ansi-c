@@ -83,5 +83,5 @@ api/.coverage
 /games/*.json
 .claude/plugins/install-counts-cache.json
 /tests/eval/results
-
+**/*.tmp
 

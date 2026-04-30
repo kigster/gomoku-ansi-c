@@ -29,7 +29,12 @@ END
 EOF
 
 OUT1=$(printf '%s\n' "$SCRIPT1" | "$BRAIN" 2>/dev/null)
-mapfile -t LINES1 <<< "$OUT1"
+# bash 3 (default /bin/bash on macOS) lacks `mapfile`, so build the array
+# manually with a read loop. Trailing-newline-less lines are preserved.
+LINES1=()
+while IFS= read -r _line || [[ -n "$_line" ]]; do
+  LINES1+=("$_line")
+done <<< "$OUT1"
 
 # Expect exactly 3 lines: OK, 7,7, then a move adjacent to (7,8).
 if [[ ${#LINES1[@]} -lt 3 ]]; then
