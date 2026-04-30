@@ -27,6 +27,7 @@ import LeaderboardModal from './components/LeaderboardModal'
 import DifficultySettingsModal from './components/DifficultySettingsModal'
 import AmbientBackground from './components/AmbientBackground'
 import MultiplayerGamePage from './components/MultiplayerGamePage'
+import ChooseGameTypeModal from './components/ChooseGameTypeModal'
 import { newGame as newMultiplayerGame } from './lib/multiplayerClient'
 import logo from '../assets/images/logo.png'
 
@@ -292,6 +293,19 @@ export default function App () {
   const [showAboutModal, setShowAboutModal] = useState(false)
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false)
   const [showNavMenu, setShowNavMenu] = useState(false)
+  // Show "Choose Game Type" once per login session; reset whenever the auth
+  // token transitions from absent → present, dismissed permanently after
+  // the user makes (or cancels) a selection.
+  const [showChooseGameType, setShowChooseGameType] = useState<boolean>(false)
+  const sawAuthRef = useRef<string | null>(authToken)
+  useEffect(() => {
+    if (authToken && sawAuthRef.current !== authToken) {
+      sawAuthRef.current = authToken
+      setShowChooseGameType(true)
+    }
+    if (!authToken) sawAuthRef.current = null
+  }, [authToken])
+
   const isActive = phase === 'playing' || phase === 'thinking'
 
   const needsAuth = !playerName || !authToken || hasResetToken
@@ -346,6 +360,16 @@ export default function App () {
         />
       ) : (
         <div className='min-h-screen relative z-10'>
+          {showChooseGameType && authToken && (
+            <ChooseGameTypeModal
+              authToken={authToken}
+              onAIChosen={() => setShowChooseGameType(false)}
+              onGuestJoined={code => {
+                window.location.href = `/play/${code}`
+              }}
+              onClose={() => setShowChooseGameType(false)}
+            />
+          )}
           <AmbientBackground />
           {/* Navigation Bar */}
           <nav className='bg-neutral-800/95 backdrop-blur-sm border-b border-neutral-700 shadow-lg sticky top-0 z-40'>
