@@ -404,8 +404,30 @@ justfile                Monorepo orchestration
 | [doc/httpd.md](doc/httpd.md) | HTTP daemon API reference and cluster setup |
 | [doc/game-rules.md](doc/game-rules.md) | Gomoku/Renju rules and variant support proposal |
 | [doc/dtrace.md](doc/dtrace.md) | DTrace investigation of CPU busy-spin fix |
+| [doc/human-vs-human-plan.md](doc/human-vs-human-plan.md) | Multiplayer feature plan + multi-agent build workflow |
+| [doc/multiplayer-modal-plan.md](doc/multiplayer-modal-plan.md) | "Choose Game Type" modal + invite-link spec |
+| [doc/multiplayer-bugs.md](doc/multiplayer-bugs.md) | Bug list & fixes from the original multiplayer PR |
+| [doc/gomocup-elo-rankings.md](doc/gomocup-elo-rankings.md) | Plan for Gomocup-compatible Elo ratings |
+| [doc/gomocup-protocol.md](doc/gomocup-protocol.md) | Gomocup brain protocol (`pbrain-kig-standard`) |
 | [iac/README.md](iac/README.md) | Cloud Run infrastructure and Terraform |
 | [frontend/CLAUDE.md](frontend/CLAUDE.md) | Frontend architecture and API endpoints |
+
+### Multiplayer (human vs human)
+
+Two authenticated users can play each other over a shared invite link. After
+logging in, the **Choose Game Type** modal appears with two options:
+
+- **AI** (default) — drops you into the standard single-player flow.
+- **Another Player** — generates a 6-character invite link
+  (`/play/AB7K3X`). The link expires after 15 minutes; cancelling the modal
+  marks the game `cancelled` in the database. The host can either pick the
+  color up front or defer the choice to the guest, who will pick at join
+  time.
+
+The full spec is in [doc/multiplayer-modal-plan.md](doc/multiplayer-modal-plan.md);
+the underlying API (six `/multiplayer/*` endpoints, asyncpg + raw-SQL,
+short-poll with backoff) is documented in
+[doc/human-vs-human-plan.md](doc/human-vs-human-plan.md).
 
 ## Application Configuration
 

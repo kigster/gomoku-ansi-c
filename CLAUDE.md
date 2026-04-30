@@ -46,4 +46,28 @@ The FastAPI app loads `api/.env.{development,test,ci}[.local]` based on the `ENV
 
 ### Tests
 
-`just test-api` runs the API test suite (89 tests) in parallel across 4 workers via pytest-xdist. Each worker gets its own `gomoku_test_gw{N}` database, dropped at session end. Sequential `just test` from `api/` also works for debugging.
+`just test-api` runs the API test suite in parallel across 4 workers via pytest-xdist (currently ~145 tests; multiplayer adds 56). Each worker gets its own `gomoku_test_gw{N}` database, dropped at session end. Sequential `just test` from `api/` also works for debugging.
+
+### Multiplayer (human vs human)
+
+The FastAPI server hosts a complete two-human game flow under
+`/multiplayer/*` (see `api/app/routers/multiplayer.py`). The frontend's
+`ChooseGameTypeModal` lets a logged-in user pick AI or Another Player —
+the latter generates a 15-minute invite link (`/play/<6-char>`) the host
+shares. Highlights a future maintainer should know:
+
+- **No SQLAlchemy** — all DB access is asyncpg + raw SQL, with savepoints
+  for the code-collision retry path.
+- **Schema discriminator** — `games.game_type IN ('ai','multiplayer')` keeps
+  the strict AI invariants (`depth>=1`, `radius>=1`, `total_moves>0`)
+  while admitting `0/0/0` sentinels for multiplayer history rows.
+- **Lazy expiry** — every read of a `waiting` game past its `expires_at`
+  flips it to `cancelled`; no background sweeper is required for the
+  modal flow.
+- **Polling backoff** — both `useMultiplayerPolling` and
+  `useMultiplayerHostPolling` geometrically back off after 304s and stop
+  after a wall-clock cap (15 min for waiting, 8 h for in-progress).
+
+Reference docs: `doc/human-vs-human-plan.md` (architecture & API),
+`doc/multiplayer-modal-plan.md` (UX), `doc/multiplayer-bugs.md`
+(historical issues that drove the current design).

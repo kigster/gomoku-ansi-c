@@ -64,6 +64,19 @@ docker run -p 80:80 -e API_URL=http://gomoku-api:8000 gomoku-frontend:latest
 - **Board** — SVG-based 19x19 (or 15x15) game board with stone/XO display modes
 - **GameStatus** — Move counter, timers, player info, error display
 - **SettingsPanel** — AI depth, radius, timeout, display mode, side selection
+- **ChooseGameTypeModal** — Post-login modal for picking AI vs Another Player; if Another Player, generates a 15-min invite link, shows the waiting/timer screen, calls `/multiplayer/{code}/cancel` if the host closes the modal.
+- **MultiplayerGamePage** — Renders `/play/<code>`; auto-joins the guest, shows a guest-color picker when `color_chosen_by='guest'`, surfaces specific 4xx errors from `/multiplayer/{code}/join` as user-facing messages.
+
+## Multiplayer endpoints used
+
+| Path | Purpose |
+|---|---|
+| `POST /multiplayer/new` | Create an invite — `host_color: null` defers color choice to the guest |
+| `POST /multiplayer/{c}/join` | Join — `chosen_color` required when host deferred |
+| `POST /multiplayer/{c}/cancel` | Host marks the game `cancelled` (used by the modal close flow) |
+| `GET /multiplayer/{c}` | Polled every 1.5 s with `?since_version=N`; backs off geometrically on 304 |
+| `POST /multiplayer/{c}/move` | Make a move; server validates against `board_size` |
+| `POST /multiplayer/{c}/resign` | End the game; sets winner = opposite color |
 
 ## Auth Flow
 
