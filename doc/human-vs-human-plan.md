@@ -265,3 +265,129 @@ Each agent gets a self-contained prompt naming:
   pre-commit hook's `just test-api` failure is unrelated infrastructure
   noise — see prior session — so commits use `--no-verify` with a brief
   note in the commit message).
+
+## 10. Verifier notes
+
+Verifier ran on 2026-04-30 against branch `kig/human-vs-human-multiplayer`.
+Plan is **APPROVED with changes**. Critical items below are blocking; the
+test writer (Stage 2) and implementer (Stage 3) must read this section first.
+
+### Critical issues (must fix before Stage 2)
+
+1. **Stack mismatch — no SQLAlchemy in this codebase.** §5 says "Use one
+   SQLAlchemy session / transaction". The API uses **asyncpg directly via an
+   `asyncpg.Pool`** (`api/app/database.py:10`, all routers use
+   `pool=Depends(get_pool)`). The locking pattern must be
+   `async with pool.acquire() as conn: async with conn.transaction(): ...`
+   plus `SELECT ... FOR UPDATE` on the row. No ORM, no Pydantic model
+   classes for tables — only request/response Pydantic schemas in
+   `api/app/models/`. The plan's reference to a "SQLAlchemy model" in §9.3
+   must become a thin asyncpg row-mapping helper.
+
+2. **Migration filename + format both wrong.** Plan shows
+   `20260501-120100-create-multiplayer-games.py` but existing migrations use
+   the next sequential `revision: str = "0006"` with `down_revision = "0005"`
+   and **raw `op.execute("""CREATE TABLE …""")`** — never `op.create_table`
+   (see `api/db/migrations/versions/20260404-120000-create-users.py:19-31`).
+   The next migration's `down_revision` must be `"0005"` and id `"0006"`.
+   The plan's SQL is fine; just wrap it in `op.execute("""…""")`.
+
+3. **Win-detection semantics are wrong / unspecified.** Plan §1 picks
+   "Freestyle" (no overline restriction → 5 *or more* in a row wins). But
+   the existing C engine (`gomoku-c/src/gomoku/gomoku.c:180`) uses
+   `if (count == 5)` strictly — and `gomoku-c/src/gomoku/ai.c:291` has a
+   comment confirming this is intentional. Porting that function gives
+   *Renju-ish* behaviour where 6+ in a row is **not** a win. Decide one of:
+   (a) keep the C semantics and label it "Standard" (not Freestyle), or
+   (b) implement `count >= 5` and explicitly diverge. Either way the plan
+   must say which. Re-implementing in pure Python is ~30 lines and cheaper
+   than porting via cffi; the C reference at gomoku.c:149-188 is trivial.
+
+4. **`/{full_path:path}` SPA catch-all swallows new routes.**
+   `api/app/main.py:101-106` defines a catch-all `GET /{full_path:path}`
+   that serves `index.html` when no static file matches. This route is
+   registered **after** `auth/game/leaderboard/user` routers but the catch-
+   all only exists when `STATIC_DIR.is_dir()` (production). In dev it's a
+   non-issue; in prod the new `/multiplayer/*` router must be included
+   `before` the SPA mount block (line 80-83 area). The plan should call
+   this out explicitly so the implementer doesn't accidentally break it.
+
+5. **Frontend has no router.** Plan §7 says "new route `/play/[code]`".
+   `frontend/package.json` has **no `react-router-dom` dependency**
+   (verified — only `react`, `react-dom`, `react-syntax-highlighter`).
+   `App.tsx` is a single mounted component with no `<Routes>`. The
+   implementer must either (a) add `react-router-dom`, or (b) parse
+   `window.location.pathname` directly and switch the rendered component.
+   Picking (b) keeps the bundle small and matches existing style
+   (`App.tsx:62` already inspects `URLSearchParams`). The plan must pick.
+
+### Important issues (should fix)
+
+6. **Join race not addressed.** Two browsers POSTing `/join` at the same
+   instant — §5 only locks moves, not the join transition. The
+   `UPDATE … SET guest_user_id=$1, state='in_progress' WHERE code=$2 AND
+   guest_user_id IS NULL RETURNING …` pattern (no row found → 409) is
+   the simplest fix; add it to §5.
+
+7. **Same-user-two-tabs hole.** Auth model lets a single user post to
+   `/join` for a code they themselves host (the plan does say 409 for that
+   — good — but **not** for a user who joins their own game from a second
+   tab using the same JWT under a different identity since guests aren't
+   distinct). Add explicit check `host_user_id != current_user.id` and
+   `guest_user_id != host_user_id`.
+
+8. **Polling load.** 1.5s × 2 clients × N concurrent games = 1.33 N qps
+   to one indexed `SELECT` — fine up to a few thousand concurrent games.
+   But the plan adds `since_version` query but never says the server uses
+   it. Either return `304 Not Modified` when `version <= since_version`,
+   or `{ version, changed: false }` on a no-op poll. Currently the doc
+   contracts the same `MultiplayerGameView` either way → wasted bytes.
+
+9. **API contract gap — guest can't see board_size before joining.**
+   §4's `GET /multiplayer/{code}` requires auth. Add: a guest hitting this
+   *before* posting to `/join` should still see `board_size`, `rule_set`,
+   `host.username`, `state` (read-only preview). Otherwise the UI can't
+   render the join screen. Either expose those fields at all states or add
+   `GET /multiplayer/{code}/preview`.
+
+10. **Missing `created_by` audit on the `games` row.** §3 says the
+    finished-game row gets `username = winner's username`. For a draw or a
+    loss that means losing the *identity of who lost* in the leaderboard
+    history. Recommend writing **two** `games` rows on finish (one per
+    participant) so each user's `/game/history` shows the game.
+
+### Nice-to-have improvements
+
+11. Add an `idx_multiplayer_games_updated` index on `(updated_at DESC)` —
+    the polling endpoint will be the hottest query and `version` index
+    alone won't help if we ever filter by recency.
+
+12. The 6-char base32 alphabet is defined twice (CLAUDE.md context vs §6).
+    Extract to a shared module `api/app/multiplayer/codes.py`.
+
+13. The conftest fixture `registered_user` only creates **one** user. The
+    Stage 2 test writer needs a `second_registered_user` fixture (or a
+    factory) for host/guest tests. The factory pattern already exists in
+    spirit — just parametrize the username/email.
+
+14. Effort estimate: with the asyncpg/raw-SQL/no-router corrections above,
+    Stage 3 is ~600-900 LOC (migration ~80, router ~250, multiplayer
+    helpers ~150, frontend page+hook+waiting screen ~300). Two days of
+    focused work; the plan implies one. Adjust expectations.
+
+### Confirmed correct
+
+- `api/app/main.py:80-83` includes routers under their natural prefixes
+  (`/auth`, `/game`, `/leaderboard`, `/user`) — adding `/multiplayer` via
+  `fastapi_app.include_router(multiplayer.router)` will work as planned.
+- `users.id` is `UUID`, FK target is correct (`users(id) ON DELETE CASCADE`
+  matches `api/db/migrations/versions/20260404-120000-create-users.py:22`).
+- JWT auth dependency is `app.security.get_current_user` returning a `dict`
+  with `id`, `username`, `email`, `created_at` keys — the plan's auth
+  assumption is correct.
+- The conftest `auth_headers` fixture (line 180) returns a usable
+  `Authorization: Bearer …` header for tests, exactly what Stage 2 needs.
+- `Board.tsx:7-14` already has the `onCellClick(row, col)` prop and an
+  `interactive: boolean` prop — the plan's "modify Board.tsx" claim is a
+  no-op; multiplayer can pass `interactive={yourTurn}` and reuse as-is.
+- Crockford base32 codespace is 30^6 ≈ 729M, plan §6 is correct.
