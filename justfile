@@ -213,6 +213,14 @@ cr-update: docker-build-all-amd64
     gcloud auth application-default login
     cd ./iac/cloud_run && bash update.sh
 
+# ─── Gomokup ────────────────────────────────────────────────────────────────────
+
+# Build the submission into gomoku executables for Win32/Win64 for Gomocup Tournament
+gomocup:
+    make -C gomoku-c pbrain-kig-standard
+    make -C gomoku-c gomocup-win
+    cp -pv gomoku-c/bin/pbrain-* bin/
+
 # ─── CMake ────────────────────────────────────────────────────────────────────
 
 # Build using CMake

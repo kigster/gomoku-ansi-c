@@ -1,6 +1,7 @@
 # ─── C build artifacts ────────────────────────────────────────────────────────
 .secret
 /bin/gomoku*
+/bin/pbrain*
 /gomoku-c/bin/
 /gomoku-c/tests/googletest/
 /gomoku-c/tests/evals/results/*
@@ -82,3 +83,5 @@ api/.coverage
 /games/*.json
 .claude/plugins/install-counts-cache.json
 /tests/eval/results
+**/*.tmp
+

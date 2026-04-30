@@ -95,7 +95,7 @@ typedef struct {
     int current_player;    // Current player (AI_CELL_CROSSES or AI_CELL_NAUGHTS)
     int game_state;        // Current game state (GAME_RUNNING, etc.)
     int max_depth;         // AI search depth
-    int move_timeout;      // Move timeout in seconds (0 = no timeout)
+    double move_timeout;   // Move timeout in seconds, fractional (0 = no timeout)
     int search_radius;     // Search radius for move generation (1-5)
     int replay_mode;       // Whether we're in replay mode (disables cursor)
 
@@ -456,6 +456,7 @@ void add_ai_history_entry(game_state_t *game, int moves_evaluated);
 // JSON EXPORT/IMPORT
 //===============================================================================
 
+#ifndef NO_JSON
 /**
  * Writes game results to a JSON file.
  *
@@ -486,5 +487,6 @@ typedef struct {
  * @return 1 on success, 0 on failure
  */
 int load_game_json(const char *filename, replay_data_t *data);
+#endif // NO_JSON
 
-#endif // GAME_H 
+#endif // GAME_H
