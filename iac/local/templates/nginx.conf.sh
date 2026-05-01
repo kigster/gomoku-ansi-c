@@ -114,7 +114,7 @@ http {
         }
 
         # ----- API routes → FastAPI -----
-        location ~ ^/(auth|game|leaderboard|user|health) {
+        location ~ ^/(auth|game|leaderboard|user|multiplayer|health) {
             limit_req zone=api_limit burst=40 nodelay;
 
             proxy_pass         http://api_backend;

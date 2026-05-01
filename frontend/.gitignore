@@ -263,3 +263,8 @@ dist
 .history
 .ionide
 
+
+# Cypress
+cypress/screenshots/
+cypress/videos/
+cypress/downloads/

@@ -50,7 +50,17 @@ async def fresh_db():
             "DROP FUNCTION IF EXISTS game_score(BOOLEAN, INT, INT, DOUBLE PRECISION) CASCADE"
         )
         await conn.execute("DROP FUNCTION IF EXISTS game_time_score(DOUBLE PRECISION) CASCADE")
-        await conn.execute("DROP TABLE IF EXISTS games, password_reset_tokens, users CASCADE")
+        # Discover all user tables in the public schema and drop them. Doing
+        # this dynamically means new migrations don't need to update a
+        # hard-coded list (the previous static list missed multiplayer_games
+        # and forced a defensive DROP inside that migration's upgrade()).
+        rows = await conn.fetch(
+            "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
+        )
+        table_names = [r["tablename"] for r in rows]
+        if table_names:
+            quoted = ", ".join(f'"{name}"' for name in table_names)
+            await conn.execute(f"DROP TABLE IF EXISTS {quoted} CASCADE")
         await conn.execute("DROP TABLE IF EXISTS alembic_version CASCADE")
     finally:
         await conn.close()

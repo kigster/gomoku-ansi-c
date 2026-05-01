@@ -27,7 +27,7 @@ import LeaderboardModal from './components/LeaderboardModal'
 import DifficultySettingsModal from './components/DifficultySettingsModal'
 import AmbientBackground from './components/AmbientBackground'
 import MultiplayerGamePage from './components/MultiplayerGamePage'
-import { newGame as newMultiplayerGame } from './lib/multiplayerClient'
+import ChooseGameTypeModal from './components/ChooseGameTypeModal'
 import logo from '../assets/images/logo.png'
 
 const MULTIPLAYER_PATH_RE = /^\/play\/([A-Z2-9]{6})$/
@@ -292,33 +292,52 @@ export default function App () {
   const [showAboutModal, setShowAboutModal] = useState(false)
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false)
   const [showNavMenu, setShowNavMenu] = useState(false)
+  // Show "Choose Game Type" once per login session; reset whenever the auth
+  // token transitions from absent → present, dismissed permanently after
+  // the user makes (or cancels) a selection.
+  const [showChooseGameType, setShowChooseGameType] = useState<boolean>(false)
+  const sawAuthRef = useRef<string | null>(authToken)
+  useEffect(() => {
+    if (authToken && sawAuthRef.current !== authToken) {
+      sawAuthRef.current = authToken
+      setShowChooseGameType(true)
+    }
+    if (!authToken) sawAuthRef.current = null
+  }, [authToken])
+
   const isActive = phase === 'playing' || phase === 'thinking'
 
   const needsAuth = !playerName || !authToken || hasResetToken
   const multiplayerCode = readMultiplayerCode()
 
-  const handleStartMultiplayer = useCallback(async () => {
-    if (!authToken) return
-    try {
-      const game = await newMultiplayerGame(authToken)
-      window.location.href = `/play/${game.code}`
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : 'Failed to create game'
-      showError('Could not create multiplayer game.', detail)
-    }
-  }, [authToken])
-
   // Multiplayer page route: requires auth, but otherwise short-circuits the
-  // single-player UI entirely.
+  // single-player UI entirely. When a not-logged-in user arrives via an
+  // invite link, render the auth modal on top of an explanatory backdrop so
+  // they understand WHY they're being asked to log in (and after auth the
+  // URL still says /play/CODE, so the auto-join fires on the next render).
   if (multiplayerCode) {
     if (needsAuth) {
       return (
         <>
           <AlertPanel />
+          <div className='fixed inset-0 z-40 flex items-center justify-center px-4 text-center text-neutral-200'>
+            <div className='max-w-md space-y-3'>
+              <h1 className='font-heading text-3xl font-bold text-amber-400'>
+                You're invited to a Gomoku game
+              </h1>
+              <p className='text-neutral-300'>
+                Game code: <span className='font-mono text-amber-300'>{multiplayerCode}</span>
+              </p>
+              <p className='text-sm text-neutral-400'>
+                Sign in or create an account to join — we'll drop you straight
+                into the game once you're in.
+              </p>
+            </div>
+          </div>
           <AuthModal
             onAuth={handleAuth}
             apiBase={API_BASE}
-            initialView={hasResetToken ? 'reset' : undefined}
+            initialView={hasResetToken ? 'reset' : 'signup'}
           />
         </>
       )
@@ -326,11 +345,29 @@ export default function App () {
     return (
       <>
         <AlertPanel />
-        <MultiplayerGamePage
-          token={authToken!}
-          code={multiplayerCode}
-          username={playerName!}
-        />
+        <div className='min-h-screen relative z-10'>
+          <AmbientBackground />
+          <nav className='bg-neutral-800/95 backdrop-blur-sm border-b border-neutral-700 shadow-lg sticky top-0 z-40'>
+            <div className='max-w-6xl mx-auto px-4 py-3 flex items-center justify-between'>
+              <a href='/' className='flex items-center gap-3'>
+                <img src={logo} alt='Gomoku' className='h-9 w-auto' />
+                <h1 className='font-heading text-2xl font-bold text-amber-400'>
+                  Gomoku
+                </h1>
+              </a>
+              <span className='text-neutral-400 text-sm'>
+                Hey,{' '}
+                <span className='text-amber-400 font-semibold'>@{playerName}</span>
+                {'! '}
+              </span>
+            </div>
+          </nav>
+          <MultiplayerGamePage
+            token={authToken!}
+            code={multiplayerCode}
+            username={playerName!}
+          />
+        </div>
       </>
     )
   }
@@ -346,6 +383,16 @@ export default function App () {
         />
       ) : (
         <div className='min-h-screen relative z-10'>
+          {showChooseGameType && authToken && (
+            <ChooseGameTypeModal
+              authToken={authToken}
+              onAIChosen={() => setShowChooseGameType(false)}
+              onGuestJoined={code => {
+                window.location.href = `/play/${code}`
+              }}
+              onClose={() => setShowChooseGameType(false)}
+            />
+          )}
           <AmbientBackground />
           {/* Navigation Bar */}
           <nav className='bg-neutral-800/95 backdrop-blur-sm border-b border-neutral-700 shadow-lg sticky top-0 z-40'>
@@ -570,10 +617,10 @@ export default function App () {
                     )}
                     {phase === 'idle' && (
                       <button
-                        onClick={handleStartMultiplayer}
+                        onClick={() => setShowChooseGameType(true)}
                         className='w-full mt-3 py-3 rounded-xl text-lg font-semibold font-heading
-                               bg-sky-700 hover:bg-sky-600 active:bg-sky-800
-                               text-white shadow-md shadow-sky-900/40
+                               bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700
+                               text-white shadow-md shadow-emerald-900/40
                                transition-all duration-200 hover:scale-[1.01]'
                       >
                         New Multiplayer Game

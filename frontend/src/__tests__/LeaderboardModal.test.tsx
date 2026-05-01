@@ -8,6 +8,8 @@ const mockOnClose = vi.fn()
 const sampleEntries = [
   {
     username: 'GrandMaster',
+    elo_rating: 2210,
+    elo_games_count: 42,
     score: 6500,
     rating: 89.7,
     depth: 6,
@@ -20,6 +22,8 @@ const sampleEntries = [
   },
   {
     username: 'Beginner',
+    elo_rating: 1517,
+    elo_games_count: 3,
     score: 1200,
     rating: 16.6,
     depth: 1,
@@ -56,8 +60,8 @@ describe('LeaderboardModal', () => {
       expect(screen.getByText('GrandMaster')).toBeInTheDocument()
       expect(screen.getByText('Beginner')).toBeInTheDocument()
     })
-    expect(screen.getByText('6,500')).toBeInTheDocument()
-    expect(screen.getByText('89.7')).toBeInTheDocument()
+    expect(screen.getByText('2210')).toBeInTheDocument()
+    expect(screen.getByText('1517')).toBeInTheDocument()
   })
 
   it('shows empty state when no entries', async () => {

@@ -4,12 +4,18 @@
 
 const API_BASE = import.meta.env.VITE_API_BASE || ''
 
-export type GameStateName = 'waiting' | 'in_progress' | 'finished' | 'abandoned'
+export type GameStateName =
+  | 'waiting'
+  | 'in_progress'
+  | 'finished'
+  | 'abandoned'
+  | 'cancelled'
 export type Color = 'X' | 'O'
+export type ColorChosenBy = 'host' | 'guest'
 
 export interface PlayerInfo {
   username: string
-  color: Color
+  color: Color | null
 }
 
 export interface MultiplayerGameView {
@@ -25,8 +31,11 @@ export interface MultiplayerGameView {
   your_color: Color | null
   your_turn: boolean
   version: number
+  color_chosen_by: ColorChosenBy
+  expires_at: string
   created_at: string
   finished_at: string | null
+  invite_url: string
 }
 
 export interface MultiplayerGamePreview {
@@ -41,6 +50,8 @@ export interface MultiplayerGamePreview {
   your_color: null
   your_turn: false
   version: number
+  color_chosen_by: ColorChosenBy
+  expires_at: string
   created_at: string
   finished_at: string | null
 }
@@ -76,12 +87,18 @@ async function parseError(response: Response): Promise<MultiplayerApiError> {
 
 export async function newGame(
   token: string,
-  opts: { board_size?: 15 | 19; host_color?: Color } = {},
+  opts: { board_size?: 15 | 19; host_color?: Color | null } = {},
 ): Promise<MultiplayerGameView> {
+  // `host_color: null` is meaningful — it tells the server "guest will pick
+  // their color at join time". We pass it through as null rather than
+  // omitting the key.
+  const body: Record<string, unknown> = {}
+  if (opts.board_size !== undefined) body.board_size = opts.board_size
+  if (opts.host_color !== undefined) body.host_color = opts.host_color
   const response = await fetch(`${API_BASE}/multiplayer/new`, {
     method: 'POST',
     headers: authHeaders(token),
-    body: JSON.stringify(opts),
+    body: JSON.stringify(body),
   })
   if (!response.ok) throw await parseError(response)
   return response.json() as Promise<MultiplayerGameView>
@@ -90,8 +107,24 @@ export async function newGame(
 export async function joinGame(
   token: string,
   code: string,
+  opts: { chosen_color?: Color } = {},
 ): Promise<MultiplayerGameView> {
+  const body: Record<string, unknown> = {}
+  if (opts.chosen_color) body.chosen_color = opts.chosen_color
   const response = await fetch(`${API_BASE}/multiplayer/${code}/join`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) throw await parseError(response)
+  return response.json() as Promise<MultiplayerGameView>
+}
+
+export async function cancelGame(
+  token: string,
+  code: string,
+): Promise<MultiplayerGameView> {
+  const response = await fetch(`${API_BASE}/multiplayer/${code}/cancel`, {
     method: 'POST',
     headers: authHeaders(token),
     body: JSON.stringify({}),
