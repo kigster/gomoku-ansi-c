@@ -187,7 +187,7 @@ The PRO opening constrains the first three moves to balance the game:
 
 *There is also a **Long Pro** variant where the third stone must be at least **4** intersections from center.*
 
-![Gomoku Pro Opening](images/pro.jpg)
+![Gomoku Pro Opening](img/opening-moves/pro.jpg)
 
 ---
 
