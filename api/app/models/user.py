@@ -82,3 +82,6 @@ class UserOut(BaseModel):
     games_won: int = 0
     games_lost: int = 0
     personal_best: PersonalBest | None = None
+    elo_rating: int = 1500
+    elo_peak: int = 1500
+    elo_games_count: int = 0

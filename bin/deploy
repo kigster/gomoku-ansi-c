@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # bin/deploy — Full Cloud Run deploy in one shot.
 #
-# Reads secrets from .env at the repo root and maps them to the TF_VAR_*
-# names the Terraform stack expects. Then in order:
+# Usage:
+#   bin/deploy [production|staging]
+#
+# Defaults to "production" when invoked with no arg, matching the
+# pre-staging behaviour. Reads secrets from .env at the repo root and
+# maps the right per-environment keys into the TF_VAR_* names the
+# Terraform stack expects, then in order:
 #   1. Verifies GCP application-default credentials (prompts login if missing)
 #   2. Runs Alembic migrations against the configured Postgres
 #   3. Builds frontend → api/public
@@ -11,17 +16,34 @@
 # Idempotent — safe on first deploy and on every redeploy. Picks up infra
 # changes (new env vars, scaling tweaks, IAM bindings) via terraform apply.
 #
-# Required .env keys: DATABASE_URL, JWT_SECRET, HONEYCOMB_INGEST_API_KEY,
-# PROJECT_ID. Optional: REGION (default us-central1), HONEYCOMB_DATASET
-# (only needed for Honeycomb classic 32-char keys).
+# .env keys (per environment):
+#   production:  PRODUCTION_DATABASE_URL, PRODUCTION_JWT_SECRET, CUSTOM_DOMAIN
+#                                                                (or PRODUCTION_CUSTOM_DOMAIN)
+#   staging:     STAGING_DATABASE_URL,    STAGING_JWT_SECRET,    STAGING_CUSTOM_DOMAIN
+#
+# Common: HONEYCOMB_INGEST_API_KEY, PROJECT_ID, REGION (default us-central1),
+# HONEYCOMB_DATASET (only for Honeycomb classic 32-char keys), and an
+# optional STAGING_HONEYCOMB_INGEST_API_KEY override.
 
 set -euo pipefail
+
+ENVIRONMENT="${1:-production}"
+case "$ENVIRONMENT" in
+  production|staging) ;;
+  *)
+    printf '\033[1;31mERROR:\033[0m unknown environment %s. Use: production | staging\n' "$ENVIRONMENT" >&2
+    exit 2
+    ;;
+esac
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${REPO_ROOT}/.env"
 
-step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
-fail() { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
+step() { printf '\n\033[1;36m==> [%s] %s\033[0m\n' "$ENVIRONMENT" "$*"; }
+fail() {
+  printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2
+  exit 1
+}
 
 [[ -f "${ENV_FILE}" ]] || fail "Missing ${ENV_FILE}. Copy .env.sample to .env and fill in values."
 
@@ -30,30 +52,46 @@ set -a
 source "${ENV_FILE}"
 set +a
 
-required=(PRODUCTION_DATABASE_URL PRODUCTION_JWT_SECRET HONEYCOMB_INGEST_API_KEY PROJECT_ID)
-missing=()
-for v in "${required[@]}"; do
-  [[ -z "${!v:-}" ]] && missing+=("${v}")
-done
-(( ${#missing[@]} == 0 )) || fail "Empty in .env: ${missing[*]}"
+# Map per-environment .env keys → canonical (env-suffixed) variable names.
+# UPPER_ENV is "PRODUCTION" or "STAGING" — used to look up the right key.
+upper_env="$(printf '%s' "$ENVIRONMENT" | tr '[:lower:]' '[:upper:]')"
 
-# Map .env names → Terraform variable names. The PRODUCTION_ prefix in .env
-# prevents these from shadowing runtime config (DATABASE_URL, JWT_SECRET) when
+db_var="${upper_env}_DATABASE_URL"
+jwt_var="${upper_env}_JWT_SECRET"
+domain_var="${upper_env}_CUSTOM_DOMAIN"
+honey_var="${upper_env}_HONEYCOMB_INGEST_API_KEY"
+
+DATABASE_URL_VAL="${!db_var:-}"
+JWT_SECRET_VAL="${!jwt_var:-}"
+# Domain falls back to the un-prefixed CUSTOM_DOMAIN so existing prod
+# .env files (which set CUSTOM_DOMAIN=app.gomoku.games) keep working.
+CUSTOM_DOMAIN_VAL="${!domain_var:-${CUSTOM_DOMAIN:-}}"
+# Per-env Honeycomb key falls back to the shared HONEYCOMB_INGEST_API_KEY so
+# the existing prod setup keeps working unchanged.
+HONEYCOMB_KEY_VAL="${!honey_var:-${HONEYCOMB_INGEST_API_KEY:-}}"
+
+# Required-key check
+missing=()
+[[ -z "${DATABASE_URL_VAL}" ]] && missing+=("${db_var}")
+[[ -z "${JWT_SECRET_VAL}"   ]] && missing+=("${jwt_var}")
+[[ -z "${HONEYCOMB_KEY_VAL}" ]] && missing+=("${honey_var} or HONEYCOMB_INGEST_API_KEY")
+[[ -z "${PROJECT_ID:-}"     ]] && missing+=("PROJECT_ID")
+((${#missing[@]} == 0)) || fail "Empty in .env for environment=${ENVIRONMENT}: ${missing[*]}"
+
+# Map → Terraform variable names. The PRODUCTION_/STAGING_ prefixes in .env
+# prevent these from shadowing runtime config (DATABASE_URL, JWT_SECRET) when
 # `just` dotenv-loads the file or a developer sources it manually. Cloud Run's
 # runtime env still uses the unprefixed names — that mapping happens in
 # Terraform/main.tf via TF_VAR_*.
-export TF_VAR_database_url="${PRODUCTION_DATABASE_URL}"
-export TF_VAR_jwt_secret="${PRODUCTION_JWT_SECRET}"
-export TF_VAR_honeycomb_api_key="${HONEYCOMB_INGEST_API_KEY}"
+export TF_VAR_database_url="${DATABASE_URL_VAL}"
+export TF_VAR_jwt_secret="${JWT_SECRET_VAL}"
+export TF_VAR_honeycomb_api_key="${HONEYCOMB_KEY_VAL}"
 export TF_VAR_honeycomb_dataset="${HONEYCOMB_DATASET:-}"
-export TF_VAR_custom_domain="${CUSTOM_DOMAIN:-}"
+export TF_VAR_custom_domain="${CUSTOM_DOMAIN_VAL}"
+export TF_VAR_environment="${ENVIRONMENT}"
 export PROJECT_ID
 export REGION="${REGION:-us-central1}"
-
-# Tag this deploy as production for Pydantic config + telemetry. The Cloud
-# Run service definition also sets ENVIRONMENT=production explicitly, but we
-# export here too so any out-of-band scripts in the deploy chain see it.
-export ENVIRONMENT=production
+export ENVIRONMENT
 
 step "Checking GCP application-default credentials"
 if ! gcloud auth application-default print-access-token >/dev/null 2>&1; then
@@ -61,18 +99,18 @@ if ! gcloud auth application-default print-access-token >/dev/null 2>&1; then
   gcloud auth application-default login
 fi
 
-step "Running Alembic migrations"
+step "Running Alembic migrations against ${db_var}"
 (
   cd "${REPO_ROOT}/api"
-  ENVIRONMENT=production DATABASE_URL="${PRODUCTION_DATABASE_URL}" \
+  ENVIRONMENT="${ENVIRONMENT}" DATABASE_URL="${DATABASE_URL_VAL}" \
     uv run alembic upgrade head
 )
 
 step "Building frontend → api/public"
-( cd "${REPO_ROOT}" && just install-frontend )
+(cd "${REPO_ROOT}" && just install-frontend)
 
 step "Building images, pushing to Artifact Registry, applying Terraform"
-( cd "${REPO_ROOT}/iac/cloud_run" && bash deploy.sh )
+(cd "${REPO_ROOT}/iac/cloud_run" && bash deploy.sh)
 
 step "Recording deploy marker in Honeycomb"
 if [[ -z "${HONEYCOMB_CONFIG_API_KEY:-}" ]]; then
@@ -80,7 +118,7 @@ if [[ -z "${HONEYCOMB_CONFIG_API_KEY:-}" ]]; then
 else
   git_sha="$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
   git_subject="$(git -C "${REPO_ROOT}" log -1 --pretty=format:'%s' 2>/dev/null || echo '')"
-  marker_msg="${git_sha} ${git_subject}"
+  marker_msg="[${ENVIRONMENT}] ${git_sha} ${git_subject}"
   marker_dataset="${HONEYCOMB_MARKER_DATASET:-__all__}"
 
   if command -v jq >/dev/null 2>&1; then
@@ -104,4 +142,4 @@ else
   fi
 fi
 
-step "Deploy complete"
+step "Deploy complete (environment: ${ENVIRONMENT})"

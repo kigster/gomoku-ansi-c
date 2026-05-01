@@ -39,19 +39,40 @@ iac/
 ## Quick Start
 
 ```bash
-# 1. Set up Neon database
-psql "$NEON_DATABASE_URL" -f iac/cloud_sql/setup.sql
+# 1. Copy the env sample, fill in PRODUCTION_*  / STAGING_* / Honeycomb keys
+cp .env.sample .env
+$EDITOR .env
 
-# 2. Set environment variables
-export PROJECT_ID="your-gcp-project-id"
-export TF_VAR_jwt_secret="$(openssl rand -base64 32)"
-export TF_VAR_database_url="postgresql://user:pass@ep-xyz.neon.tech/gomoku?sslmode=require"
-
-# 3. Build and deploy
-just cr-init
+# 2. Deploy
+just deploy             # → production (gomoku.us)
+just deploy staging     # → staging   (staging.gomoku.games), min=0/0
 ```
 
-See [cloud_run/README.md](cloud_run/README.md) for the full deployment guide, custom domain setup, scaling, and monitoring.
+The two environments are fully isolated: separate Cloud Run services
+(`gomoku-api` / `gomoku-api-staging`, `gomoku-httpd` / `gomoku-httpd-staging`),
+separate Terraform state under `gs://gomoku-tfstate/cloud-run/{env}/gomoku`,
+and **separate Neon databases** (you point them via `PRODUCTION_DATABASE_URL`
+and `STAGING_DATABASE_URL` in `.env`).
+
+Local dev is a third, completely separate flow — see
+[bin/gctl](../bin/gctl) and the README in the project root.
+
+### Custom domains and DNS
+
+Both stacks register a Cloud Run domain mapping. After the first
+`just deploy <env>`, add the records to your DNS registrar:
+
+| Environment | Domain | Records |
+|---|---|---|
+| production | `gomoku.us` (apex) | 4× `A` + 4× `AAAA` (Google ghs IPs) |
+| staging | `staging.gomoku.games` | 1× `CNAME` → `ghs.googlehosted.com.` |
+
+**Step-by-step DNSMadeEasy instructions, including the exact record
+values, troubleshooting, and TLS provisioning timing, live in
+[`iac/DNS.md`](DNS.md).**
+
+See [cloud_run/README.md](cloud_run/README.md) for the full deployment
+guide, scaling, and monitoring.
 
 ## Database Schema
 

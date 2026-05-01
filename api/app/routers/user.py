@@ -37,6 +37,11 @@ async def get_me(user: dict = Depends(get_current_user), pool=Depends(get_pool))
         str(user["id"]),
     )
 
+    elo = await pool.fetchrow(
+        "SELECT elo_rating, elo_peak, elo_games_count FROM users WHERE id = $1::uuid",
+        str(user["id"]),
+    )
+
     return UserOut(
         id=user["id"],
         username=user["username"],
@@ -49,4 +54,7 @@ async def get_me(user: dict = Depends(get_current_user), pool=Depends(get_pool))
         games_won=wl["won"] if wl else 0,
         games_lost=wl["lost"] if wl else 0,
         personal_best=personal_best,
+        elo_rating=int(elo["elo_rating"]) if elo else 1500,
+        elo_peak=int(elo["elo_peak"]) if elo else 1500,
+        elo_games_count=int(elo["elo_games_count"]) if elo else 0,
     )

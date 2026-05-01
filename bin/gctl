@@ -459,8 +459,8 @@ api.start() {
   fi
 
   nohup bash -c "cd '$api_dir' && \
-    DATABASE_URL=postgresql://postgres:@localhost:5432/gomoku \
-    GOMOKU_HTTPD_URL=http://localhost:10000 \
+    DATABASE_URL=\"${DATABASE_URL:-postgresql://postgres:postgres@127.0.0.1:5432/gomoku}\" \
+    GOMOKU_HTTPD_URL=\"${GOMOKU_HTTPD_URL:-http://localhost:10000}\" \
     JWT_SECRET=${SECRET} \
     uv run uvicorn app.main:app --host 0.0.0.0 --port 8000" \
     >/var/log/gomoku-api.log 2>&1 &
@@ -772,7 +772,7 @@ cmd_ps() {
 cmd_observe() {
   local tool="${1:-btop}"
   case "$tool" in
-  htop) htop -F "gomoku" ;;
+  htop) htop -F "gomoku|cypress" ;;
   btop) btop --filter gomoku ;;
   btm | bottom) btm ;;
   ctop) ctop ;;

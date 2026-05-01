@@ -70,6 +70,20 @@ test-api:
 test-frontend:
     cd frontend && npm test
 
+# Run Cypress end-to-end tests. Restarts the local cluster from a known
+# state first (gctl stop is a no-op if nothing's up; gctl start is
+# idempotent). Override the targets with CYPRESS_BASE_URL /
+# CYPRESS_API_BASE / CYPRESS_DB_URL to point at dev.gomoku.games or
+# another deployment, in which case skip the gctl dance and run cypress
+# directly: `cd frontend && npx cypress run --e2e`.
+test-cypress:
+    export SECRET="$(cat .secret)"; \
+    bin/gctl stop || true; \
+    bin/gctl start || exit $?; \
+    cd frontend && npx cypress run --e2e
+
+alias test-e2d := test-cypress
+
 # Run all tests across the monorepo
 test-all: test test-api test-frontend
 
@@ -192,8 +206,16 @@ jwt-secret:
     @openssl rand -base64 32
 
 # Canonical deploy: .env → migrations → images → Terraform → Honeycomb marker.
-deploy:
-    bin/deploy
+# Pass `production` (default) or `staging`. Each environment reads its own
+# {ENV}_DATABASE_URL / {ENV}_JWT_SECRET / {ENV}_CUSTOM_DOMAIN keys from
+# .env and lands in a separate Terraform state file under
+# gs://gomoku-tfstate/cloud-run/{env}/gomoku.
+#
+#   just deploy             → production (gomoku.us)
+#   just deploy staging     → staging (staging.gomoku.games), min=0/0
+#   bin/gctl start          → local dev (dev.gomoku.games via /etc/hosts)
+deploy environment="production":
+    bin/deploy {{ environment }}
 
 # (legacy) Terraform-only deploy, no DB migrations. Prefer `just deploy`.
 cr-init: docker-build-all-amd64

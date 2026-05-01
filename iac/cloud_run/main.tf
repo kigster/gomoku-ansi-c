@@ -6,15 +6,32 @@ terraform {
       version = "~> 5.0"
     }
   }
+  # Per-environment state lives at a different `prefix` set via
+  # `-backend-config="prefix=cloud-run/${ENVIRONMENT}/gomoku"` at
+  # `terraform init` time. The committed default below is for production
+  # only — a `terraform init` without an override targets prod (matches
+  # the historical behaviour). bin/deploy / iac/cloud_run/deploy.sh
+  # always pass the explicit prefix so the two state files never share.
   backend "gcs" {
     bucket = "gomoku-tfstate"
-    prefix = "cloud-run/gomoku"
+    prefix = "cloud-run/production/gomoku"
   }
 }
 
 provider "google" {
   project = var.project_id
   region  = var.region
+}
+
+# Production keeps its historical bare names (`gomoku-api`, `gomoku-httpd`)
+# so the deploy.sh refactor doesn't force a destroy/recreate of the
+# in-flight production services. Non-prod environments append `-${env}`
+# (e.g. `gomoku-api-staging`) so multiple environments can coexist in the
+# same project without name collision.
+locals {
+  name_suffix = var.environment == "production" ? "" : "-${var.environment}"
+  api_name    = "gomoku-api${local.name_suffix}"
+  httpd_name  = "gomoku-httpd${local.name_suffix}"
 }
 
 # Enable APIs
@@ -47,7 +64,7 @@ resource "google_artifact_registry_repository" "repo" {
 # ──────────────────────────────────────────────
 
 resource "google_cloud_run_v2_service" "httpd" {
-  name     = "gomoku-httpd"
+  name     = local.httpd_name
   location = var.region
   # INGRESS_TRAFFIC_ALL + IAM-restricted invoker is the canonical Cloud-Run-
   # to-Cloud-Run pattern. INGRESS_TRAFFIC_INTERNAL_ONLY rejects the api's
@@ -59,8 +76,8 @@ resource "google_cloud_run_v2_service" "httpd" {
 
   template {
     scaling {
-      min_instance_count = var.min_instances
-      max_instance_count = var.max_instances
+      min_instance_count = var.httpd_min_instances
+      max_instance_count = var.httpd_max_instances
     }
 
     containers {
@@ -112,20 +129,18 @@ resource "google_cloud_run_v2_service" "httpd" {
 # ──────────────────────────────────────────────
 
 resource "google_cloud_run_v2_service" "api" {
-  name     = "gomoku-api"
+  name     = local.api_name
   location = var.region
   ingress  = "INGRESS_TRAFFIC_ALL"
 
   template {
     scaling {
-      # Keep at least one instance warm so app.gomoku.games loads instantly.
-      # FastAPI cold-start under uvicorn + asyncpg pool init + telemetry SDK
-      # bootstrap is several seconds — long enough that an unwarmed visitor
-      # hits a blank tab while the container spins up. The cost of one
-      # always-on small Cloud Run instance is marginal compared to the UX
-      # hit, especially while traffic is low.
-      min_instance_count = 1
-      max_instance_count = 5
+      # Production keeps min=1 so the front page loads instantly (cold-start
+      # for uvicorn + asyncpg pool init + telemetry SDK is several seconds —
+      # long enough for an unwarmed visitor to hit a blank tab). Staging
+      # defaults to min=0 to keep the bill at zero when nobody's poking it.
+      min_instance_count = var.api_min_instances
+      max_instance_count = var.api_max_instances
     }
 
     containers {
@@ -157,7 +172,7 @@ resource "google_cloud_run_v2_service" "api" {
 
       env {
         name  = "ENVIRONMENT"
-        value = "production"
+        value = var.environment
       }
 
       env {
@@ -173,6 +188,15 @@ resource "google_cloud_run_v2_service" "api" {
       env {
         name  = "HONEYCOMB_DATASET"
         value = var.honeycomb_dataset
+      }
+
+      # Multiplayer invite URLs are built from CUSTOM_DOMAIN (see
+      # api/app/config.py::effective_domain). Production uses gomoku.us,
+      # staging uses staging.gomoku.games — we stamp it via TF so the
+      # api never has to guess from the Cloud Run service URL.
+      env {
+        name  = "CUSTOM_DOMAIN"
+        value = var.custom_domain
       }
 
       startup_probe {
@@ -194,7 +218,12 @@ resource "google_cloud_run_v2_service" "api" {
       }
     }
 
-    # Async — can handle many concurrent requests
+    # Async + asyncpg pool: one api instance can comfortably hold 80
+    # concurrent requests in flight, each fanning out to a dedicated
+    # gomoku-httpd worker (which is single-threaded with concurrency=1).
+    # This number is the load-shape contract between the two services:
+    # to support 1 api instance fully saturated you need
+    # var.httpd_max_instances >= 80.
     max_instance_request_concurrency = 80
   }
 

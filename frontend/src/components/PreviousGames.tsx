@@ -10,6 +10,11 @@ interface GameEntry {
   human_time_s: number
   ai_time_s: number
   played_at: string
+  game_type: 'ai' | 'multiplayer'
+  opponent_username: string
+  elo_before: number | null
+  elo_after: number | null
+  opponent_elo_before: number | null
 }
 
 interface PreviousGamesProps {
@@ -96,46 +101,98 @@ export default function PreviousGames ({
             <thead>
               <tr className='border-b border-neutral-700 text-[14px] text-neutral-500'>
                 <th className='py-2 pr-4 text-left font-medium'>Username</th>
+                <th className='py-2 pr-4 text-left font-medium'>Opponent</th>
                 <th className='py-2 pr-4 text-left font-medium'>Date</th>
                 <th className='py-2 pr-4 text-left font-medium'>Status</th>
+                <th className='py-2 pr-4 text-right font-medium'>Elo</th>
+                <th className='py-2 pr-4 text-right font-medium'>Δ</th>
                 <th className='py-2 pr-4 text-right font-medium'>Your Score</th>
                 <th className='py-2 pr-4 text-right font-medium'>Your Time (s)</th>
-                <th className='py-2 pr-4 text-right font-medium'>AI Time (s)</th>
-                <th className='py-2 pr-4 text-right font-medium'>AI Depth</th>
-                <th className='py-2 text-right font-medium'>Download Game</th>
+                <th className='py-2 pr-4 text-right font-medium'>Opponent's Time (s)</th>
+                <th className='py-2 text-right font-medium'>Game</th>
               </tr>
             </thead>
             <tbody>
-              {games.map(game => (
-                <tr
-                  key={game.id}
-                  className='border-b border-neutral-700/40 text-[14px]'
-                >
-                  <td className='py-2.5 pr-4 text-white'>{game.username}</td>
-                  <td className='whitespace-nowrap py-2.5 pr-4 text-neutral-400'>
-                    {new Date(game.played_at).toLocaleDateString('en-US', {
-                      month: '2-digit',
-                      day: '2-digit',
-                      year: 'numeric'
-                    })}
-                  </td>
-                  <td className={`py-2.5 pr-4 font-semibold ${game.won ? 'text-amber-400' : 'text-red-400'}`}>
-                    {game.won ? 'Won' : 'Lost'}
-                  </td>
-                  <td className='py-2.5 pr-4 text-right font-mono text-neutral-300'>{game.score}</td>
-                  <td className='py-2.5 pr-4 text-right font-mono text-neutral-400'>{game.human_time_s.toFixed(1)}</td>
-                  <td className='py-2.5 pr-4 text-right font-mono text-neutral-400'>{game.ai_time_s.toFixed(1)}</td>
-                  <td className='py-2.5 pr-4 text-right font-mono text-neutral-400'>{game.depth}</td>
-                  <td className='py-2.5 text-right'>
-                    <button
-                      onClick={() => handleDownload(game)}
-                      className='cursor-pointer text-xs text-amber-400 underline transition-colors hover:text-amber-300'
-                    >
-                      JSON
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {games.map(game => {
+                const isMultiplayer = game.game_type === 'multiplayer'
+                const opponentLabel = isMultiplayer
+                  ? `@${game.opponent_username}`
+                  : 'AI'
+                const eloAfter = game.elo_after
+                const eloDelta =
+                  game.elo_after !== null && game.elo_before !== null
+                    ? game.elo_after - game.elo_before
+                    : null
+                const deltaText =
+                  eloDelta === null
+                    ? '—'
+                    : eloDelta > 0
+                      ? `+${eloDelta}`
+                      : `${eloDelta}`
+                const deltaClass =
+                  eloDelta === null
+                    ? 'text-neutral-500'
+                    : eloDelta > 0
+                      ? 'text-amber-400'
+                      : eloDelta < 0
+                        ? 'text-red-400'
+                        : 'text-neutral-400'
+                return (
+                  <tr
+                    key={game.id}
+                    className='border-b border-neutral-700/40 text-[14px]'
+                  >
+                    <td className='py-2.5 pr-4 text-white'>{game.username}</td>
+                    <td className='py-2.5 pr-4 text-neutral-300'>{opponentLabel}</td>
+                    <td className='whitespace-nowrap py-2.5 pr-4 text-neutral-400'>
+                      {new Date(game.played_at).toLocaleDateString('en-US', {
+                        month: '2-digit',
+                        day: '2-digit',
+                        year: 'numeric'
+                      })}
+                    </td>
+                    <td className={`py-2.5 pr-4 font-semibold ${game.won ? 'text-amber-400' : 'text-red-400'}`}>
+                      {game.won ? 'Won' : 'Lost'}
+                    </td>
+                    <td className='py-2.5 pr-4 text-right font-mono text-neutral-200'>
+                      {eloAfter ?? '—'}
+                    </td>
+                    <td className={`py-2.5 pr-4 text-right font-mono ${deltaClass}`}>
+                      {deltaText}
+                    </td>
+                    <td className='py-2.5 pr-4 text-right font-mono text-neutral-300'>
+                      {isMultiplayer ? '' : game.score}
+                    </td>
+                    <td className='py-2.5 pr-4 text-right font-mono text-neutral-400'>{game.human_time_s.toFixed(1)}</td>
+                    <td className='py-2.5 pr-4 text-right font-mono text-neutral-400'>{game.ai_time_s.toFixed(1)}</td>
+                    <td className='py-2.5 text-right'>
+                      <button
+                        onClick={() => handleDownload(game)}
+                        className='inline-flex items-center gap-1 cursor-pointer text-xs text-amber-400 underline transition-colors hover:text-amber-300'
+                        aria-label='Download game JSON'
+                      >
+                        <svg
+                          xmlns='http://www.w3.org/2000/svg'
+                          width='14'
+                          height='14'
+                          viewBox='0 0 24 24'
+                          fill='none'
+                          stroke='currentColor'
+                          strokeWidth='2'
+                          strokeLinecap='round'
+                          strokeLinejoin='round'
+                          aria-hidden='true'
+                        >
+                          <path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' />
+                          <polyline points='7 10 12 15 17 10' />
+                          <line x1='12' y1='15' x2='12' y2='3' />
+                        </svg>
+                        Game
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

@@ -113,7 +113,7 @@ function daemons-start() {
 
   ${flag_verbose} && echo -e "${txtylw}Starting ${nproc} ${GOMOKUD_BINARY} processes...${clr}"
 
-  [[ -f ${GOMOKUD_BINARY} ]] || { make all; }
+  [[ -f ${GOMOKUD_BINARY} ]] || { make -C gomoku-c install; }
 
   mkdir -p log
 
