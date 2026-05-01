@@ -2,27 +2,26 @@
 
 # Gomoku (Five-in-a-Row)
 
-Three ways to play Gomoku in one repo! 
+Many ways to play Gomoku in one repo! 
 
-* A **Fast, compiles on any system that has a C99-compaatible compiler**, TTY Terminal Gomoku Game and the logic "brain". This module is what plays as "AI" against humans, and so it's written in C to optimize the performance. 
+1. A **Fast, compiles on any system that has a C99-compaatible compiler**, TTY Terminal Gomoku Game and the logic "brain". This module is what plays as "AI" against humans, and so it's written in C to optimize the performance. 
 
-* **Full multi-user tournament-ready web version.** — This version gets deployed to a cloud and runs there burning some number of dollars, but premium features may come in a few that would help pay for hosting.j
+2. **Full multi-user tournament-ready web version.** — This version gets deployed to a cloud and runs. Play online at **[gomoku.games](https://app.gomoku.games)**. You can play with another human, or you can play against the AI.
+
     The distributed game architecture is much different than a single-binery TUI version:
 
   - A ReactJS frontend compiled into static HTML/CSS/JSS SPA (at least 1 container is always running)
   - A Python/Pydantic-based FastAPI backend, that uses `pg-async` library, and provides Alembic migrations, and a proper peristence mechanism
   - A C-based binary `gomoku-httpd` which, unlike `gomoku` has no UI and is meant to run as an httpd daemon. However, this service is very special 
-    in a sense that i;'s
-    listening on a particular port. It can only process one move, so you should run as many of those  
-    as you expect concurrent players (although putting envoy proxy in front of gomoku-httpd might help 
-    shrink it a litle bit).
+    in a sense that it's listening on a particular port. Each process can only handle a single move at a time, so you should run as many of those  
+    as you expect concurrent players (although putting envoy proxy in front of gomoku-httpd might help shrink it a litle bit). Google Run handles this
+    automatically
 
-* , global leaderboard. Play online at **[gomoku.games](https://app.gomoku.games)**.
+3. [Gomocup](https://gomocup.org) compatible binaries are also provided, to engage in this competition.
 
-## Summary
+## Going a bit Deeper
 
-This monorepo ships **four ways to play** the same Gomoku engine,
-all backed by one C99 codebase under `gomoku-c/`:
+This monorepo ships **four ways to play** the same Gomoku engine, all backed by one C99 codebase under `gomoku-c/`:
 
 | # | Mode | Where you play | Deep dive |
 |---|---|---|---|
@@ -31,8 +30,7 @@ all backed by one C99 codebase under `gomoku-c/`:
 | 3 | Human vs Human on the web | Invite link, both players in browser | [doc/03-human-vs-human-web.md](doc/03-human-vs-human-web.md) |
 | 4 | Gomocup tournament brain | `pbrain-kig-standard*.exe` submitted to <https://gomocup.org/> | [doc/04-gomocup-submission.md](doc/04-gomocup-submission.md) |
 
-The sections that follow give a one-paragraph orientation for each.
-Click through to the linked doc for the long form.
+The sections that follow give a one-paragraph orientation for each. Click through to the linked doc for the long form.
 
 ### 1. Human vs AI in the Terminal (TUI)
 
@@ -97,7 +95,7 @@ build, packaging, and submission detail.
 ### Rating system
 
 All four modes feed into a unified rating system that mirrors
-**Gomocup's own**: BayesElo with `eloAdvantage=0`, `eloDraw=0.01`,
+**Gomocup's own**: [BayesElo](https://link.springer.com/chapter/10.1007/978-3-540-87608-3_11) with `eloAdvantage=0`, `eloDraw=0.01`,
 default prior — exactly the parameters Gomocup uses to rank
 submitted brains. AI tiers are first-class rated subjects (so a win
 against a depth-5 AI grants more rating than a win against depth-2),
@@ -108,7 +106,7 @@ rollout in [doc/gomocup-elo-rankings.md](doc/gomocup-elo-rankings.md).
 
 ---
 
-## 1. Build and Play the Terminal Game
+## 1. Build and Play the Terminal Game (TUI)
 
 The terminal game is a standalone C99 binary with **zero runtime dependencies** — just a C compiler and Make.
 
@@ -183,6 +181,10 @@ just evals-ruby         # Ruby tournament against httpd cluster via envoy
 See [doc/ai-engine.md](doc/ai-engine.md) for algorithm details and threat scoring.
 
 ## 2. Run the Networked Cluster Locally
+
+> [!IMPORTANT]
+> 
+> This is how you might want to run the web version locally on your mac laptop.
 
 The full stack runs on your dev machine: nginx for TLS, envoy for load balancing across a pool of `gomoku-httpd` workers, FastAPI for auth/scoring/leaderboard, and a Vite dev server for the React frontend.
 
@@ -292,7 +294,7 @@ graph TB
 
 Each `gomoku-httpd` worker is single-threaded, so envoy distributes requests across the pool using least-request load balancing. See [doc/deployment.md](doc/deployment.md) for the full local cluster guide.
 
-### justfile Recipes
+### `justfile` Recipes
 
 ```bash
 just --list             # See all recipes
