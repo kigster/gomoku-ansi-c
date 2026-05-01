@@ -66,7 +66,7 @@ brew install mingw-w64                      # macOS
 # or: apt install mingw-w64                  # Linux
 cd gomoku-c
 make gomocup-win
-ls bin/pbrain-kig-standard64.exe bin/pbrain-kig-standard-x86.exe
+ls bin/pbrain-kig-standard-x86-64.exe bin/pbrain-kig-standard-x86-32.exe
 ```
 
 Verify there are no third-party DLL dependencies:
@@ -86,9 +86,9 @@ ls bin/pbrain-kig-standard.zip
 
 The ZIP contains:
 
-- `pbrain-kig-standard64.exe` — Win64 (filename must contain `64` per
+- `pbrain-kig-standard-x86-64.exe` — Win64 (filename must contain `64` per
   Gomocup rules)
-- `pbrain-kig-standard-x86.exe` — Win32
+- `pbrain-kig-standard-x86-32.exe` — Win32
 - `README.txt` stamped with the git SHA and build timestamp
 
 Total size is a few hundred KB, well under the 256 MB Gomocup
@@ -158,8 +158,8 @@ before packaging:
 
 ```bash
 brew install --cask --no-quarantine wine-stable     # macOS, once
-printf 'START 15\nBEGIN\nEND\n' | wine64 bin/pbrain-kig-standard64.exe
-printf 'START 15\nBEGIN\nEND\n' | wine   bin/pbrain-kig-standard-x86.exe
+printf 'START 15\nBEGIN\nEND\n' | wine64 bin/pbrain-kig-standard-x86-64.exe
+printf 'START 15\nBEGIN\nEND\n' | wine   bin/pbrain-kig-standard-x86-32.exe
 ```
 
 Wine isn't strictly required — the Windows-VM submission step
