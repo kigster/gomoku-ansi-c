@@ -1,21 +1,20 @@
- -[![C99 Test Suite](https://github.com/kigster/gomoku-ansi-c/actions/workflows/c99.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/c99.yml) [![API Tests](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-test.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-test.yml) [![API Lint](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-lint.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-lint.yml) [![Frontend Tests](https://github.com/kigster/gomoku-ansi-c/actions/workflows/frontend.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/frontend.yml)
+[![C99 Test Suite](https://github.com/kigster/gomoku-ansi-c/actions/workflows/c99.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/c99.yml) [![API Tests](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-test.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-test.yml) [![API Lint](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-lint.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-lint.yml) [![Frontend Tests](https://github.com/kigster/gomoku-ansi-c/actions/workflows/frontend.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/frontend.yml)
 
 # Gomoku (Five-in-a-Row)
 
-Many ways to play Gomoku in one repo! 
+This is a monorepo that contains at least five or six languages to create multi-purpose Gomoku repsotory.
+
+The following can be built by cloning this repo:
 
 1. A **Fast, compiles on any system that has a C99-compaatible compiler**, TTY Terminal Gomoku Game and the logic "brain". This module is what plays as "AI" against humans, and so it's written in C to optimize the performance. 
 
 2. **Full multi-user tournament-ready web version.** — This version gets deployed to a cloud and runs. Play online at **[gomoku.games](https://app.gomoku.games)**. You can play with another human, or you can play against the AI.
 
-    The distributed game architecture is much different than a single-binery TUI version:
+  The distributed game architecture is much different than a single-binery TUI version:
 
   - A ReactJS frontend compiled into static HTML/CSS/JSS SPA (at least 1 container is always running)
   - A Python/Pydantic-based FastAPI backend, that uses `pg-async` library, and provides Alembic migrations, and a proper peristence mechanism
-  - A C-based binary `gomoku-httpd` which, unlike `gomoku` has no UI and is meant to run as an httpd daemon. However, this service is very special 
-    in a sense that it's listening on a particular port. Each process can only handle a single move at a time, so you should run as many of those  
-    as you expect concurrent players (although putting envoy proxy in front of gomoku-httpd might help shrink it a litle bit). Google Run handles this
-    automatically
+  - A C-based binary `gomoku-httpd` which, unlike `gomoku` has no UI and is meant to run as an httpd daemon. However, this service is very special in a sense that it's listening on a particular port. Each process can only handle a single move at a time, so you should run as many of those as you expect concurrent players (although putting envoy proxy in front of gomoku-httpd might help shrink it a litle bit). Google Run handles this automatically
 
 3. [Gomocup](https://gomocup.org) compatible binaries are also provided, to engage in this competition.
 
@@ -34,75 +33,55 @@ The sections that follow give a one-paragraph orientation for each. Click throug
 
 ### 1. Human vs AI in the Terminal (TUI)
 
-A single ANSI-coloured C99 binary (`bin/gomoku`) with **zero runtime
-dependencies**. Arrow keys to move, `Space`/`Enter` to place,
-`u` to undo, `q` to quit. Strength is controlled by `--depth`
-(1–10 plies of alpha-beta look-ahead) and `--radius` (1–5 cells
-around existing stones the candidate generator considers); a wall
-clock cap is set with `--timeout`. Saves and replays games as JSON
-(`-j FILE` / `-p FILE`), including AI-vs-AI runs in headless mode
-(`-q`). Build with `just build-game`. Full CLI reference in
+A single ANSI-coloured C99 binary (`bin/gomoku`) with **zero runtime dependencies**. 
+
+- Arrow keys to move, `Space`/`Enter` to place,
+`u` to undo, `q` to quit. 
+
+- Strength pf play is controlled by `--depth`
+(1–10 plies of alpha-beta look-ahead) and `--radius` (1–5 cells around existing stones the candidate generator considers); a wall clock cap is set with `--timeout`. Saves and replays games as JSON
+
+- (`-j FILE` / `-p FILE`), including AI-vs-AI runs in headless mode
+
+- (`-q`). Build with `just build-game`. Full CLI reference in
+
 [doc/01-human-vs-ai-tui.md](doc/01-human-vs-ai-tui.md).
 
 <img src="doc/img/gomoku-human-vs-ai.png" width="700" border="1" style="border-radius: 10px"/>
 
 ### 2. Human vs AI on the Web
 
-A React SPA fronts the same C engine; FastAPI proxies each move to a
-pool of stateless `gomoku-httpd` workers behind envoy, while
-PostgreSQL holds users, history, and the leaderboard. The Settings
-panel exposes the same **depth** (2–5 in the web flow, capped to
-keep moves responsive) and **radius** (1–4) knobs as the TUI, plus
-an optional per-move **timeout** (30/60/120/300 s). Difficulty maps
-straight to AI strength: depth 5 with radius 3 is the upper
-"competent club player" tier, and depth 2 is "novice". Wins update
-your Elo against the AI tier you played; losses cost you Elo
-symmetrically. Full flow, screenshots, and API list in
+A React SPA fronts the same C engine; FastAPI proxies each move to a pool of stateless `gomoku-httpd` workers behind envoy, while PostgreSQL holds users, history, and the leaderboard. The Settings panel exposes the same **depth** (2–5 in the web flow, capped to keep moves responsive) and **radius** (1–4) knobs as the TUI, plus an optional per-move **timeout** (30/60/120/300 seconds). Difficulty maps
+straight to AI strength: depth 5 with radius 3 is the upper "competent club player" tier, and depth 2 is "novice". Wins update your Elo against the AI tier you played; losses cost you Elo symmetrically. Full flow, screenshots, and API list in availabable in this document: 
 [doc/02-human-vs-ai-web.md](doc/02-human-vs-ai-web.md).
 
 <img src="doc/img/gomoku-web-version.png" width="700" border="1" style="border-radius: 10px"/>
 
 ### 3. Human vs Human on the Web
 
-Two authenticated users play each other over a shared 6-character
-invite link (`/play/AB7K3X`). The host generates the link from the
-**New Multiplayer Game** modal — both the URL and the bare code are
-copyable, and the host can either pick the colour up front or defer
-to the guest. Invites expire after **15 minutes**. There are no
-websockets; both clients short-poll a single `multiplayer_games` row
-on a wall-clock-tiered cadence (300 ms for the first 10 min, then
-2/3/5 s) with optimistic concurrency on a per-row version counter.
-Win/loss surfaces in-game and writes two cross-linked `games` rows
-that show up in both players' history. Multiplayer games rate
-against your **opponent's actual Elo** rather than an AI tier — see
+Two authenticated users play each other over a shared 6-character invite link (`/play/AB7K3X`). The host generates the link from the **New Multiplayer Game** modal — both the URL and the bare code are copyable, and the host can either pick the colour up front or defer to the guest. Invites expire after **15 minutes**. 
+
+#### Inplementation Note
+
+There are no websockets (yet); both clients short-poll a single `multiplayer_games` row on a wall-clock-tiered cadence (300 ms for the first 10 min, then
+2/3/5 s) with optimistic concurrency on a per-row version counter. Win/loss surfaces in-game and writes two cross-linked `games` rows that show up in both players' history. Multiplayer games rate against your **opponent's actual Elo** rather than an AI tier — see
 [doc/03-human-vs-human-web.md](doc/03-human-vs-human-web.md).
 
 <img src="doc/img/gomoku-web-menu.png" width="700" border="1" style="border-radius: 10px"/>
 
 ### 4. Gomocup Tournament Submission
 
-`pbrain-kig-standard` is a Gomocup-protocol brain wrapping the same
-engine, targeting the **Standard** category at <https://gomocup.org/>
-(15×15 board, exact five-in-a-row, overlines do not win). Native
-binary builds with `make pbrain-kig-standard`; cross-compiled Win64
-and Win32 `.exe` files with `make gomocup-win`; submission ZIP with
-`make gomocup-zip`. Default search depth is 5, radius 3, with a
-200 ms safety margin under the manager's deadline. The brain links
-the engine with `-DNO_JSON` so it has zero dependencies. See
-[doc/04-gomocup-submission.md](doc/04-gomocup-submission.md) for
-build, packaging, and submission detail.
+`pbrain-kig-standard` is a Gomocup-protocol brain wrapping the same engine, targeting the **Standard** category at <https://gomocup.org/>, (15×15 board, exact five-in-a-row, overlines do not win). 
+
+Native binary builds with `make pbrain-kig-standard`; cross-compiled Win64 and Win32 `.exe` files with `make gomocup-win`; submission ZIP with `make gomocup-zip`. Default search depth is 5, radius 3, with a 200 ms safety margin under the manager's deadline.
+
+The brain links the engine with `-DNO_JSON` so it has zero dependencies. See
+[doc/04-gomocup-submission.md](doc/04-gomocup-submission.md) for build, packaging, and submission detail.
 
 ### Rating system
 
-All four modes feed into a unified rating system that mirrors
-**Gomocup's own**: [BayesElo](https://link.springer.com/chapter/10.1007/978-3-540-87608-3_11) with `eloAdvantage=0`, `eloDraw=0.01`,
-default prior — exactly the parameters Gomocup uses to rank
-submitted brains. AI tiers are first-class rated subjects (so a win
-against a depth-5 AI grants more rating than a win against depth-2),
-and human-vs-human games rate against the opponent's actual Elo. A
-weekly batch job re-fits the entire history with BayesElo so live
-classical-Elo updates converge on the canonical numbers. Design and
-rollout in [doc/gomocup-elo-rankings.md](doc/gomocup-elo-rankings.md).
+All four modes feed into a unified rating system that mirrors **Gomocup's own**: [BayesElo](https://link.springer.com/chapter/10.1007/978-3-540-87608-3_11) with `eloAdvantage=0`, `eloDraw=0.01`, default prior — exactly the parameters Gomocup uses to rank submitted brains. AI tiers are first-class rated subjects (so a win against a depth-5 AI grants more rating than a win against depth-2),
+and human-vs-human games rate against the opponent's actual Elo. A weekly batch job re-fits the entire history with BayesElo so live classical-Elo updates converge on the canonical numbers. Design and rollout in [doc/gomocup-elo-rankings.md](doc/gomocup-elo-rankings.md).
 
 ---
 
@@ -179,6 +158,8 @@ just evals-ruby         # Ruby tournament against httpd cluster via envoy
 ```
 
 See [doc/ai-engine.md](doc/ai-engine.md) for algorithm details and threat scoring.
+
+---
 
 ## 2. Run the Networked Cluster Locally
 
@@ -310,6 +291,8 @@ just deploy             # Full Cloud Run deploy: migrate DB, build, push, apply
 
 For a fresh checkout, `bin/db-test-setup --recreate` drops/creates the local `gomoku_test` database and runs all migrations against it.
 
+---
+
 ## 3. Deploy to Production
 
 The application needs two containers and a PostgreSQL database. All three deployment options below assume you outsource PostgreSQL to a managed provider.
@@ -328,7 +311,7 @@ The application needs two containers and a PostgreSQL database. All three deploy
 
 Serverless, scales to zero, cheapest for low/medium traffic. Managed by Terraform; orchestrated by `bin/deploy`.
 
-Two Cloud Run services:
+#### Two Cloud Run services:
 
 - **gomoku-api** — FastAPI + React SPA, handles auth, scoring, leaderboard, and proxies game moves to the engine
 - **gomoku-httpd** — C game engine, single-threaded, concurrency=1, auto-scales per demand
@@ -574,4 +557,4 @@ MIT License. Copyright 2025-2026, Konstantin Gredeskoul.
 
 - [Claude](https://claude.ai) (Sonnet, Opus) -- AI pair programming partner
 - Google Test framework for C++ testing
-- Pattern recognition adapted from traditional Gomoku AI research
+- Pattern recognition adapted from traditional Gomoku AI research, PDFs of whidh together with paper sumaries is included in the repo.
