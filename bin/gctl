@@ -772,7 +772,7 @@ cmd_ps() {
 cmd_observe() {
   local tool="${1:-btop}"
   case "$tool" in
-  htop) htop -F "gomoku" ;;
+  htop) htop -F "gomoku|cypress" ;;
   btop) btop --filter gomoku ;;
   btm | bottom) btm ;;
   ctop) ctop ;;

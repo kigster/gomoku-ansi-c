@@ -43,12 +43,10 @@ HTTPSERVER_PLATFORM	= -DEPOLL
 endif
 DAEMON_CFLAGS    	= $(CFLAGS) -I$(HTTPSERVER_DIR) $(HTTPSERVER_PLATFORM)
 
+DEFAULT_ALL		= $(TARGET) $(DAEMON_TARGET) $(DAEMON_CLIENT_TARGET)
 
 # Test HTTP client
 DAEMON_CLIENT_TARGET 	= $(BINDIR)/$(DAEMON_CLIENT)
-
-# Build terminal gomoku and gomoku-httpd + test client
-DEFAULT_ALL		= $(TARGET) $(DAEMON_TARGET) $(DAEMON_CLIENT_TARGET)
 
 TEST_HTTP_SRC    	= src/net/test_client.c src/net/test_client_utils.c
 
@@ -85,11 +83,6 @@ BUILD_DIR = build
 $(BINDIR):
 		@mkdir -p $(BINDIR)
 
-all: 		$(DEFAULT_ALL)
-
-install: 	all
-		cp -pv $(DEFAULT_ALL) ../bin
-
 docker-install: all
 		cp -pv $(DEFAULT_ALL) ./bin
 
@@ -109,12 +102,24 @@ $(JSONC_LIB):
 $(TARGET): $(JSONC_LIB) $(OBJECTS) | $(BINDIR)
 		$(CC) $(OBJECTS) $(LDFLAGS) -o $(TARGET)
 
-# Daemon targets (must come before generic src/%.o rule)
-gomoku-httpd: $(JSONC_LIB) $(DAEMON_CORE) $(DAEMON_NET) | $(BINDIR)
+# Daemon targets (must come before generic src/%.o rule). The file rule
+# is keyed off $(DAEMON_TARGET) (= bin/gomoku-httpd) so `make all` —
+# which depends on the path via $(DEFAULT_ALL) — can resolve it. The
+# bare `gomoku-httpd` is kept as a phony alias for backwards compat.
+$(DAEMON_TARGET): $(JSONC_LIB) $(DAEMON_CORE) $(DAEMON_NET) | $(BINDIR)
 		$(CC) $(DAEMON_CORE) $(DAEMON_NET) $(LDFLAGS) -lpthread -o $(DAEMON_TARGET)
+
+gomoku-httpd: $(DAEMON_TARGET)
 
 src/net/%.o: src/net/%.c | $(JSONC_LIB)
 		$(CC) $(DAEMON_CFLAGS) -c $< -o $@
+
+# Build terminal gomoku and gomoku-httpd + test client
+
+all: 		$(DEFAULT_ALL)
+
+install: 	all
+		cp -pv $(DEFAULT_ALL) ../bin
 
 # HTTP test client
 $(DAEMON_CLIENT_TARGET): $(TEST_HTTP_SRC) | $(BINDIR)
@@ -125,8 +130,6 @@ test-client: 	$(DAEMON_CLIENT_TARGET)
 # Generic src rules (net rule must come before gomoku rule)
 src/gomoku/%.o: src/gomoku/%.c | $(JSONC_LIB)
 		$(CC) $(CFLAGS) -c $< -o $@
-
-all: $(TARGET) gomoku-httpd test-client
 
 googletest:
 		@bash -c "./tests/tests-setup"

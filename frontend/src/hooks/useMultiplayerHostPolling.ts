@@ -4,6 +4,7 @@ import {
   type MultiplayerGameView,
   type MultiplayerGamePreview,
 } from '../lib/multiplayerClient'
+import { pollingIntervalForElapsedMs } from './pollingSchedule'
 
 interface Args {
   /** Auth token. Polling pauses when null. */
@@ -14,12 +15,6 @@ interface Args {
   stopWhenNotWaiting?: boolean
   /** Hard cap (ms) — stop after this elapsed wall time even if state is still 'waiting'. Default: 15 minutes. */
   maxAgeMs?: number
-  /** Initial poll interval (ms). Default: 100. */
-  baseIntervalMs?: number
-  /** Maximum backoff interval (ms). Default: 60000 (1 min) — safety cap so the geometric series never single-sleeps the entire 15-min budget. */
-  maxIntervalMs?: number
-  /** Backoff multiplier applied after each 304 / error. Default: 1.5. */
-  backoffFactor?: number
 }
 
 interface State {
@@ -35,18 +30,14 @@ interface State {
 
 /**
  * Polls `/multiplayer/{code}` for the **host** while they wait for a guest.
- * Implements the polling backoff requested by `doc/multiplayer-bugs.md` #5:
- * after each consecutive 304 the interval doubles up to `maxIntervalMs`,
- * resetting whenever the server sends a fresh body.
+ * Cadence is wall-clock-tiered (see `pollingSchedule.ts`): 300 ms for the
+ * first 10 minutes, then 2 s up to 30 min, 3 s up to 60 min, 5 s after.
  */
 export function useMultiplayerHostPolling ({
   token,
   code,
   stopWhenNotWaiting = true,
   maxAgeMs = 15 * 60 * 1000,
-  baseIntervalMs = 100,
-  maxIntervalMs = 60_000,
-  backoffFactor = 1.5,
 }: Args): State {
   const [view, setView] = useState<MultiplayerGameView | MultiplayerGamePreview | null>(null)
   const [secondsWaited, setSecondsWaited] = useState(0)
@@ -68,46 +59,41 @@ export function useMultiplayerHostPolling ({
     if (!token || !code) return
 
     let lastVersion: number | undefined = undefined
-    let intervalMs = baseIntervalMs
     let timeout: ReturnType<typeof setTimeout> | null = null
     const startedAt = Date.now()
 
     const tick = async () => {
       if (cancelledRef.current) return
-      if (Date.now() - startedAt >= maxAgeMs) {
+      const elapsed = Date.now() - startedAt
+      if (elapsed >= maxAgeMs) {
         setExpired(true)
         return
       }
       try {
         const v = await getGame(token, code, lastVersion)
         if (cancelledRef.current) return
-        if (v === null) {
-          // 304 — no change. Back off geometrically (capped).
-          intervalMs = Math.min(intervalMs * backoffFactor, maxIntervalMs)
-        } else {
+        if (v !== null) {
           lastVersion = v.version
           setView(v)
           setError(null)
-          intervalMs = baseIntervalMs
           if (stopWhenNotWaiting && v.state !== 'waiting') return
         }
       } catch (err) {
         if (!cancelledRef.current) {
           setError(err instanceof Error ? err.message : 'poll_failed')
-          intervalMs = Math.min(intervalMs * backoffFactor, maxIntervalMs)
         }
       }
       if (!cancelledRef.current) {
-        timeout = setTimeout(tick, intervalMs)
+        timeout = setTimeout(tick, pollingIntervalForElapsedMs(Date.now() - startedAt))
       }
     }
 
-    timeout = setTimeout(tick, intervalMs)
+    timeout = setTimeout(tick, pollingIntervalForElapsedMs(0))
     return () => {
       cancelledRef.current = true
       if (timeout) clearTimeout(timeout)
     }
-  }, [token, code, stopWhenNotWaiting, maxAgeMs, baseIntervalMs, maxIntervalMs])
+  }, [token, code, stopWhenNotWaiting, maxAgeMs])
 
   return { view, secondsWaited, expired, error }
 }

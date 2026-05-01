@@ -142,13 +142,12 @@ describe('ChooseGameTypeModal', () => {
     expect(mockNewGame).not.toHaveBeenCalled()
   })
 
-  it('Start with Another Player POSTs /multiplayer/new and shows the invite link', async () => {
+  it('picking Another Player auto-POSTs /multiplayer/new and shows the invite link', async () => {
     const user = userEvent.setup()
     mockNewGame.mockResolvedValueOnce(FAKE_GAME)
     renderModal()
 
     await user.click(screen.getByLabelText(/Another Player/i, { selector: 'input' }))
-    await user.click(screen.getByRole('button', { name: /^Start$/ }))
 
     await waitFor(() => {
       expect(mockNewGame).toHaveBeenCalledWith('test-token', { host_color: 'X' })
@@ -161,21 +160,25 @@ describe('ChooseGameTypeModal', () => {
 
   it('Opponent-chooses sends host_color: null', async () => {
     const user = userEvent.setup()
-    mockNewGame.mockResolvedValueOnce({
-      ...FAKE_GAME,
-      color_chosen_by: 'guest',
-      host: { ...FAKE_GAME.host, color: null },
-      your_color: null,
-    })
+    mockNewGame
+      // Initial auto-create with host_color='X'.
+      .mockResolvedValueOnce(FAKE_GAME)
+      // Re-create after switching to "Opponent will choose".
+      .mockResolvedValueOnce({
+        ...FAKE_GAME,
+        color_chosen_by: 'guest',
+        host: { ...FAKE_GAME.host, color: null },
+        your_color: null,
+      })
+    mockCancelGame.mockResolvedValue({ ...FAKE_GAME, state: 'cancelled' })
     renderModal()
     await user.click(screen.getByLabelText(/Another Player/i, { selector: 'input' }))
+    await waitFor(() => expect(mockNewGame).toHaveBeenCalledTimes(1))
     await user.click(
       screen.getByLabelText(/Opponent will choose/i, { selector: 'input' }),
     )
-    await user.click(screen.getByRole('button', { name: /^Start$/ }))
-
     await waitFor(() => {
-      expect(mockNewGame).toHaveBeenCalledWith('test-token', { host_color: null })
+      expect(mockNewGame).toHaveBeenLastCalledWith('test-token', { host_color: null })
     })
   })
 
@@ -187,7 +190,6 @@ describe('ChooseGameTypeModal', () => {
     renderModal({ onClose })
 
     await user.click(screen.getByLabelText(/Another Player/i, { selector: 'input' }))
-    await user.click(screen.getByRole('button', { name: /^Start$/ }))
     await waitFor(() =>
       expect(screen.getByText(/Waiting for your opponent to join/)).toBeInTheDocument(),
     )
@@ -249,7 +251,6 @@ describe('ChooseGameTypeModal', () => {
     mockNewGame.mockRejectedValueOnce(new Error('Network down'))
     renderModal()
     await user.click(screen.getByLabelText(/Another Player/i, { selector: 'input' }))
-    await user.click(screen.getByRole('button', { name: /^Start$/ }))
     expect(await screen.findByText('Network down')).toBeInTheDocument()
   })
 })

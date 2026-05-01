@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import ModalShell from './ModalShell'
 import CopyableLinkRow from './CopyableLinkRow'
 import {
@@ -58,6 +58,9 @@ export default function ChooseGameTypeModal ({
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [game, setGame] = useState<MultiplayerGameView | null>(null)
+  // Lifted out of JoinByCodeSection so the parent can grey the host's
+  // "Start" button while the user is typing an opponent's code.
+  const [joinValue, setJoinValue] = useState('')
 
   // Polling: only active once we have a created game.
   const { view: latest, secondsWaited, expired } = useMultiplayerHostPolling({
@@ -70,14 +73,18 @@ export default function ChooseGameTypeModal ({
   const active = (latest as MultiplayerGameView | null) ?? game
   const inWaitingPhase = !!active && active.state === 'waiting'
   const cancelledRemotely = !!active && active.state === 'cancelled'
+  const hasGuestJoined =
+    !!active && (active.state === 'in_progress' || !!active.guest)
+  const userIsJoining = joinValue.trim().length > 0
 
-  // Side effects driven by the polled state — kept out of render to avoid
-  // triggering parent setState during a child render pass.
+  // Auto-navigate once the guest has joined our hosted game — but not if
+  // the user is also typing into the paste-opponent-code input (in which
+  // case they're switching to the join flow and should click Join).
   useEffect(() => {
-    if (latest && latest.state === 'in_progress' && game) {
+    if (latest && latest.state === 'in_progress' && game && !userIsJoining) {
       onGuestJoined(game.code)
     }
-  }, [latest, game, onGuestJoined])
+  }, [latest, game, onGuestJoined, userIsJoining])
 
   useEffect(() => {
     if (cancelledRemotely) onClose()
@@ -101,26 +108,74 @@ export default function ChooseGameTypeModal ({
     }
   }, [expired, game, authToken, onClose])
 
-  // ----- Handlers --------------------------------------------------------
+  // ----- Auto-create the invite the moment "Another Player" is picked ----
+  //
+  // The host should not have to click "Start" to see their link — the
+  // paste-opponent-code box and the host's own auto-generated link must
+  // both be visible at once. When the host changes their colour choice we
+  // cancel the existing invite and create a fresh one (so the link always
+  // matches the visible config).
+  const desiredHostColor: Color | null = chooser === 'host' ? hostColor : null
+  const configKey = gameType === 'human' ? `human:${desiredHostColor ?? 'guest'}` : 'ai'
+  const createdKeyRef = useRef<string | null>(null)
 
-  const handleStart = useCallback(async () => {
-    if (gameType === 'ai') {
-      onAIChosen()
+  useEffect(() => {
+    if (gameType !== 'human') {
+      // Switched back to AI — cancel any in-flight invite and clear it.
+      if (createdKeyRef.current && game) {
+        const oldCode = game.code
+        void apiCancelGame(authToken, oldCode).catch(() => {})
+        setGame(null)
+      }
+      createdKeyRef.current = null
       return
     }
+    if (createdKeyRef.current === configKey) return
+
+    let cancelled = false
+    const previousCode = game?.code
+    createdKeyRef.current = configKey
     setCreating(true)
     setCreateError(null)
-    try {
-      const created = await apiNewGame(authToken, {
-        host_color: chooser === 'host' ? hostColor : null,
-      })
-      setGame(created)
-    } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Could not create game')
-    } finally {
-      setCreating(false)
+    ;(async () => {
+      if (previousCode) {
+        try {
+          await apiCancelGame(authToken, previousCode)
+        } catch {
+          // Lazy-expire path covers it eventually.
+        }
+      }
+      try {
+        const created = await apiNewGame(authToken, { host_color: desiredHostColor })
+        if (!cancelled) setGame(created)
+      } catch (err) {
+        if (!cancelled) {
+          setCreateError(
+            err instanceof Error ? err.message : 'Could not create game',
+          )
+          createdKeyRef.current = null // allow retry on next render
+        }
+      } finally {
+        if (!cancelled) setCreating(false)
+      }
+    })()
+    return () => {
+      cancelled = true
     }
-  }, [gameType, chooser, hostColor, authToken, onAIChosen])
+    // game?.code intentionally omitted: we only re-run when the desired
+    // config changes, not when the created game's code arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configKey, gameType, authToken])
+
+  // ----- Handlers --------------------------------------------------------
+
+  const handleStartAI = useCallback(() => {
+    onAIChosen()
+  }, [onAIChosen])
+
+  const handleStartHost = useCallback(() => {
+    if (game && hasGuestJoined) onGuestJoined(game.code)
+  }, [game, hasGuestJoined, onGuestJoined])
 
   const handleClose = useCallback(async () => {
     if (game && active && active.state === 'waiting') {
@@ -158,7 +213,7 @@ export default function ChooseGameTypeModal ({
           </div>
         </fieldset>
 
-        {gameType === 'human' && !inWaitingPhase && (
+        {gameType === 'human' && (
           <>
             <fieldset>
               <legend className='mb-2 text-sm font-medium text-neutral-300'>
@@ -211,43 +266,64 @@ export default function ChooseGameTypeModal ({
           </p>
         )}
 
-        {!inWaitingPhase && (
+        {gameType === 'ai' && (
           <div className='flex justify-end pt-2'>
             <button
               type='button'
-              onClick={handleStart}
-              disabled={creating}
-              className='rounded-md bg-amber-500 px-5 py-2.5 text-sm font-bold text-neutral-900 shadow transition hover:bg-amber-400 disabled:cursor-wait disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-amber-300/50'
+              onClick={handleStartAI}
+              className='rounded-md bg-amber-500 px-6 py-3 text-base font-bold text-neutral-900 shadow transition hover:bg-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-300/50'
             >
-              {creating ? 'Creating link…' : 'Start'}
+              Start
             </button>
           </div>
         )}
 
-        {inWaitingPhase && active && (
-          <WaitingSection
-            inviteUrl={active.invite_url}
-            secondsWaited={secondsWaited}
-          />
-        )}
-
         {gameType === 'human' && (
-          <JoinByCodeSection
-            ownCode={game?.code ?? null}
-            onJoin={async code => {
-              // If the host is currently waiting on their own game, mark
-              // it cancelled before pivoting to the opponent's game.
-              if (game && active && active.state === 'waiting') {
-                try {
-                  await apiCancelGame(authToken, game.code)
-                } catch {
-                  // Lazy-expire path covers it eventually.
-                }
+          <>
+            <InviteSection
+              inviteUrl={
+                inWaitingPhase && active ? active.invite_url : null
               }
-              onGuestJoined(code)
-            }}
-            disabled={creating}
-          />
+              code={game?.code ?? null}
+              creating={creating}
+              hasGuestJoined={hasGuestJoined}
+              secondsWaited={secondsWaited}
+            />
+
+            <div className='flex justify-end pt-2'>
+              <button
+                type='button'
+                onClick={handleStartHost}
+                disabled={!hasGuestJoined || userIsJoining || creating}
+                className={`rounded-md px-6 py-3 text-base font-bold shadow transition focus:outline-none focus:ring-2 focus:ring-amber-300/50 ${
+                  !hasGuestJoined || userIsJoining || creating
+                    ? 'cursor-not-allowed bg-neutral-700 text-neutral-500'
+                    : 'bg-amber-500 text-neutral-900 hover:bg-amber-400'
+                }`}
+              >
+                Start
+              </button>
+            </div>
+
+            <JoinByCodeSection
+              value={joinValue}
+              onChange={setJoinValue}
+              ownCode={game?.code ?? null}
+              onJoin={async code => {
+                // If the host is currently waiting on their own game, mark
+                // it cancelled before pivoting to the opponent's game.
+                if (game && active && active.state === 'waiting') {
+                  try {
+                    await apiCancelGame(authToken, game.code)
+                  } catch {
+                    // Lazy-expire path covers it eventually.
+                  }
+                }
+                onGuestJoined(code)
+              }}
+              disabled={creating}
+            />
+          </>
         )}
       </div>
     </ModalShell>
@@ -295,17 +371,22 @@ function RadioCard ({
 }
 
 function JoinByCodeSection ({
+  value,
+  onChange,
   ownCode,
   onJoin,
   disabled,
 }: {
+  /** Controlled value — lifted to parent so the host's "Start" button can grey while typing. */
+  value: string
+  onChange: (next: string) => void
   /** Caller's currently-hosted code, if any — used to reject self-paste. */
   ownCode: string | null
   onJoin: (code: string) => void | Promise<void>
   disabled?: boolean
 }) {
-  const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const hasInput = value.trim().length > 0
 
   function submit () {
     const code = extractInviteCode(value)
@@ -333,7 +414,7 @@ function JoinByCodeSection ({
           type='text'
           value={value}
           onChange={e => {
-            setValue(e.target.value)
+            onChange(e.target.value)
             setError(null)
           }}
           onKeyDown={e => {
@@ -350,8 +431,14 @@ function JoinByCodeSection ({
         <button
           type='button'
           onClick={submit}
-          disabled={disabled || value.trim().length === 0}
-          className='rounded-md border border-neutral-600 bg-neutral-700 px-4 py-2 text-sm font-semibold text-neutral-100 transition hover:bg-neutral-600 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-amber-500/50'
+          disabled={disabled || !hasInput}
+          className={
+            hasInput
+              ? // Primary action — large + yellow once the user has typed something.
+                'rounded-md bg-amber-500 px-6 py-3 text-base font-bold text-neutral-900 shadow transition hover:bg-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-300/50 disabled:cursor-not-allowed disabled:opacity-60'
+              : // Inactive — neutral grey while empty.
+                'rounded-md border border-neutral-600 bg-neutral-700 px-4 py-2 text-sm font-semibold text-neutral-100 transition hover:bg-neutral-600 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-amber-500/50'
+          }
         >
           Join
         </button>
@@ -361,29 +448,46 @@ function JoinByCodeSection ({
   )
 }
 
-function WaitingSection ({
+function InviteSection ({
   inviteUrl,
+  code,
+  creating,
+  hasGuestJoined,
   secondsWaited,
 }: {
-  inviteUrl: string
+  /** Server-issued invite URL, or null while we're (re)creating it. */
+  inviteUrl: string | null
+  /** Bare 6-char code (`AB7K3X`) — sharable separately from the URL. */
+  code: string | null
+  creating: boolean
+  hasGuestJoined: boolean
   secondsWaited: number
 }) {
-  const minutes = Math.floor(secondsWaited / 60)
-  const seconds = secondsWaited % 60
+  // Countdown from the 15-minute invite TTL. Clamp at 0 so we never show
+  // a negative remainder if the polling cap fires a beat after the timer.
+  const remaining = Math.max(0, 15 * 60 - secondsWaited)
+  const minutes = Math.floor(remaining / 60)
+  const seconds = remaining % 60
+  const headline = hasGuestJoined
+    ? 'Opponent joined! Click Start to begin.'
+    : inviteUrl
+      ? 'Waiting for your opponent to join…'
+      : creating
+        ? 'Generating your invitation link…'
+        : 'Preparing your invitation link…'
   return (
-    <div className='space-y-4 border-t border-neutral-700 pt-5'>
-      <p className='text-base font-semibold text-amber-300'>
-        Waiting for your opponent to join…
-      </p>
-      <p className='text-sm tabular-nums text-neutral-300'>
-        Waiting time: {minutes} minutes, {seconds} seconds
-      </p>
-      <CopyableLinkRow url={inviteUrl} />
+    <div className='space-y-3 border-t border-neutral-700 pt-5'>
+      <p className='text-base font-semibold text-amber-300'>{headline}</p>
+      {inviteUrl && !hasGuestJoined && (
+        <p className='text-xs tabular-nums text-neutral-400'>
+          Waiting for opponent for: {minutes} min, {seconds} sec
+        </p>
+      )}
+      <CopyableLinkRow url={inviteUrl ?? ''} />
+      <CopyableLinkRow url={code ?? ''} />
       <p className='text-xs leading-relaxed text-neutral-400'>
-        This is your invitation link to the game you are hosting. Please send
-        this link to your opponent. They must click on it within 15 minutes,
-        or the link will expire. Once they click on it, they will join your
-        game and this dialog box will disappear.
+        Send the link or just the 6-character code to your opponent. They have
+        15 minutes to accept.
       </p>
     </div>
   )

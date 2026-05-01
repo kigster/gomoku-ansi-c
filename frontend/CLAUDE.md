@@ -74,7 +74,7 @@ docker run -p 80:80 -e API_URL=http://gomoku-api:8000 gomoku-frontend:latest
 | `POST /multiplayer/new` | Create an invite — `host_color: null` defers color choice to the guest |
 | `POST /multiplayer/{c}/join` | Join — `chosen_color` required when host deferred |
 | `POST /multiplayer/{c}/cancel` | Host marks the game `cancelled` (used by the modal close flow) |
-| `GET /multiplayer/{c}` | Polled every 1.5 s with `?since_version=N`; backs off geometrically on 304 |
+| `GET /multiplayer/{c}` | Polled with `?since_version=N` on a wall-clock-tiered cadence — see `src/hooks/pollingSchedule.ts` (300 ms first 10 min, then 2/3/5 s) |
 | `POST /multiplayer/{c}/move` | Make a move; server validates against `board_size` |
 | `POST /multiplayer/{c}/resign` | End the game; sets winner = opposite color |
 

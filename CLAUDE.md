@@ -64,9 +64,10 @@ shares. Highlights a future maintainer should know:
 - **Lazy expiry** — every read of a `waiting` game past its `expires_at`
   flips it to `cancelled`; no background sweeper is required for the
   modal flow.
-- **Polling backoff** — both `useMultiplayerPolling` and
-  `useMultiplayerHostPolling` geometrically back off after 304s and stop
-  after a wall-clock cap (15 min for waiting, 8 h for in-progress).
+- **Tiered polling** — both `useMultiplayerPolling` and
+  `useMultiplayerHostPolling` use `pollingIntervalForElapsedMs`:
+  300 ms for the first 10 min, 2 s up to 30 min, 3 s up to 60 min,
+  5 s thereafter. Wall-clock caps remain (15 min waiting, 8 h in-progress).
 
 Reference docs: `doc/human-vs-human-plan.md` (architecture & API),
 `doc/multiplayer-modal-plan.md` (UX), `doc/multiplayer-bugs.md`
