@@ -43,8 +43,13 @@ HTTPSERVER_PLATFORM	= -DEPOLL
 endif
 DAEMON_CFLAGS    	= $(CFLAGS) -I$(HTTPSERVER_DIR) $(HTTPSERVER_PLATFORM)
 
+
 # Test HTTP client
 DAEMON_CLIENT_TARGET 	= $(BINDIR)/$(DAEMON_CLIENT)
+
+# Build terminal gomoku and gomoku-httpd + test client
+DEFAULT_ALL		= $(TARGET) $(DAEMON_TARGET) $(DAEMON_CLIENT_TARGET)
+
 TEST_HTTP_SRC    	= src/net/test_client.c src/net/test_client_utils.c
 
 # Test configuration
@@ -80,13 +85,13 @@ BUILD_DIR = build
 $(BINDIR):
 		@mkdir -p $(BINDIR)
 
-all: 		$(TARGET) $(DAEMON_PACKAGE) $(DAEMON_CLIENT_TARGET)
+all: 		$(DEFAULT_ALL)
 
 install: 	all
-		cp -pv $(TARGET) $(DAEMON_TARGET) $(DAEMON_CLIENT_TARGET) ../bin
+		cp -pv $(DEFAULT_ALL) ../bin
 
 docker-install: all
-		cp -pv $(TARGET) $(DAEMON_TARGET) $(DAEMON_CLIENT_TARGET) ./bin
+		cp -pv $(DEFAULT_ALL) ./bin
 
 
 rebuild: 	clean all install
@@ -120,6 +125,8 @@ test-client: 	$(DAEMON_CLIENT_TARGET)
 # Generic src rules (net rule must come before gomoku rule)
 src/gomoku/%.o: src/gomoku/%.c | $(JSONC_LIB)
 		$(CC) $(CFLAGS) -c $< -o $@
+
+all: $(TARGET) gomoku-httpd test-client
 
 googletest:
 		@bash -c "./tests/tests-setup"
