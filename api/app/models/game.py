@@ -20,7 +20,12 @@ class GameSaveResponse(BaseModel):
 
 
 class GameHistoryEntry(BaseModel):
-    """A single game entry in the user's game history."""
+    """A single game entry in the user's game history.
+
+    `opponent_username` is "AI" for AI games and the other participant's
+    username for multiplayer games. `game_type` lets the frontend hide
+    AI-specific columns (depth, score) for multiplayer rows.
+    """
 
     id: str
     username: str
@@ -30,6 +35,8 @@ class GameHistoryEntry(BaseModel):
     human_time_s: float
     ai_time_s: float
     played_at: datetime
+    game_type: str  # 'ai' | 'multiplayer'
+    opponent_username: str
 
 
 class GameHistoryResponse(BaseModel):

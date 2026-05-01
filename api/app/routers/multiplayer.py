@@ -280,15 +280,42 @@ async def _write_finished_games_rows(
     assert mp_row["guest_user_id"] is not None, (
         "_write_finished_games_rows must only be called once a guest has joined"
     )
+    host_color = mp_row["host_color"]
+    guest_color_for_json = _opposite_color(host_color)
+    winner_username = (
+        host_username
+        if winner == host_color
+        else (guest_username if winner == guest_color_for_json else None)
+    )
+    loser_username = (
+        guest_username
+        if winner_username == host_username
+        else (host_username if winner_username == guest_username else None)
+    )
     game_json = json_mod.dumps(
         {
             "multiplayer_game_id": str(mp_row["id"]),
-            "host_username": host_username,
-            "guest_username": guest_username,
+            "game_type": "multiplayer",
+            "host": {"username": host_username, "color": host_color},
+            "guest": {"username": guest_username, "color": guest_color_for_json},
+            # Convenience: ('X' or 'O') -> username, so reading the JSON
+            # answers "who plays X?" without thinking about host/guest.
+            "players_by_color": {
+                host_color: host_username,
+                guest_color_for_json: guest_username,
+            },
+            "winner_color": winner,
+            "winner_username": winner_username,
+            "loser_username": loser_username,
             "moves": [list(m) for m in moves],
             "rule_set": mp_row["rule_set"],
             "board_size": mp_row["board_size"],
+            # Legacy convenience field — duplicate of winner_color for tools
+            # already keying off `winner`.
             "winner": winner,
+            # Legacy convenience fields preserved for backward compat.
+            "host_username": host_username,
+            "guest_username": guest_username,
         }
     )
     total_moves = len(moves)
@@ -300,11 +327,12 @@ async def _write_finished_games_rows(
     insert_sql = """
         INSERT INTO games
           (username, user_id, winner, human_player, board_size, depth, radius,
-           total_moves, human_time_s, ai_time_s, score, game_json, game_type)
+           total_moves, human_time_s, ai_time_s, score, game_json,
+           game_type, opponent_id)
         VALUES ($1, $2::uuid, $3, $4, $5, 0, 0,
-                $6, 0, 0, 0, $7::jsonb, 'multiplayer')
+                $6, 0, 0, 0, $7::jsonb, 'multiplayer', $8::uuid)
     """
-    # Host row
+    # Host row — opponent is the guest.
     await conn.execute(
         insert_sql,
         host_username,
@@ -314,8 +342,9 @@ async def _write_finished_games_rows(
         mp_row["board_size"],
         total_moves,
         game_json,
+        guest_user_id,
     )
-    # Guest row
+    # Guest row — opponent is the host.
     await conn.execute(
         insert_sql,
         guest_username,
@@ -325,6 +354,7 @@ async def _write_finished_games_rows(
         mp_row["board_size"],
         total_moves,
         game_json,
+        host_user_id,
     )
 
 

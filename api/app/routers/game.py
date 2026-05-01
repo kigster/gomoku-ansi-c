@@ -173,13 +173,15 @@ async def game_history(
     """Return the authenticated user's games in reverse chronological order."""
     start_time = time.monotonic()
     rows = await pool.fetch(
-        """SELECT id, username, winner, human_player, score, depth,
-                  round(human_time_s::numeric, 1) AS human_time_s,
-                  round(ai_time_s::numeric, 1) AS ai_time_s,
-                  played_at
-           FROM games
-           WHERE user_id = $1::uuid
-           ORDER BY played_at DESC
+        """SELECT g.id, g.username, g.winner, g.human_player, g.score, g.depth,
+                  round(g.human_time_s::numeric, 1) AS human_time_s,
+                  round(g.ai_time_s::numeric, 1) AS ai_time_s,
+                  g.played_at, g.game_type,
+                  opp.username AS opponent_username
+           FROM games g
+           LEFT JOIN users opp ON opp.id = g.opponent_id
+           WHERE g.user_id = $1::uuid
+           ORDER BY g.played_at DESC
            LIMIT $2""",
         str(user["id"]),
         limit,
@@ -195,6 +197,8 @@ async def game_history(
                 human_time_s=float(r["human_time_s"]),
                 ai_time_s=float(r["ai_time_s"]),
                 played_at=r["played_at"],
+                game_type=r["game_type"],
+                opponent_username=r["opponent_username"] or "AI",
             )
             for r in rows
         ]
