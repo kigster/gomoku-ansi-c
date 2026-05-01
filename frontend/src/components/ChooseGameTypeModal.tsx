@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import ModalShell from './ModalShell'
 import CopyableLinkRow from './CopyableLinkRow'
 import {
@@ -65,29 +65,41 @@ export default function ChooseGameTypeModal ({
     code: game?.code ?? null,
   })
 
-  // When the polled state flips to in_progress, the guest joined.
-  if (latest && latest.state === 'in_progress' && game) {
-    onGuestJoined(game.code)
-    return null
-  }
-
-  // 15-minute hard cap — fall through to AI per spec.
-  if (expired && game) {
-    onClose()
-    return null
-  }
-
   // The actively-relevant view: prefer the latest poll, fall back to the
   // initial create response.
   const active = (latest as MultiplayerGameView | null) ?? game
   const inWaitingPhase = !!active && active.state === 'waiting'
   const cancelledRemotely = !!active && active.state === 'cancelled'
 
-  // If the game was cancelled remotely (e.g. via expiry), close the modal.
-  if (cancelledRemotely) {
-    onClose()
-    return null
-  }
+  // Side effects driven by the polled state — kept out of render to avoid
+  // triggering parent setState during a child render pass.
+  useEffect(() => {
+    if (latest && latest.state === 'in_progress' && game) {
+      onGuestJoined(game.code)
+    }
+  }, [latest, game, onGuestJoined])
+
+  useEffect(() => {
+    if (cancelledRemotely) onClose()
+  }, [cancelledRemotely, onClose])
+
+  // 15-minute hard cap — issue an explicit cancel POST so the row goes to
+  // state='cancelled' immediately (don't rely on lazy expiry), then close.
+  useEffect(() => {
+    if (!expired || !game) return
+    let cancelled = false
+    void (async () => {
+      try {
+        await apiCancelGame(authToken, game.code)
+      } catch {
+        // Server-side lazy-expire path covers it eventually.
+      }
+      if (!cancelled) onClose()
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [expired, game, authToken, onClose])
 
   // ----- Handlers --------------------------------------------------------
 

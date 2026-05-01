@@ -14,10 +14,12 @@ interface Args {
   stopWhenNotWaiting?: boolean
   /** Hard cap (ms) — stop after this elapsed wall time even if state is still 'waiting'. Default: 15 minutes. */
   maxAgeMs?: number
-  /** Initial poll interval (ms). Default: 1500. */
+  /** Initial poll interval (ms). Default: 100. */
   baseIntervalMs?: number
-  /** Maximum backoff interval (ms). Default: 8000. */
+  /** Maximum backoff interval (ms). Default: 60000 (1 min) — safety cap so the geometric series never single-sleeps the entire 15-min budget. */
   maxIntervalMs?: number
+  /** Backoff multiplier applied after each 304 / error. Default: 1.5. */
+  backoffFactor?: number
 }
 
 interface State {
@@ -42,8 +44,9 @@ export function useMultiplayerHostPolling ({
   code,
   stopWhenNotWaiting = true,
   maxAgeMs = 15 * 60 * 1000,
-  baseIntervalMs = 1500,
-  maxIntervalMs = 8000,
+  baseIntervalMs = 100,
+  maxIntervalMs = 60_000,
+  backoffFactor = 1.5,
 }: Args): State {
   const [view, setView] = useState<MultiplayerGameView | MultiplayerGamePreview | null>(null)
   const [secondsWaited, setSecondsWaited] = useState(0)
@@ -80,7 +83,7 @@ export function useMultiplayerHostPolling ({
         if (cancelledRef.current) return
         if (v === null) {
           // 304 — no change. Back off geometrically (capped).
-          intervalMs = Math.min(intervalMs * 2, maxIntervalMs)
+          intervalMs = Math.min(intervalMs * backoffFactor, maxIntervalMs)
         } else {
           lastVersion = v.version
           setView(v)
@@ -91,7 +94,7 @@ export function useMultiplayerHostPolling ({
       } catch (err) {
         if (!cancelledRef.current) {
           setError(err instanceof Error ? err.message : 'poll_failed')
-          intervalMs = Math.min(intervalMs * 2, maxIntervalMs)
+          intervalMs = Math.min(intervalMs * backoffFactor, maxIntervalMs)
         }
       }
       if (!cancelledRef.current) {

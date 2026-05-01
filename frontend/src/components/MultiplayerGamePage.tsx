@@ -92,7 +92,12 @@ export default function MultiplayerGamePage({
         }
       })
       .finally(() => {
-        if (!cancelled) setJoining(false)
+        // Always clear joining=false. The `cancelled` flag signals the
+        // effect was torn down (e.g. because `game` re-rendered with
+        // state=in_progress after the join), but the COMPONENT is still
+        // mounted; leaving `joining` stuck on `true` would render the
+        // "Joining game…" placeholder forever.
+        setJoining(false)
       })
     return () => {
       cancelled = true
@@ -178,11 +183,17 @@ export default function MultiplayerGamePage({
     return [m[0], m[1]]
   })()
 
+  // Title format: "Gomoku — alice vs bob" once both players are present;
+  // fall back to the bare host name (or the code) before the guest joins.
+  const titleLabel = game.guest
+    ? `${game.host.username} vs ${game.guest.username}`
+    : `Game ${game.code}`
+
   return (
     <div className="min-h-screen px-4 py-6 text-neutral-100">
       <div className="max-w-3xl mx-auto flex flex-col items-center gap-4">
         <h1 className="font-heading text-3xl font-bold text-amber-400">
-          Gomoku — Game {game.code}
+          Gomoku — {titleLabel}
         </h1>
 
         {game.state === 'waiting' && <WaitingForOpponent code={game.code} />}

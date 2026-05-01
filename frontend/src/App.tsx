@@ -328,11 +328,29 @@ export default function App () {
     return (
       <>
         <AlertPanel />
-        <MultiplayerGamePage
-          token={authToken!}
-          code={multiplayerCode}
-          username={playerName!}
-        />
+        <div className='min-h-screen relative z-10'>
+          <AmbientBackground />
+          <nav className='bg-neutral-800/95 backdrop-blur-sm border-b border-neutral-700 shadow-lg sticky top-0 z-40'>
+            <div className='max-w-6xl mx-auto px-4 py-3 flex items-center justify-between'>
+              <a href='/' className='flex items-center gap-3'>
+                <img src={logo} alt='Gomoku' className='h-9 w-auto' />
+                <h1 className='font-heading text-2xl font-bold text-amber-400'>
+                  Gomoku
+                </h1>
+              </a>
+              <span className='text-neutral-400 text-sm'>
+                Hey,{' '}
+                <span className='text-amber-400 font-semibold'>@{playerName}</span>
+                {'! '}
+              </span>
+            </div>
+          </nav>
+          <MultiplayerGamePage
+            token={authToken!}
+            code={multiplayerCode}
+            username={playerName!}
+          />
+        </div>
       </>
     )
   }
