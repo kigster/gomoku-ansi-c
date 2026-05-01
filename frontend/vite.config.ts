@@ -6,7 +6,10 @@ const API = 'http://localhost:8000'
 
 export default defineConfig({
   root: '.',
-  base: './',
+  // Absolute base so asset URLs (`/assets/...`) resolve correctly under
+  // nested routes like `/play/<code>`. With `./` the browser would resolve
+  // them against the current path, yielding `/play/assets/...` → 404.
+  base: '/',
   plugins: [react()],
   server: {
     host: '0.0.0.0',
