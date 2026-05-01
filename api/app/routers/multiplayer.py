@@ -90,8 +90,13 @@ def _is_participant(row: dict, user_id: str) -> bool:
 
 
 def _invite_url(code: str) -> str:
-    """Public URL the host shares with the guest."""
-    domain = settings.public_domain
+    """Public URL the host shares with the guest.
+
+    Uses `settings.effective_domain`, which prefers `$CUSTOM_DOMAIN` when
+    set (typical for local dev / staging / non-default tenants) and falls
+    back to `$PUBLIC_DOMAIN` otherwise.
+    """
+    domain = settings.effective_domain
     scheme = "http" if domain.startswith("localhost") or domain.startswith("127.") else "https"
     return f"{scheme}://{domain}/play/{code}"
 
