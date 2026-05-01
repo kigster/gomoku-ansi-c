@@ -26,7 +26,16 @@ import AboutModal from './components/AboutModal'
 import LeaderboardModal from './components/LeaderboardModal'
 import DifficultySettingsModal from './components/DifficultySettingsModal'
 import AmbientBackground from './components/AmbientBackground'
+import MultiplayerGamePage from './components/MultiplayerGamePage'
+import { newGame as newMultiplayerGame } from './lib/multiplayerClient'
 import logo from '../assets/images/logo.png'
+
+const MULTIPLAYER_PATH_RE = /^\/play\/([A-Z2-9]{6})$/
+
+function readMultiplayerCode(): string | null {
+  const m = MULTIPLAYER_PATH_RE.exec(window.location.pathname)
+  return m ? m[1] : null
+}
 
 const STORAGE_KEY = 'gomoku_username'
 const TOKEN_KEY = 'gomoku_auth_token'
@@ -286,6 +295,45 @@ export default function App () {
   const isActive = phase === 'playing' || phase === 'thinking'
 
   const needsAuth = !playerName || !authToken || hasResetToken
+  const multiplayerCode = readMultiplayerCode()
+
+  const handleStartMultiplayer = useCallback(async () => {
+    if (!authToken) return
+    try {
+      const game = await newMultiplayerGame(authToken)
+      window.location.href = `/play/${game.code}`
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : 'Failed to create game'
+      showError('Could not create multiplayer game.', detail)
+    }
+  }, [authToken])
+
+  // Multiplayer page route: requires auth, but otherwise short-circuits the
+  // single-player UI entirely.
+  if (multiplayerCode) {
+    if (needsAuth) {
+      return (
+        <>
+          <AlertPanel />
+          <AuthModal
+            onAuth={handleAuth}
+            apiBase={API_BASE}
+            initialView={hasResetToken ? 'reset' : undefined}
+          />
+        </>
+      )
+    }
+    return (
+      <>
+        <AlertPanel />
+        <MultiplayerGamePage
+          token={authToken!}
+          code={multiplayerCode}
+          username={playerName!}
+        />
+      </>
+    )
+  }
 
   return (
     <>
@@ -518,6 +566,17 @@ export default function App () {
                                hover:shadow-xl hover:scale-[1.01]'
                       >
                         Start Game
+                      </button>
+                    )}
+                    {phase === 'idle' && (
+                      <button
+                        onClick={handleStartMultiplayer}
+                        className='w-full mt-3 py-3 rounded-xl text-lg font-semibold font-heading
+                               bg-sky-700 hover:bg-sky-600 active:bg-sky-800
+                               text-white shadow-md shadow-sky-900/40
+                               transition-all duration-200 hover:scale-[1.01]'
+                      >
+                        New Multiplayer Game
                       </button>
                     )}
                     {phase === 'gameover' && (
