@@ -1,7 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import ChooseGameTypeModal from '../components/ChooseGameTypeModal'
+import ChooseGameTypeModal, {
+  extractInviteCode,
+} from '../components/ChooseGameTypeModal'
 
 vi.mock('../lib/multiplayerClient', async () => {
   const actual = await vi.importActual<
@@ -67,6 +69,33 @@ function renderModal(handlers: Partial<{
     />,
   )
 }
+
+describe('extractInviteCode', () => {
+  it.each([
+    ['AB7K3X', 'AB7K3X'],
+    ['ab7k3x', 'AB7K3X'],
+    ['  ab7k3x  ', 'AB7K3X'],
+    ['https://dev.gomoku.games/play/AB7K3X', 'AB7K3X'],
+    ['http://localhost:5173/play/ab7k3x', 'AB7K3X'],
+    ['/play/AB7K3X', 'AB7K3X'],
+    ['/play/AB7K3X?ref=foo', 'AB7K3X'],
+  ])('parses %s as %s', (input, expected) => {
+    expect(extractInviteCode(input)).toBe(expected)
+  })
+
+  it.each([
+    '',
+    '   ',
+    'AB7K3',          // too short
+    'AB7K3XX',        // too long
+    'AB1K3X',         // contains '1' (excluded)
+    'ABOK3X',         // contains 'O' (excluded)
+    'NOPE!!',
+    'https://dev.gomoku.games/auth/signup',
+  ])('rejects invalid input %s', input => {
+    expect(extractInviteCode(input)).toBeNull()
+  })
+})
 
 describe('ChooseGameTypeModal', () => {
   beforeEach(() => {
@@ -171,6 +200,48 @@ describe('ChooseGameTypeModal', () => {
       expect(mockCancelGame).toHaveBeenCalledWith('test-token', FAKE_GAME.code)
     })
     expect(onClose).toHaveBeenCalled()
+  })
+
+  it('shows the join-by-code section when Another Player is picked', async () => {
+    const user = userEvent.setup()
+    renderModal()
+    expect(screen.queryByLabelText(/Invitation code or link/i)).toBeNull()
+    await user.click(screen.getByLabelText(/Another Player/i, { selector: 'input' }))
+    expect(screen.getByLabelText(/Invitation code or link/i)).toBeInTheDocument()
+  })
+
+  it('joining via pasted bare code calls onGuestJoined with the code', async () => {
+    const user = userEvent.setup()
+    const onGuestJoined = vi.fn()
+    renderModal({ onGuestJoined })
+    await user.click(screen.getByLabelText(/Another Player/i, { selector: 'input' }))
+    await user.type(screen.getByLabelText(/Invitation code or link/i), 'ab7k3x')
+    await user.click(screen.getByRole('button', { name: 'Join' }))
+    expect(onGuestJoined).toHaveBeenCalledWith('AB7K3X')
+  })
+
+  it('joining via a full /play URL extracts and uppercases the code', async () => {
+    const user = userEvent.setup()
+    const onGuestJoined = vi.fn()
+    renderModal({ onGuestJoined })
+    await user.click(screen.getByLabelText(/Another Player/i, { selector: 'input' }))
+    await user.type(
+      screen.getByLabelText(/Invitation code or link/i),
+      'https://dev.gomoku.games/play/abcdef',
+    )
+    await user.click(screen.getByRole('button', { name: 'Join' }))
+    expect(onGuestJoined).toHaveBeenCalledWith('ABCDEF')
+  })
+
+  it('rejects garbage input with an inline error', async () => {
+    const user = userEvent.setup()
+    const onGuestJoined = vi.fn()
+    renderModal({ onGuestJoined })
+    await user.click(screen.getByLabelText(/Another Player/i, { selector: 'input' }))
+    await user.type(screen.getByLabelText(/Invitation code or link/i), 'NOPE!!')
+    await user.click(screen.getByRole('button', { name: 'Join' }))
+    expect(onGuestJoined).not.toHaveBeenCalled()
+    expect(screen.getByText(/Enter a 6-character code/)).toBeInTheDocument()
   })
 
   it('shows an inline error when newGame fails', async () => {

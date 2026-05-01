@@ -12,6 +12,23 @@ import { useMultiplayerHostPolling } from '../hooks/useMultiplayerHostPolling'
 type GameType = 'ai' | 'human'
 type ColorChooser = 'host' | 'guest'
 
+/**
+ * Extract a 6-char Crockford-base32 code from raw user input. Accepts
+ * either a bare code (`AB7K3X`) or a full URL containing `/play/<code>`.
+ * Returns the uppercased code, or null if no valid code is present.
+ */
+export function extractInviteCode(raw: string): string | null {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  // Crockford-base32 alphabet (no I/L/O/U/0/1) — see api/app/multiplayer/codes.py.
+  const ALPHA = '[2-9A-HJ-NP-Z]{6}'
+  const urlMatch = trimmed.match(new RegExp(`/play/(${ALPHA})(?:[/?#].*)?$`, 'i'))
+  if (urlMatch) return urlMatch[1].toUpperCase()
+  const bareMatch = trimmed.match(new RegExp(`^${ALPHA}$`, 'i'))
+  if (bareMatch) return bareMatch[0].toUpperCase()
+  return null
+}
+
 interface Props {
   /** Auth token used to call the multiplayer API. */
   authToken: string
@@ -195,6 +212,13 @@ export default function ChooseGameTypeModal ({
           </div>
         )}
 
+        {gameType === 'human' && !inWaitingPhase && (
+          <JoinByCodeSection
+            onJoin={code => onGuestJoined(code)}
+            disabled={creating}
+          />
+        )}
+
         {inWaitingPhase && active && (
           <WaitingSection
             inviteUrl={active.invite_url}
@@ -243,6 +267,67 @@ function RadioCard ({
         {hint && <span className='block text-xs text-neutral-400'>{hint}</span>}
       </span>
     </label>
+  )
+}
+
+function JoinByCodeSection ({
+  onJoin,
+  disabled,
+}: {
+  onJoin: (code: string) => void
+  disabled?: boolean
+}) {
+  const [value, setValue] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  function submit () {
+    const code = extractInviteCode(value)
+    if (!code) {
+      setError('Enter a 6-character code or a /play/<CODE> link.')
+      return
+    }
+    setError(null)
+    // Note: navigation to /play/<code> handles the rest. The host of the
+    // game is whoever called POST /multiplayer/new — pasting their code
+    // makes you the guest, regardless of who copied/pasted what.
+    onJoin(code)
+  }
+
+  return (
+    <div className='space-y-2 border-t border-neutral-700 pt-5'>
+      <label className='block text-sm font-medium text-neutral-300'>
+        Got an invitation? Paste the link or 6-character code:
+      </label>
+      <div className='flex items-stretch gap-2'>
+        <input
+          type='text'
+          value={value}
+          onChange={e => {
+            setValue(e.target.value)
+            setError(null)
+          }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              submit()
+            }
+          }}
+          placeholder='AB7K3X or https://…/play/AB7K3X'
+          disabled={disabled}
+          aria-label='Invitation code or link'
+          className='min-w-0 flex-1 rounded-md border border-neutral-600 bg-neutral-900 px-3 py-2 font-mono text-sm text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-60'
+        />
+        <button
+          type='button'
+          onClick={submit}
+          disabled={disabled || value.trim().length === 0}
+          className='rounded-md border border-neutral-600 bg-neutral-700 px-4 py-2 text-sm font-semibold text-neutral-100 transition hover:bg-neutral-600 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-amber-500/50'
+        >
+          Join
+        </button>
+      </div>
+      {error && <p className='text-xs text-red-400'>{error}</p>}
+    </div>
   )
 }
 
