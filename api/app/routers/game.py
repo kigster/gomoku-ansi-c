@@ -6,6 +6,8 @@ from fastapi.responses import JSONResponse
 from httpx import AsyncClient
 
 from app.database import get_pool
+from app.elo import ai_tier_rating, k_factor
+from app.elo import update as elo_update
 from app.logger import get_logger
 from app.models.game import GameHistoryEntry, GameHistoryResponse, GameSaveRequest, GameSaveResponse
 from app.scoring import game_score, rating
@@ -131,14 +133,34 @@ async def save(
     client_ip = getattr(request.state, "client_ip", None) if hasattr(request, "state") else None
     user_id = str(user["id"])
 
+    # Elo update against the AI tier the human chose. Draws are rare in
+    # Gomoku (eloDraw=0.01 in BayesElo), but we treat anything that isn't
+    # a clear human win as a loss for now — the engine never resigns and
+    # the C side never reports 'draw' yet.
+    score_a = 1.0 if human_won else 0.0
+    opponent_rating = ai_tier_rating(ai_depth, radius)
+
     async with pool.acquire() as conn:
         async with conn.transaction():
+            user_row = await conn.fetchrow(
+                "SELECT elo_rating, elo_peak, elo_games_count FROM users WHERE id = $1::uuid",
+                user_id,
+            )
+            elo_before = int(user_row["elo_rating"])
+            games_before = int(user_row["elo_games_count"])
+            peak_before = int(user_row["elo_peak"])
+            k = k_factor(games_before, elo_before)
+            elo_after = elo_update(elo_before, opponent_rating, score_a, k)
+            peak_after = max(peak_before, elo_after)
+
             row = await conn.fetchrow(
                 """INSERT INTO games
                    (username, user_id, winner, human_player, board_size, depth, radius,
-                    total_moves, human_time_s, ai_time_s, score, game_json, client_ip)
+                    total_moves, human_time_s, ai_time_s, score, game_json, client_ip,
+                    elo_before, elo_after, opponent_elo_before)
                    VALUES ($1, $2::uuid, $3, $4, $5, $6, $7,
-                           $8, $9, $10, $11, $12::jsonb, $13::inet)
+                           $8, $9, $10, $11, $12::jsonb, $13::inet,
+                           $14, $15, $16)
                    RETURNING id""",
                 user["username"],
                 user_id,
@@ -153,14 +175,32 @@ async def save(
                 score,
                 json_mod.dumps(gj),
                 client_ip,
+                elo_before,
+                elo_after,
+                opponent_rating,
             )
             await conn.execute(
-                "UPDATE users SET games_finished = games_finished + 1 WHERE id = $1::uuid",
+                """UPDATE users
+                       SET games_finished = games_finished + 1,
+                           elo_rating = $2,
+                           elo_peak = $3,
+                           elo_games_count = elo_games_count + 1,
+                           updated_at = now()
+                     WHERE id = $1::uuid""",
                 user_id,
+                elo_after,
+                peak_after,
             )
 
     log_game_request(request, start_time, status.HTTP_200_OK, len(raw_body))
-    return GameSaveResponse(id=str(row["id"]), score=score, rating=rating(score))
+    return GameSaveResponse(
+        id=str(row["id"]),
+        score=score,
+        rating=rating(score),
+        elo_before=elo_before,
+        elo_after=elo_after,
+        elo_delta=elo_after - elo_before,
+    )
 
 
 @router.get("/history", response_model=GameHistoryResponse)
@@ -177,6 +217,7 @@ async def game_history(
                   round(g.human_time_s::numeric, 1) AS human_time_s,
                   round(g.ai_time_s::numeric, 1) AS ai_time_s,
                   g.played_at, g.game_type,
+                  g.elo_before, g.elo_after, g.opponent_elo_before,
                   opp.username AS opponent_username
            FROM games g
            LEFT JOIN users opp ON opp.id = g.opponent_id
@@ -199,6 +240,9 @@ async def game_history(
                 played_at=r["played_at"],
                 game_type=r["game_type"],
                 opponent_username=r["opponent_username"] or "AI",
+                elo_before=r["elo_before"],
+                elo_after=r["elo_after"],
+                opponent_elo_before=r["opponent_elo_before"],
             )
             for r in rows
         ]

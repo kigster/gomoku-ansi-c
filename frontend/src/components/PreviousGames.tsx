@@ -12,6 +12,9 @@ interface GameEntry {
   played_at: string
   game_type: 'ai' | 'multiplayer'
   opponent_username: string
+  elo_before: number | null
+  elo_after: number | null
+  opponent_elo_before: number | null
 }
 
 interface PreviousGamesProps {
@@ -101,6 +104,8 @@ export default function PreviousGames ({
                 <th className='py-2 pr-4 text-left font-medium'>Opponent</th>
                 <th className='py-2 pr-4 text-left font-medium'>Date</th>
                 <th className='py-2 pr-4 text-left font-medium'>Status</th>
+                <th className='py-2 pr-4 text-right font-medium'>Elo</th>
+                <th className='py-2 pr-4 text-right font-medium'>Δ</th>
                 <th className='py-2 pr-4 text-right font-medium'>Your Score</th>
                 <th className='py-2 pr-4 text-right font-medium'>Your Time (s)</th>
                 <th className='py-2 pr-4 text-right font-medium'>Opponent's Time (s)</th>
@@ -113,6 +118,25 @@ export default function PreviousGames ({
                 const opponentLabel = isMultiplayer
                   ? `@${game.opponent_username}`
                   : 'AI'
+                const eloAfter = game.elo_after
+                const eloDelta =
+                  game.elo_after !== null && game.elo_before !== null
+                    ? game.elo_after - game.elo_before
+                    : null
+                const deltaText =
+                  eloDelta === null
+                    ? '—'
+                    : eloDelta > 0
+                      ? `+${eloDelta}`
+                      : `${eloDelta}`
+                const deltaClass =
+                  eloDelta === null
+                    ? 'text-neutral-500'
+                    : eloDelta > 0
+                      ? 'text-amber-400'
+                      : eloDelta < 0
+                        ? 'text-red-400'
+                        : 'text-neutral-400'
                 return (
                   <tr
                     key={game.id}
@@ -129,6 +153,12 @@ export default function PreviousGames ({
                     </td>
                     <td className={`py-2.5 pr-4 font-semibold ${game.won ? 'text-amber-400' : 'text-red-400'}`}>
                       {game.won ? 'Won' : 'Lost'}
+                    </td>
+                    <td className='py-2.5 pr-4 text-right font-mono text-neutral-200'>
+                      {eloAfter ?? '—'}
+                    </td>
+                    <td className={`py-2.5 pr-4 text-right font-mono ${deltaClass}`}>
+                      {deltaText}
                     </td>
                     <td className='py-2.5 pr-4 text-right font-mono text-neutral-300'>
                       {isMultiplayer ? '' : game.score}

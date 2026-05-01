@@ -70,16 +70,19 @@ holds long-running connections.
 
 ## Scoring and rating
 
-When you win an AI game, the result is recorded in `games` and your
-rating is updated.
+When you win or lose an AI game, the result is recorded in `games` and
+your Elo rating is updated immediately. The system is **calibrated to
+match Gomocup's BayesElo** parameters (`eloAdvantage=0`,
+`eloDraw=0.01`) — the live update uses the standard classical Elo
+formula with no first-move advantage and treats draws as
+half-points. See [`api/app/elo.py`](../api/app/elo.py) for the
+implementation and [doc/gomocup-elo-rankings.md](gomocup-elo-rankings.md)
+for the long-form design (including the planned weekly BayesElo
+recalibration job).
 
-> **Note:** the project is mid-migration from the old
-> "(`1000*depth + 50*radius + time_bonus`)" score formula to a proper
-> Gomocup-style Elo (BayesElo with `eloAdvantage=0`, `eloDraw=0.01`).
-> See [doc/gomocup-elo-rankings.md](gomocup-elo-rankings.md) for the
-> design and rollout plan. While the migration is in flight, both
-> values are persisted for each game and the leaderboard ranks by
-> Elo.
+The legacy "score" field (`1000*depth + 50*radius + time_bonus`) is
+still written to each game row so older tooling keeps working, but the
+**leaderboard ranks by Elo**.
 
 The Elo system models each AI difficulty tier as its own rated
 opponent — playing depth-5 is "stronger" than depth-3, so a win

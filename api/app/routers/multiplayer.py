@@ -20,7 +20,7 @@ All endpoints require authentication (`get_current_user`). Codes are
 from __future__ import annotations
 
 import json as json_mod
-from typing import Any
+from typing import Any, Literal, cast
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -28,6 +28,8 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import get_pool
+from app.elo import k_factor
+from app.elo import update as elo_update
 from app.models.multiplayer import (
     CancelRequest,
     JoinRequest,
@@ -120,21 +122,25 @@ def _build_view(
     guest_color = (
         _opposite_color(host_color) if (host_color and guest_username) else None
     )
+    # The DB schema constrains host_color / guest_color to ('X','O') but
+    # asyncpg returns plain ``str``; the casts here narrow the type for
+    # Pydantic without affecting runtime behaviour.
+    _Color = Literal["X", "O"]
     return MultiplayerGameView(
         code=row["code"],
         state=row["state"],
         board_size=row["board_size"],
         rule_set=row["rule_set"],
-        host=PlayerInfo(username=host_username, color=host_color),
+        host=PlayerInfo(username=host_username, color=cast("_Color | None", host_color)),
         guest=(
-            PlayerInfo(username=guest_username, color=guest_color)
+            PlayerInfo(username=guest_username, color=cast("_Color | None", guest_color))
             if guest_username
             else None
         ),
         moves=moves,
         next_to_move=next_to_move,
         winner=row["winner"],
-        your_color=your_color,
+        your_color=cast("_Color | None", your_color),
         your_turn=your_turn,
         version=row["version"],
         color_chosen_by=row["color_chosen_by"],
@@ -155,14 +161,15 @@ def _build_preview(
     guest_color = (
         _opposite_color(host_color) if (host_color and guest_username) else None
     )
+    _Color = Literal["X", "O"]
     return MultiplayerGamePreview(
         code=row["code"],
         state=row["state"],
         board_size=row["board_size"],
         rule_set=row["rule_set"],
-        host=PlayerInfo(username=host_username, color=host_color),
+        host=PlayerInfo(username=host_username, color=cast("_Color | None", host_color)),
         guest=(
-            PlayerInfo(username=guest_username, color=guest_color)
+            PlayerInfo(username=guest_username, color=cast("_Color | None", guest_color))
             if guest_username
             else None
         ),
@@ -324,13 +331,37 @@ async def _write_finished_games_rows(
     host_user_id = str(mp_row["host_user_id"])
     guest_user_id = str(mp_row["guest_user_id"])
 
+    # Live Elo update for both players. Host's score is 1.0 if host_color
+    # won, 0.5 on draw, 0.0 on loss; guest's is the symmetric value.
+    host_row = await conn.fetchrow(
+        "SELECT elo_rating, elo_peak, elo_games_count FROM users WHERE id = $1::uuid",
+        host_user_id,
+    )
+    guest_row = await conn.fetchrow(
+        "SELECT elo_rating, elo_peak, elo_games_count FROM users WHERE id = $1::uuid",
+        guest_user_id,
+    )
+    host_elo_before = int(host_row["elo_rating"])
+    guest_elo_before = int(guest_row["elo_rating"])
+    if winner == "draw":
+        host_score, guest_score = 0.5, 0.5
+    elif winner == host_color:
+        host_score, guest_score = 1.0, 0.0
+    else:
+        host_score, guest_score = 0.0, 1.0
+    host_k = k_factor(int(host_row["elo_games_count"]), host_elo_before)
+    guest_k = k_factor(int(guest_row["elo_games_count"]), guest_elo_before)
+    host_elo_after = elo_update(host_elo_before, guest_elo_before, host_score, host_k)
+    guest_elo_after = elo_update(guest_elo_before, host_elo_before, guest_score, guest_k)
+
     insert_sql = """
         INSERT INTO games
           (username, user_id, winner, human_player, board_size, depth, radius,
            total_moves, human_time_s, ai_time_s, score, game_json,
-           game_type, opponent_id)
+           game_type, opponent_id, elo_before, elo_after, opponent_elo_before)
         VALUES ($1, $2::uuid, $3, $4, $5, 0, 0,
-                $6, 0, 0, 0, $7::jsonb, 'multiplayer', $8::uuid)
+                $6, 0, 0, 0, $7::jsonb, 'multiplayer', $8::uuid,
+                $9, $10, $11)
     """
     # Host row — opponent is the guest.
     await conn.execute(
@@ -343,6 +374,9 @@ async def _write_finished_games_rows(
         total_moves,
         game_json,
         guest_user_id,
+        host_elo_before,
+        host_elo_after,
+        guest_elo_before,
     )
     # Guest row — opponent is the host.
     await conn.execute(
@@ -355,6 +389,31 @@ async def _write_finished_games_rows(
         total_moves,
         game_json,
         host_user_id,
+        guest_elo_before,
+        guest_elo_after,
+        host_elo_before,
+    )
+
+    # Roll the new ratings forward on the users table.
+    await conn.execute(
+        """UPDATE users
+              SET elo_rating = $2,
+                  elo_peak = GREATEST(elo_peak, $2),
+                  elo_games_count = elo_games_count + 1,
+                  updated_at = now()
+            WHERE id = $1::uuid""",
+        host_user_id,
+        host_elo_after,
+    )
+    await conn.execute(
+        """UPDATE users
+              SET elo_rating = $2,
+                  elo_peak = GREATEST(elo_peak, $2),
+                  elo_games_count = elo_games_count + 1,
+                  updated_at = now()
+            WHERE id = $1::uuid""",
+        guest_user_id,
+        guest_elo_after,
     )
 
 
@@ -719,6 +778,9 @@ async def make_move(
             updated_row = dict(updated)
 
             if won:
+                # `won` implies `new_winner is not None` — narrow for the
+                # type checker which can't see across the conditional.
+                assert new_winner is not None
                 await _write_finished_games_rows(
                     conn,
                     mp_row=updated_row,

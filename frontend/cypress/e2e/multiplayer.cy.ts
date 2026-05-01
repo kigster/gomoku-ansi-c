@@ -134,10 +134,11 @@ describe('Two-user multiplayer game', () => {
     cy.contains(new RegExp(`Lost to @${alice.username} in \\d+ seconds?\\.`))
       .should('be.visible')
 
-    // ---- 6. Verify two `games` rows + cross-linked opponent_id. ---------
+    // ---- 6. Verify two `games` rows + cross-linked opponent_id + Elo. ---
     cy.task<Record<string, unknown>[]>('dbQuery', {
       sql: `SELECT g.id, g.username, g.game_type, g.winner,
-                   g.human_player, g.opponent_id, opp.username AS opp_name
+                   g.human_player, g.opponent_id, opp.username AS opp_name,
+                   g.elo_before, g.elo_after, g.opponent_elo_before
             FROM games g
             LEFT JOIN users opp ON opp.id = g.opponent_id
             WHERE g.username IN ($1, $2)
@@ -164,6 +165,15 @@ describe('Two-user multiplayer game', () => {
         expect(b.winner, 'bob.winner').to.eq('X')
         expect(a.human_player, 'alice plays X').to.eq('X')
         expect(b.human_player, 'bob plays O').to.eq('O')
+
+        // Elo: both started at 1500; equal opponents + K=40, so Alice
+        // gains 20 (1520) and Bob loses 20 (1480). Allow ±1 for rounding.
+        expect(a.elo_before, 'alice elo_before').to.eq(1500)
+        expect(a.elo_after, 'alice elo_after').to.eq(1520)
+        expect(a.opponent_elo_before, 'alice opp elo').to.eq(1500)
+        expect(b.elo_before, 'bob elo_before').to.eq(1500)
+        expect(b.elo_after, 'bob elo_after').to.eq(1480)
+        expect(b.opponent_elo_before, 'bob opp elo').to.eq(1500)
       })
   })
 })

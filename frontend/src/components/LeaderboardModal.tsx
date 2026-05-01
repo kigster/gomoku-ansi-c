@@ -3,6 +3,8 @@ import ModalShell from './ModalShell'
 
 interface LeaderboardEntry {
   username: string
+  elo_rating: number
+  elo_games_count: number
   score: number
   rating: number
   depth: number
@@ -49,7 +51,8 @@ export default function LeaderboardModal ({
         Top 100 players worldwide
       </p>
       <p className='text-center text-xs italic text-neutral-500'>
-        NOTE: Only games of humans vs AI are counted.
+        Ranked by Gomocup-style Elo (BayesElo with eloAdvantage=0,
+        eloDraw=0.01). NOTE: Only games of humans vs AI are counted.
       </p>
 
       {loading && (
@@ -71,11 +74,12 @@ export default function LeaderboardModal ({
               <tr className='border-b border-neutral-700 text-neutral-400'>
                 <th className='w-10 px-2 py-2 text-left'>#</th>
                 <th className='px-2 py-2 text-left'>Player</th>
-                <th className='px-2 py-2 text-right'>Score</th>
-                <th className='px-2 py-2 text-right'>Rating</th>
-                <th className='hidden px-2 py-2 text-center sm:table-cell'>Depth</th>
-                <th className='hidden px-2 py-2 text-right sm:table-cell'>Time</th>
-                <th className='hidden px-2 py-2 text-left md:table-cell'>Location</th>
+                <th className='px-2 py-2 text-right'>Elo</th>
+                <th className='hidden px-2 py-2 text-right sm:table-cell'>Games</th>
+                <th className='hidden px-2 py-2 text-right sm:table-cell'>Best Score</th>
+                <th className='hidden px-2 py-2 text-center md:table-cell'>Best Depth</th>
+                <th className='hidden px-2 py-2 text-right md:table-cell'>Time</th>
+                <th className='hidden px-2 py-2 text-left lg:table-cell'>Location</th>
               </tr>
             </thead>
             <tbody>
@@ -92,11 +96,12 @@ export default function LeaderboardModal ({
                 >
                   <td className='px-2 py-2'>{i + 1}</td>
                   <td className='px-2 py-2 font-medium'>{entry.username}</td>
-                  <td className='px-2 py-2 text-right tabular-nums'>{entry.score.toLocaleString()}</td>
-                  <td className='px-2 py-2 text-right tabular-nums'>{entry.rating}</td>
-                  <td className='hidden px-2 py-2 text-center sm:table-cell'>d{entry.depth}/r{entry.radius}</td>
-                  <td className='hidden px-2 py-2 text-right tabular-nums sm:table-cell'>{entry.human_time_s}s</td>
-                  <td className='hidden px-2 py-2 text-neutral-500 md:table-cell'>
+                  <td className='px-2 py-2 text-right tabular-nums font-semibold'>{entry.elo_rating}</td>
+                  <td className='hidden px-2 py-2 text-right tabular-nums sm:table-cell'>{entry.elo_games_count}</td>
+                  <td className='hidden px-2 py-2 text-right tabular-nums sm:table-cell text-neutral-400'>{entry.score.toLocaleString()}</td>
+                  <td className='hidden px-2 py-2 text-center md:table-cell text-neutral-400'>d{entry.depth}/r{entry.radius}</td>
+                  <td className='hidden px-2 py-2 text-right tabular-nums md:table-cell text-neutral-400'>{entry.human_time_s}s</td>
+                  <td className='hidden px-2 py-2 text-neutral-500 lg:table-cell'>
                     {[entry.geo_city, entry.geo_country].filter(Boolean).join(', ') || '—'}
                   </td>
                 </tr>
