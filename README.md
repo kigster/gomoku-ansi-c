@@ -1,8 +1,23 @@
-[![C99 Test Suite](https://github.com/kigster/gomoku-ansi-c/actions/workflows/c99.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/c99.yml) [![API Tests](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-test.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-test.yml) [![API Lint](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-lint.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-lint.yml) [![Frontend Tests](https://github.com/kigster/gomoku-ansi-c/actions/workflows/frontend.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/frontend.yml)
+ -[![C99 Test Suite](https://github.com/kigster/gomoku-ansi-c/actions/workflows/c99.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/c99.yml) [![API Tests](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-test.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-test.yml) [![API Lint](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-lint.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/api-lint.yml) [![Frontend Tests](https://github.com/kigster/gomoku-ansi-c/actions/workflows/frontend.yml/badge.svg)](https://github.com/kigster/gomoku-ansi-c/actions/workflows/frontend.yml)
 
 # Gomoku (Five-in-a-Row)
 
-A full-stack Gomoku game: C99 AI engine, FastAPI backend, React frontend, global leaderboard. Play online at **[gomoku.games](https://app.gomoku.games)**.
+Three ways to play Gomoku in one repo! 
+
+* A **Fast, compiles on any system that has a C99-compaatible compiler**, TTY Terminal Gomoku Game and the logic "brain". This module is what plays as "AI" against humans, and so it's written in C to optimize the performance. 
+
+* **Full multi-user tournament-ready web version.** — This version gets deployed to a cloud and runs there burning some number of dollars, but premium features may come in a few that would help pay for hosting.j
+    The distributed game architecture is much different than a single-binery TUI version:
+
+  - A ReactJS frontend compiled into static HTML/CSS/JSS SPA (at least 1 container is always running)
+  - A Python/Pydantic-based FastAPI backend, that uses `pg-async` library, and provides Alembic migrations, and a proper peristence mechanism
+  - A C-based binary `gomoku-httpd` which, unlike `gomoku` has no UI and is meant to run as an httpd daemon. However, this service is very special 
+    in a sense that i;'s
+    listening on a particular port. It can only process one move, so you should run as many of those  
+    as you expect concurrent players (although putting envoy proxy in front of gomoku-httpd might help 
+    shrink it a litle bit).
+
+* , global leaderboard. Play online at **[gomoku.games](https://app.gomoku.games)**.
 
 ## Summary
 

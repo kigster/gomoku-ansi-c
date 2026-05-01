@@ -206,8 +206,16 @@ jwt-secret:
     @openssl rand -base64 32
 
 # Canonical deploy: .env → migrations → images → Terraform → Honeycomb marker.
-deploy:
-    bin/deploy
+# Pass `production` (default) or `staging`. Each environment reads its own
+# {ENV}_DATABASE_URL / {ENV}_JWT_SECRET / {ENV}_CUSTOM_DOMAIN keys from
+# .env and lands in a separate Terraform state file under
+# gs://gomoku-tfstate/cloud-run/{env}/gomoku.
+#
+#   just deploy             → production (gomoku.us)
+#   just deploy staging     → staging (staging.gomoku.games), min=0/0
+#   bin/gctl start          → local dev (dev.gomoku.games via /etc/hosts)
+deploy environment="production":
+    bin/deploy {{ environment }}
 
 # (legacy) Terraform-only deploy, no DB migrations. Prefer `just deploy`.
 cr-init: docker-build-all-amd64
