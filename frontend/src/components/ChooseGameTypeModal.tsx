@@ -212,17 +212,29 @@ export default function ChooseGameTypeModal ({
           </div>
         )}
 
-        {gameType === 'human' && !inWaitingPhase && (
-          <JoinByCodeSection
-            onJoin={code => onGuestJoined(code)}
-            disabled={creating}
-          />
-        )}
-
         {inWaitingPhase && active && (
           <WaitingSection
             inviteUrl={active.invite_url}
             secondsWaited={secondsWaited}
+          />
+        )}
+
+        {gameType === 'human' && (
+          <JoinByCodeSection
+            ownCode={game?.code ?? null}
+            onJoin={async code => {
+              // If the host is currently waiting on their own game, mark
+              // it cancelled before pivoting to the opponent's game.
+              if (game && active && active.state === 'waiting') {
+                try {
+                  await apiCancelGame(authToken, game.code)
+                } catch {
+                  // Lazy-expire path covers it eventually.
+                }
+              }
+              onGuestJoined(code)
+            }}
+            disabled={creating}
           />
         )}
       </div>
@@ -271,10 +283,13 @@ function RadioCard ({
 }
 
 function JoinByCodeSection ({
+  ownCode,
   onJoin,
   disabled,
 }: {
-  onJoin: (code: string) => void
+  /** Caller's currently-hosted code, if any — used to reject self-paste. */
+  ownCode: string | null
+  onJoin: (code: string) => void | Promise<void>
   disabled?: boolean
 }) {
   const [value, setValue] = useState('')
@@ -286,11 +301,14 @@ function JoinByCodeSection ({
       setError('Enter a 6-character code or a /play/<CODE> link.')
       return
     }
+    if (ownCode && code === ownCode) {
+      setError("That's your own invitation — share it with your opponent.")
+      return
+    }
     setError(null)
-    // Note: navigation to /play/<code> handles the rest. The host of the
-    // game is whoever called POST /multiplayer/new — pasting their code
-    // makes you the guest, regardless of who copied/pasted what.
-    onJoin(code)
+    // Whoever's code is entered becomes the active game. The opponent
+    // (the host of that code) stays the host; the caller joins as guest.
+    void onJoin(code)
   }
 
   return (

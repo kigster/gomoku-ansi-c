@@ -28,7 +28,6 @@ import DifficultySettingsModal from './components/DifficultySettingsModal'
 import AmbientBackground from './components/AmbientBackground'
 import MultiplayerGamePage from './components/MultiplayerGamePage'
 import ChooseGameTypeModal from './components/ChooseGameTypeModal'
-import { newGame as newMultiplayerGame } from './lib/multiplayerClient'
 import logo from '../assets/images/logo.png'
 
 const MULTIPLAYER_PATH_RE = /^\/play\/([A-Z2-9]{6})$/
@@ -311,17 +310,6 @@ export default function App () {
   const needsAuth = !playerName || !authToken || hasResetToken
   const multiplayerCode = readMultiplayerCode()
 
-  const handleStartMultiplayer = useCallback(async () => {
-    if (!authToken) return
-    try {
-      const game = await newMultiplayerGame(authToken)
-      window.location.href = `/play/${game.code}`
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : 'Failed to create game'
-      showError('Could not create multiplayer game.', detail)
-    }
-  }, [authToken])
-
   // Multiplayer page route: requires auth, but otherwise short-circuits the
   // single-player UI entirely.
   if (multiplayerCode) {
@@ -594,10 +582,10 @@ export default function App () {
                     )}
                     {phase === 'idle' && (
                       <button
-                        onClick={handleStartMultiplayer}
+                        onClick={() => setShowChooseGameType(true)}
                         className='w-full mt-3 py-3 rounded-xl text-lg font-semibold font-heading
-                               bg-sky-700 hover:bg-sky-600 active:bg-sky-800
-                               text-white shadow-md shadow-sky-900/40
+                               bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700
+                               text-white shadow-md shadow-emerald-900/40
                                transition-all duration-200 hover:scale-[1.01]'
                       >
                         New Multiplayer Game
