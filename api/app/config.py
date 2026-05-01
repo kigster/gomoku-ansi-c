@@ -39,8 +39,15 @@ class Settings(BaseSettings):
 
     environment: Literal["development", "production", "test", "ci"] = "development"
 
-    # Public Domain
+    # Public Domain. `custom_domain` (env: CUSTOM_DOMAIN) is an explicit
+    # override used when the deployed domain differs from the default —
+    # e.g. local dev hosts pointed at dev.gomoku.games via /etc/hosts.
     public_domain: str = "app.gomoku.games"
+    custom_domain: str | None = None
+
+    @property
+    def effective_domain(self) -> str:
+        return self.custom_domain or self.public_domain
 
     # Database
     db_socket: str = ""

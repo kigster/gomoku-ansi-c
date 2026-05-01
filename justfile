@@ -70,6 +70,20 @@ test-api:
 test-frontend:
     cd frontend && npm test
 
+# Run Cypress end-to-end tests. Restarts the local cluster from a known
+# state first (gctl stop is a no-op if nothing's up; gctl start is
+# idempotent). Override the targets with CYPRESS_BASE_URL /
+# CYPRESS_API_BASE / CYPRESS_DB_URL to point at dev.gomoku.games or
+# another deployment, in which case skip the gctl dance and run cypress
+# directly: `cd frontend && npx cypress run --e2e`.
+test-cypress:
+    export SECRET="$(cat .secret)"; \
+    bin/gctl stop || true; \
+    bin/gctl start || exit $?; \
+    cd frontend && npx cypress run --e2e
+
+alias test-e2d := test-cypress
+
 # Run all tests across the monorepo
 test-all: test test-api test-frontend
 

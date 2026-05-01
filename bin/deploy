@@ -21,7 +21,10 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${REPO_ROOT}/.env"
 
 step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
-fail() { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
+fail() {
+  printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2
+  exit 1
+}
 
 [[ -f "${ENV_FILE}" ]] || fail "Missing ${ENV_FILE}. Copy .env.sample to .env and fill in values."
 
@@ -35,7 +38,7 @@ missing=()
 for v in "${required[@]}"; do
   [[ -z "${!v:-}" ]] && missing+=("${v}")
 done
-(( ${#missing[@]} == 0 )) || fail "Empty in .env: ${missing[*]}"
+((${#missing[@]} == 0)) || fail "Empty in .env: ${missing[*]}"
 
 # Map .env names → Terraform variable names. The PRODUCTION_ prefix in .env
 # prevents these from shadowing runtime config (DATABASE_URL, JWT_SECRET) when
@@ -69,10 +72,10 @@ step "Running Alembic migrations"
 )
 
 step "Building frontend → api/public"
-( cd "${REPO_ROOT}" && just install-frontend )
+(cd "${REPO_ROOT}" && just install-frontend)
 
 step "Building images, pushing to Artifact Registry, applying Terraform"
-( cd "${REPO_ROOT}/iac/cloud_run" && bash deploy.sh )
+(cd "${REPO_ROOT}/iac/cloud_run" && bash deploy.sh)
 
 step "Recording deploy marker in Honeycomb"
 if [[ -z "${HONEYCOMB_CONFIG_API_KEY:-}" ]]; then

@@ -915,3 +915,291 @@ async def test_move_after_finished_is_409(
     )
     assert resp.status_code == 409
     assert "game_not_in_progress" in resp.text
+
+
+# ---------------------------------------------------------------------------
+# Modal/invite flow — host_color=null (guest chooses), cancel, expiry
+# (see doc/multiplayer-modal-plan.md)
+# ---------------------------------------------------------------------------
+
+
+async def _set_expires_at(code: str, when_offset_sql: str) -> None:
+    """Manually move a game's expires_at by a SQL interval string.
+
+    `when_offset_sql` is interpolated as `NOW() + <interval>` — pass for
+    instance `"-INTERVAL '1 minute'"` to push it into the past.
+    """
+    conn = await asyncpg.connect(TEST_DSN)
+    try:
+        await conn.execute(
+            f"UPDATE multiplayer_games SET expires_at = NOW() + {when_offset_sql} "
+            "WHERE code = $1",
+            code,
+        )
+    finally:
+        await conn.close()
+
+
+@pytest.mark.asyncio
+async def test_new_game_with_host_color_null_marks_guest_chooses(
+    client: AsyncClient, auth_headers
+):
+    """Posting host_color=null records color_chosen_by='guest' and host_color is unset."""
+    resp = await client.post(
+        "/multiplayer/new", headers=auth_headers, json={"host_color": None}
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["color_chosen_by"] == "guest"
+    # Host's color is unresolved — the host's PlayerInfo.color is None until guest joins.
+    assert data["host"]["color"] is None
+    assert data["your_color"] is None
+
+
+@pytest.mark.asyncio
+async def test_new_game_with_host_color_set_marks_host_chose(
+    client: AsyncClient, auth_headers
+):
+    """Posting host_color='O' records color_chosen_by='host'."""
+    data = await _create_game(client, auth_headers, host_color="O")
+    assert data["color_chosen_by"] == "host"
+    assert data["host"]["color"] == "O"
+
+
+@pytest.mark.asyncio
+async def test_new_game_response_includes_invite_url_and_expires_at(
+    client: AsyncClient, auth_headers
+):
+    data = await _create_game(client, auth_headers)
+    assert data["invite_url"].endswith(f"/play/{data['code']}")
+    assert "expires_at" in data and data["expires_at"]  # ISO datetime string
+
+
+@pytest.mark.asyncio
+async def test_join_when_guest_chooses_picks_color(
+    client: AsyncClient, auth_headers, second_registered_user
+):
+    """When color_chosen_by='guest', guest's chosen_color drives both colors."""
+    created = await client.post(
+        "/multiplayer/new", headers=auth_headers, json={"host_color": None}
+    )
+    code = created.json()["code"]
+
+    join = await client.post(
+        f"/multiplayer/{code}/join",
+        headers=second_registered_user["headers"],
+        json={"chosen_color": "O"},
+    )
+    assert join.status_code == 200, join.text
+    body = join.json()
+    assert body["state"] == "in_progress"
+    # Guest picked O → host gets X.
+    assert body["guest"]["color"] == "O"
+    assert body["host"]["color"] == "X"
+    assert body["your_color"] == "O"
+
+
+@pytest.mark.asyncio
+async def test_join_when_guest_chooses_missing_color_is_422(
+    client: AsyncClient, auth_headers, second_registered_user
+):
+    created = await client.post(
+        "/multiplayer/new", headers=auth_headers, json={"host_color": None}
+    )
+    code = created.json()["code"]
+    join = await client.post(
+        f"/multiplayer/{code}/join",
+        headers=second_registered_user["headers"],
+        json={},
+    )
+    assert join.status_code == 422
+    assert "chosen_color_required" in join.text
+
+
+@pytest.mark.asyncio
+async def test_join_when_host_chose_with_chosen_color_is_422(
+    client: AsyncClient, auth_headers, second_registered_user
+):
+    """If host already picked, guest sending chosen_color is rejected."""
+    created = await _create_game(client, auth_headers, host_color="X")
+    code = created["code"]
+    join = await client.post(
+        f"/multiplayer/{code}/join",
+        headers=second_registered_user["headers"],
+        json={"chosen_color": "O"},
+    )
+    assert join.status_code == 422
+    assert "chosen_color_not_allowed" in join.text
+
+
+@pytest.mark.asyncio
+async def test_cancel_marks_state_cancelled_and_bumps_version(
+    client: AsyncClient, auth_headers
+):
+    created = await _create_game(client, auth_headers)
+    code = created["code"]
+    pre_version = created["version"]
+
+    resp = await client.post(
+        f"/multiplayer/{code}/cancel", headers=auth_headers, json={}
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["state"] == "cancelled"
+    assert body["version"] > pre_version
+
+
+@pytest.mark.asyncio
+async def test_cancel_by_non_host_returns_403(
+    client: AsyncClient, auth_headers, second_registered_user
+):
+    created = await _create_game(client, auth_headers)
+    code = created["code"]
+    resp = await client.post(
+        f"/multiplayer/{code}/cancel",
+        headers=second_registered_user["headers"],
+        json={},
+    )
+    assert resp.status_code == 403
+    assert "not_the_host" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_cancel_in_progress_returns_409(
+    client: AsyncClient, auth_headers, second_registered_user
+):
+    game = await _start_in_progress_game(
+        client, auth_headers, second_registered_user["headers"]
+    )
+    code = game["code"]
+    resp = await client.post(
+        f"/multiplayer/{code}/cancel", headers=auth_headers, json={}
+    )
+    assert resp.status_code == 409
+    assert "cannot_cancel_in_state_in_progress" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_join_after_cancel_returns_409_game_cancelled(
+    client: AsyncClient, auth_headers, second_registered_user
+):
+    created = await _create_game(client, auth_headers)
+    code = created["code"]
+    cancel = await client.post(
+        f"/multiplayer/{code}/cancel", headers=auth_headers, json={}
+    )
+    assert cancel.status_code == 200
+
+    join = await client.post(
+        f"/multiplayer/{code}/join",
+        headers=second_registered_user["headers"],
+        json={},
+    )
+    assert join.status_code == 409
+    assert "game_cancelled" in join.text
+
+
+@pytest.mark.asyncio
+async def test_get_after_expiry_lazily_cancels(
+    client: AsyncClient, auth_headers
+):
+    """A waiting game past expires_at is auto-cancelled on next read."""
+    created = await _create_game(client, auth_headers)
+    code = created["code"]
+    await _set_expires_at(code, "-INTERVAL '1 minute'")
+
+    resp = await client.get(f"/multiplayer/{code}", headers=auth_headers)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["state"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_join_after_expiry_returns_409_game_cancelled(
+    client: AsyncClient, auth_headers, second_registered_user
+):
+    created = await _create_game(client, auth_headers)
+    code = created["code"]
+    await _set_expires_at(code, "-INTERVAL '1 minute'")
+
+    join = await client.post(
+        f"/multiplayer/{code}/join",
+        headers=second_registered_user["headers"],
+        json={},
+    )
+    assert join.status_code == 409
+    # Expiry is reified as state='cancelled' by the lazy-expire path.
+    assert "game_cancelled" in join.text
+
+
+@pytest.mark.asyncio
+async def test_new_code_collision_retries_until_unique(
+    client: AsyncClient, auth_headers, monkeypatch
+):
+    """Mock new_code() to return a colliding value once, then a fresh one.
+
+    The router must retry on UniqueViolationError without raising 500.
+    """
+    from app.routers import multiplayer as mp_router
+
+    real_codes = ["AAAAAA", "AAAAAA", "BBBBBB"]
+
+    def fake_new_code() -> str:
+        return real_codes.pop(0)
+
+    monkeypatch.setattr(mp_router, "new_code", fake_new_code)
+
+    first = await client.post("/multiplayer/new", headers=auth_headers, json={})
+    second = await client.post("/multiplayer/new", headers=auth_headers, json={})
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert first.json()["code"] == "AAAAAA"
+    assert second.json()["code"] == "BBBBBB"
+
+
+@pytest.mark.asyncio
+async def test_move_oob_uses_400_not_422_for_high_coords(
+    client: AsyncClient, auth_headers, second_registered_user
+):
+    """A 15-board move at x=15 must come back as 400 out_of_bounds, not 422.
+
+    Per doc/multiplayer-bugs.md item #7 — the wire contract is one
+    consistent OOB status, not a mix of Pydantic 422 / handler 400.
+    """
+    game = await _start_in_progress_game(
+        client, auth_headers, second_registered_user["headers"], board_size=15
+    )
+    code = game["code"]
+    resp = await _move(
+        client, code, auth_headers, x=15, y=7, expected_version=game["version"]
+    )
+    assert resp.status_code == 400
+    assert "out_of_bounds" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_finished_games_have_game_type_multiplayer(
+    client: AsyncClient, auth_headers, second_registered_user
+):
+    """When a multiplayer game ends, both `games` rows are tagged game_type='multiplayer'."""
+    game = await _start_in_progress_game(
+        client, auth_headers, second_registered_user["headers"], host_color="X"
+    )
+    code = game["code"]
+
+    resign = await client.post(f"/multiplayer/{code}/resign", headers=auth_headers, json={})
+    assert resign.status_code == 200
+
+    conn = await asyncpg.connect(TEST_DSN)
+    try:
+        rows = await conn.fetch(
+            "SELECT game_type, depth, radius FROM games WHERE game_json::jsonb ? "
+            "'multiplayer_game_id' AND (game_json::jsonb ->> 'multiplayer_game_id')::uuid "
+            "= (SELECT id FROM multiplayer_games WHERE code = $1)",
+            code,
+        )
+    finally:
+        await conn.close()
+    assert len(rows) == 2
+    assert all(r["game_type"] == "multiplayer" for r in rows)
+    assert all(r["depth"] == 0 and r["radius"] == 0 for r in rows)

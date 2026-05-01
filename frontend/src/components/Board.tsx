@@ -155,6 +155,7 @@ export default function Board({
                     transition-transform duration-300 ease-out hover:scale-[1.01] hover:shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
     >
       <svg
+        data-testid="board-svg"
         width="100%" height="100%"
         viewBox={`0 0 ${BOARD_PX} ${BOARD_PX}`}
         onClick={handleClick}
