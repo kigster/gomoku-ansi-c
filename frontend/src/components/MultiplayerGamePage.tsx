@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Board from './Board'
 import WaitingForOpponent from './WaitingForOpponent'
 import {
@@ -61,30 +61,34 @@ export default function MultiplayerGamePage({
   // Guest's chosen color for `color_chosen_by='guest'` games. Set via the
   // pick-color screen before the auto-join fires.
   const [guestPickedColor, setGuestPickedColor] = useState<Color | null>(null)
+  // At-most-once guard against the useEffect firing repeatedly while the
+  // polled `game` is in flight. Without it, the cleanup-driven cancel of
+  // the .then(refresh) chain leaves `game.state` stale at 'waiting', the
+  // effect re-runs on the next render, and we hammer POST /join → 409.
+  const joinAttemptedRef = useRef(false)
+  useEffect(() => {
+    joinAttemptedRef.current = false
+  }, [code])
 
   // If the loaded game is in `waiting` state and the caller isn't the host,
-  // automatically POST /join.
+  // automatically POST /join — exactly once per `code`.
   useEffect(() => {
-    if (!game || joining) return
+    if (!game || joining || joinAttemptedRef.current) return
     if (game.state !== 'waiting') return
     if (game.your_color !== null) return
     if (game.host.username === username) return
     // If the host wants the guest to pick the color, wait for the user.
     if (game.color_chosen_by === 'guest' && guestPickedColor === null) return
 
-    let cancelled = false
+    joinAttemptedRef.current = true
     setJoining(true)
     setJoinError(null)
     joinGame(token, code, {
       chosen_color:
         game.color_chosen_by === 'guest' ? (guestPickedColor as Color) : undefined,
     })
-      .then(() => {
-        if (cancelled) return
-        return refresh()
-      })
+      .then(() => refresh())
       .catch((err) => {
-        if (cancelled) return
         if (err instanceof MultiplayerApiError) {
           setJoinError(joinDetailToMessage(err.status, err.detail))
         } else {
@@ -92,16 +96,8 @@ export default function MultiplayerGamePage({
         }
       })
       .finally(() => {
-        // Always clear joining=false. The `cancelled` flag signals the
-        // effect was torn down (e.g. because `game` re-rendered with
-        // state=in_progress after the join), but the COMPONENT is still
-        // mounted; leaving `joining` stuck on `true` would render the
-        // "Joining game…" placeholder forever.
         setJoining(false)
       })
-    return () => {
-      cancelled = true
-    }
   }, [game, joining, token, code, username, refresh, guestPickedColor])
 
   const handleCellClick = useCallback(
@@ -229,21 +225,8 @@ export default function MultiplayerGamePage({
           </>
         )}
 
-        {game.state === 'finished' && (
-          <div className="mt-4 px-6 py-4 rounded-xl bg-neutral-800 border border-amber-500 text-center">
-            <h2 className="font-heading text-2xl text-amber-400 font-bold mb-1">
-              Game over
-            </h2>
-            <p className="text-neutral-200">
-              Winner: <strong>{game.winner ?? 'draw'}</strong>
-            </p>
-            <a
-              href="/"
-              className="inline-block mt-3 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-neutral-900 font-semibold"
-            >
-              Back home
-            </a>
-          </div>
+        {game.state === 'finished' && isParticipantView(game) && (
+          <GameOverPanel game={game} username={username} />
         )}
 
         {error && (
@@ -252,6 +235,62 @@ export default function MultiplayerGamePage({
           </p>
         )}
       </div>
+    </div>
+  )
+}
+
+function GameOverPanel({
+  game,
+  username,
+}: {
+  game: MultiplayerGameView
+  username: string
+}) {
+  const opponentUsername =
+    game.host.username === username
+      ? game.guest?.username ?? 'opponent'
+      : game.host.username
+  const youWon =
+    game.your_color !== null && game.winner === game.your_color
+  const isDraw = game.winner === 'draw'
+  const elapsedSec =
+    game.finished_at && game.created_at
+      ? Math.max(
+          1,
+          Math.round(
+            (new Date(game.finished_at).getTime() -
+              new Date(game.created_at).getTime()) /
+              1000,
+          ),
+        )
+      : null
+
+  let headline: string
+  let detail: string | null = null
+  if (isDraw) {
+    headline = `Draw against @${opponentUsername}`
+  } else if (youWon) {
+    headline = `@${username} wins against @${opponentUsername}`
+  } else {
+    headline = 'Game Over'
+    detail =
+      elapsedSec !== null
+        ? `Lost to @${opponentUsername} in ${elapsedSec} seconds.`
+        : `Lost to @${opponentUsername}.`
+  }
+
+  return (
+    <div className='mt-4 px-6 py-4 rounded-xl bg-neutral-800 border border-amber-500 text-center'>
+      <h2 className='font-heading text-2xl text-amber-400 font-bold mb-1'>
+        {headline}
+      </h2>
+      {detail && <p className='text-neutral-200'>{detail}</p>}
+      <a
+        href='/'
+        className='inline-block mt-3 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-neutral-900 font-semibold'
+      >
+        Back home
+      </a>
     </div>
   )
 }

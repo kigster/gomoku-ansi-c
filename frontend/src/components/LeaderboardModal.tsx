@@ -48,6 +48,9 @@ export default function LeaderboardModal ({
       <p className='text-center text-sm text-neutral-500'>
         Top 100 players worldwide
       </p>
+      <p className='text-center text-xs italic text-neutral-500'>
+        NOTE: Only games of humans vs AI are counted.
+      </p>
 
       {loading && (
         <p className='py-8 text-center text-neutral-400'>Loading...</p>
