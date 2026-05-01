@@ -6,9 +6,13 @@ This is a monorepo that contains at least five or six languages to create multi-
 
 The following can be built by cloning this repo:
 
-1. A **Fast, compiles on any system that has a C99-compaatible compiler**, TTY Terminal Gomoku Game and the logic "brain". This module is what plays as "AI" against humans, and so it's written in C to optimize the performance. 
+1. A **Fast TUI Executable** `./bin/gomoku` compiles on any system that has a C99-compaatible compiler**, TTY Terminal Gomoku Game and the logic "brain". This module is what plays as "AI" against humans, and so it's written in C to optimize the performance. 
 
 2. **Full multi-user tournament-ready web version.** — This version gets deployed to a cloud and runs. Play online at **[gomoku.games](https://app.gomoku.games)**. You can play with another human, or you can play against the AI.
+
+> [!IMPORTANT]
+> 
+> The public production URL will soon migrate to https://gomoku.us
 
   The distributed game architecture is much different than a single-binery TUI version:
 
