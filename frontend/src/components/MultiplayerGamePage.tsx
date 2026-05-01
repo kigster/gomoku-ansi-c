@@ -70,6 +70,24 @@ export default function MultiplayerGamePage({
     joinAttemptedRef.current = false
   }, [code])
 
+  // URL hygiene — once the game *transitions* into a terminal state
+  // (finished / cancelled / abandoned) drop the /play/<code> path so a
+  // refresh lands on the home page rather than re-fetching a finished game.
+  // We only run on the transition (tracked via a ref); landing directly on
+  // a finished game keeps the URL so the game-over panel stays visible
+  // through subsequent re-renders / direct revisits.
+  const prevStateRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!game) return
+    const prev = prevStateRef.current
+    prevStateRef.current = game.state
+    const isTerminal = ['finished', 'cancelled', 'abandoned'].includes(game.state)
+    const wasInProgress = prev !== null && !['finished', 'cancelled', 'abandoned'].includes(prev)
+    if (isTerminal && wasInProgress && window.location.pathname !== '/') {
+      window.history.replaceState({}, '', '/')
+    }
+  }, [game])
+
   // If the loaded game is in `waiting` state and the caller isn't the host,
   // automatically POST /join — exactly once per `code`.
   useEffect(() => {

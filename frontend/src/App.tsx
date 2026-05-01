@@ -311,16 +311,33 @@ export default function App () {
   const multiplayerCode = readMultiplayerCode()
 
   // Multiplayer page route: requires auth, but otherwise short-circuits the
-  // single-player UI entirely.
+  // single-player UI entirely. When a not-logged-in user arrives via an
+  // invite link, render the auth modal on top of an explanatory backdrop so
+  // they understand WHY they're being asked to log in (and after auth the
+  // URL still says /play/CODE, so the auto-join fires on the next render).
   if (multiplayerCode) {
     if (needsAuth) {
       return (
         <>
           <AlertPanel />
+          <div className='fixed inset-0 z-40 flex items-center justify-center px-4 text-center text-neutral-200'>
+            <div className='max-w-md space-y-3'>
+              <h1 className='font-heading text-3xl font-bold text-amber-400'>
+                You're invited to a Gomoku game
+              </h1>
+              <p className='text-neutral-300'>
+                Game code: <span className='font-mono text-amber-300'>{multiplayerCode}</span>
+              </p>
+              <p className='text-sm text-neutral-400'>
+                Sign in or create an account to join — we'll drop you straight
+                into the game once you're in.
+              </p>
+            </div>
+          </div>
           <AuthModal
             onAuth={handleAuth}
             apiBase={API_BASE}
-            initialView={hasResetToken ? 'reset' : undefined}
+            initialView={hasResetToken ? 'reset' : 'signup'}
           />
         </>
       )

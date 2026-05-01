@@ -6,36 +6,90 @@ A full-stack Gomoku game: C99 AI engine, FastAPI backend, React frontend, global
 
 ## Summary
 
-This repo contains two versions of the game: 
+This monorepo ships **four ways to play** the same Gomoku engine,
+all backed by one C99 codebase under `gomoku-c/`:
 
-1. A terminal version (TUI) that's played using arrow keys, space and Enter
-2. A networked version with ReactJS frontend, FastAPI server backend with PostgreSQL, and the actual stateless gaming engine running on the backend, written in C. 
+| # | Mode | Where you play | Deep dive |
+|---|---|---|---|
+| 1 | Human vs AI in the terminal (TUI) | `bin/gomoku` on your machine | [doc/01-human-vs-ai-tui.md](doc/01-human-vs-ai-tui.md) |
+| 2 | Human vs AI on the web | <https://app.gomoku.games> | [doc/02-human-vs-ai-web.md](doc/02-human-vs-ai-web.md) |
+| 3 | Human vs Human on the web | Invite link, both players in browser | [doc/03-human-vs-human-web.md](doc/03-human-vs-human-web.md) |
+| 4 | Gomocup tournament brain | `pbrain-kig-standard*.exe` submitted to <https://gomocup.org/> | [doc/04-gomocup-submission.md](doc/04-gomocup-submission.md) |
 
-### Terminal Version
+The sections that follow give a one-paragraph orientation for each.
+Click through to the linked doc for the long form.
 
-Below is the screenshot of a terminal game played against the AI:
+### 1. Human vs AI in the Terminal (TUI)
+
+A single ANSI-coloured C99 binary (`bin/gomoku`) with **zero runtime
+dependencies**. Arrow keys to move, `Space`/`Enter` to place,
+`u` to undo, `q` to quit. Strength is controlled by `--depth`
+(1–10 plies of alpha-beta look-ahead) and `--radius` (1–5 cells
+around existing stones the candidate generator considers); a wall
+clock cap is set with `--timeout`. Saves and replays games as JSON
+(`-j FILE` / `-p FILE`), including AI-vs-AI runs in headless mode
+(`-q`). Build with `just build-game`. Full CLI reference in
+[doc/01-human-vs-ai-tui.md](doc/01-human-vs-ai-tui.md).
 
 <img src="doc/img/gomoku-human-vs-ai.png" width="700" border="1" style="border-radius: 10px"/>
 
-If you clone the repo, you can run `just build-game` and it builds three binaries:
+### 2. Human vs AI on the Web
 
- * `gomoku` — the terminal game
- * `gomoku-httpd` — the stateless networking service
- * `gomoku-http-client` — the client for testing the networking service.
-
-### The Web Version
-
-The web version is a bit more sophisticated, in particular in its systems architecture, as it relies on FastAPI Python server, PostgreSQL for authentication and logging game statistics + the leaderboard, yet it proxies the requests for the AI moves directly to the swarm of stateless  `gomoku-httpd` daemons that are all single-threaded, and typically run behind an envoy proxy.
-
-Below is the screenshot of the web version of the game:
+A React SPA fronts the same C engine; FastAPI proxies each move to a
+pool of stateless `gomoku-httpd` workers behind envoy, while
+PostgreSQL holds users, history, and the leaderboard. The Settings
+panel exposes the same **depth** (2–5 in the web flow, capped to
+keep moves responsive) and **radius** (1–4) knobs as the TUI, plus
+an optional per-move **timeout** (30/60/120/300 s). Difficulty maps
+straight to AI strength: depth 5 with radius 3 is the upper
+"competent club player" tier, and depth 2 is "novice". Wins update
+your Elo against the AI tier you played; losses cost you Elo
+symmetrically. Full flow, screenshots, and API list in
+[doc/02-human-vs-ai-web.md](doc/02-human-vs-ai-web.md).
 
 <img src="doc/img/gomoku-web-version.png" width="700" border="1" style="border-radius: 10px"/>
 
-And the next image shows you the drop down menu that has a few options you can explore.
+### 3. Human vs Human on the Web
+
+Two authenticated users play each other over a shared 6-character
+invite link (`/play/AB7K3X`). The host generates the link from the
+**New Multiplayer Game** modal — both the URL and the bare code are
+copyable, and the host can either pick the colour up front or defer
+to the guest. Invites expire after **15 minutes**. There are no
+websockets; both clients short-poll a single `multiplayer_games` row
+on a wall-clock-tiered cadence (300 ms for the first 10 min, then
+2/3/5 s) with optimistic concurrency on a per-row version counter.
+Win/loss surfaces in-game and writes two cross-linked `games` rows
+that show up in both players' history. Multiplayer games rate
+against your **opponent's actual Elo** rather than an AI tier — see
+[doc/03-human-vs-human-web.md](doc/03-human-vs-human-web.md).
 
 <img src="doc/img/gomoku-web-menu.png" width="700" border="1" style="border-radius: 10px"/>
 
-Next, we are going to dive deeper into each of the versions.
+### 4. Gomocup Tournament Submission
+
+`pbrain-kig-standard` is a Gomocup-protocol brain wrapping the same
+engine, targeting the **Standard** category at <https://gomocup.org/>
+(15×15 board, exact five-in-a-row, overlines do not win). Native
+binary builds with `make pbrain-kig-standard`; cross-compiled Win64
+and Win32 `.exe` files with `make gomocup-win`; submission ZIP with
+`make gomocup-zip`. Default search depth is 5, radius 3, with a
+200 ms safety margin under the manager's deadline. The brain links
+the engine with `-DNO_JSON` so it has zero dependencies. See
+[doc/04-gomocup-submission.md](doc/04-gomocup-submission.md) for
+build, packaging, and submission detail.
+
+### Rating system
+
+All four modes feed into a unified rating system that mirrors
+**Gomocup's own**: BayesElo with `eloAdvantage=0`, `eloDraw=0.01`,
+default prior — exactly the parameters Gomocup uses to rank
+submitted brains. AI tiers are first-class rated subjects (so a win
+against a depth-5 AI grants more rating than a win against depth-2),
+and human-vs-human games rate against the opponent's actual Elo. A
+weekly batch job re-fits the entire history with BayesElo so live
+classical-Elo updates converge on the canonical numbers. Design and
+rollout in [doc/gomocup-elo-rankings.md](doc/gomocup-elo-rankings.md).
 
 ---
 
@@ -398,17 +452,21 @@ justfile                Monorepo orchestration
 
 | Document | Description |
 |---|---|
+| [doc/01-human-vs-ai-tui.md](doc/01-human-vs-ai-tui.md) | **Mode 1** — TUI binary, CLI flags, depth/radius, recording |
+| [doc/02-human-vs-ai-web.md](doc/02-human-vs-ai-web.md) | **Mode 2** — web flow, settings panel, scoring, API |
+| [doc/03-human-vs-human-web.md](doc/03-human-vs-human-web.md) | **Mode 3** — invite links, polling cadence, lifecycle |
+| [doc/04-gomocup-submission.md](doc/04-gomocup-submission.md) | **Mode 4** — `pbrain-kig-standard` build, packaging, submission |
+| [doc/gomocup-elo-rankings.md](doc/gomocup-elo-rankings.md) | Unified Elo system (BayesElo, recalibration) |
 | [doc/deployment.md](doc/deployment.md) | Local cluster, Cloud Run, and GKE deployment |
 | [doc/developer.md](doc/developer.md) | C engine technical overview and architecture |
 | [doc/ai-engine.md](doc/ai-engine.md) | AI algorithm analysis, threat scoring, known issues |
 | [doc/httpd.md](doc/httpd.md) | HTTP daemon API reference and cluster setup |
 | [doc/game-rules.md](doc/game-rules.md) | Gomoku/Renju rules and variant support proposal |
 | [doc/dtrace.md](doc/dtrace.md) | DTrace investigation of CPU busy-spin fix |
+| [doc/gomocup-protocol.md](doc/gomocup-protocol.md) | Gomocup brain protocol implementation plan |
 | [doc/human-vs-human-plan.md](doc/human-vs-human-plan.md) | Multiplayer feature plan + multi-agent build workflow |
 | [doc/multiplayer-modal-plan.md](doc/multiplayer-modal-plan.md) | "Choose Game Type" modal + invite-link spec |
 | [doc/multiplayer-bugs.md](doc/multiplayer-bugs.md) | Bug list & fixes from the original multiplayer PR |
-| [doc/gomocup-elo-rankings.md](doc/gomocup-elo-rankings.md) | Plan for Gomocup-compatible Elo ratings |
-| [doc/gomocup-protocol.md](doc/gomocup-protocol.md) | Gomocup brain protocol (`pbrain-kig-standard`) |
 | [iac/README.md](iac/README.md) | Cloud Run infrastructure and Terraform |
 | [frontend/CLAUDE.md](frontend/CLAUDE.md) | Frontend architecture and API endpoints |
 
