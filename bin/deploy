@@ -47,10 +47,18 @@ fail() {
 
 [[ -f "${ENV_FILE}" ]] || fail "Missing ${ENV_FILE}. Copy .env.sample to .env and fill in values."
 
+# Hold the CLI-arg ENVIRONMENT before sourcing .env — older .env files may
+# pin `ENVIRONMENT=development` for local-runtime reasons, which would
+# otherwise clobber the deploy target the user passed on the CLI.
+_cli_environment="$ENVIRONMENT"
+
 set -a
 # shellcheck disable=SC1090
 source "${ENV_FILE}"
 set +a
+
+ENVIRONMENT="$_cli_environment"
+unset _cli_environment
 
 # Map per-environment .env keys → canonical (env-suffixed) variable names.
 # UPPER_ENV is "PRODUCTION" or "STAGING" — used to look up the right key.
@@ -63,9 +71,15 @@ honey_var="${upper_env}_HONEYCOMB_INGEST_API_KEY"
 
 DATABASE_URL_VAL="${!db_var:-}"
 JWT_SECRET_VAL="${!jwt_var:-}"
-# Domain falls back to the un-prefixed CUSTOM_DOMAIN so existing prod
-# .env files (which set CUSTOM_DOMAIN=app.gomoku.games) keep working.
-CUSTOM_DOMAIN_VAL="${!domain_var:-${CUSTOM_DOMAIN:-}}"
+# Production-only fallback to the legacy un-prefixed CUSTOM_DOMAIN so
+# existing prod .env files keep working. Staging must set
+# STAGING_CUSTOM_DOMAIN explicitly — leaking a prod CUSTOM_DOMAIN into
+# the staging deploy would map a real domain to the staging service.
+if [[ "$ENVIRONMENT" == "production" ]]; then
+  CUSTOM_DOMAIN_VAL="${!domain_var:-${CUSTOM_DOMAIN:-}}"
+else
+  CUSTOM_DOMAIN_VAL="${!domain_var:-}"
+fi
 # Per-env Honeycomb key falls back to the shared HONEYCOMB_INGEST_API_KEY so
 # the existing prod setup keeps working unchanged.
 HONEYCOMB_KEY_VAL="${!honey_var:-${HONEYCOMB_INGEST_API_KEY:-}}"

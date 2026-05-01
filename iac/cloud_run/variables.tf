@@ -52,9 +52,17 @@ variable "httpd_min_instances" {
 }
 
 variable "httpd_max_instances" {
-  description = "Maximum number of gomoku-httpd instances. >= api_max_instances * 80 to avoid queueing."
+  description = "Maximum number of gomoku-httpd instances. >= api_max_instances * 80 to avoid queueing under saturation."
   type        = number
-  default     = 80
+  # Default 20 fits inside the GCP `CpuAllocPerProjectRegion` baseline
+  # of 56,000 mCPU (= 56 instances at 1 vCPU each). To realize the
+  # documented "1 api saturates 80 httpd workers" contract you must
+  # first request a quota increase via
+  #   gcloud quotas update --service=run.googleapis.com \
+  #     --metric=run.googleapis.com/cpu_allocation \
+  #     --consumer=projects/PROJECT_ID --value=120000
+  # then bump this default (or pass TF_VAR_httpd_max_instances=80).
+  default = 20
 }
 
 variable "api_min_instances" {

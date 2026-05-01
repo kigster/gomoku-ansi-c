@@ -37,7 +37,7 @@ def _env_files() -> tuple[Path, ...]:
 class Settings(BaseSettings):
     """Settings for the application."""
 
-    environment: Literal["development", "production", "test", "ci"] = "development"
+    environment: Literal["development", "production", "staging", "test", "ci"] = "development"
 
     # Public Domain. `custom_domain` (env: CUSTOM_DOMAIN) is an explicit
     # override used when the deployed domain differs from the default —
