@@ -19,7 +19,7 @@ contract). Highlights:
 - `chats` is a 1:1 mapping to a multiplayer_games row for now; the
   `multiplayer_game_id` FK becomes nullable in a future migration when
   we add stand-alone DM between mutual friends.
-- `chat_messages` is append-only, capped to 2000 chars per row.
+- `chat_messages` is append-only, capped to 500 chars per row.
 """
 
 from collections.abc import Sequence
@@ -49,14 +49,17 @@ def upgrade() -> None:
             id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             chat_id     UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
             speaker_id  UUID NOT NULL REFERENCES users(id),
-            message     TEXT NOT NULL CHECK (length(message) BETWEEN 1 AND 2000),
+            message     TEXT NOT NULL CHECK (length(message) BETWEEN 1 AND 500),
             created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
         )
         """
     )
+    # DESC on created_at: every chat read path (open window, paginate
+    # back) wants newest-first, so the index physical order matches the
+    # query order and Postgres can stream rows without an explicit sort.
     op.execute(
         "CREATE INDEX chat_messages_chat_created_idx "
-        "ON chat_messages (chat_id, created_at)"
+        "ON chat_messages (chat_id, created_at DESC)"
     )
 
     op.execute(

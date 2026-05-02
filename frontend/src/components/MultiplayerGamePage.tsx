@@ -77,6 +77,9 @@ export default function MultiplayerGamePage({
   // a finished game keeps the URL so the game-over panel stays visible
   // through subsequent re-renders / direct revisits.
   const prevStateRef = useRef<string | null>(null)
+  // True once we've shown the "opponent has left" banner so the polling
+  // loop doesn't re-trigger it on every refresh.
+  const [opponentLeft, setOpponentLeft] = useState(false)
   useEffect(() => {
     if (!game) return
     const prev = prevStateRef.current
@@ -86,7 +89,21 @@ export default function MultiplayerGamePage({
     if (isTerminal && wasInProgress && window.location.pathname !== '/') {
       window.history.replaceState({}, '', '/')
     }
-  }, [game])
+    // "Opponent has left" banner — fired only on the in_progress →
+    // abandoned transition. A win or draw goes to `finished`; a host
+    // cancel of a never-joined game goes to `cancelled`. The only way
+    // a live game lands in `abandoned` is the other side blocking us
+    // (or a future timeout / admin action). We deliberately do NOT
+    // surface "you were blocked" — that's a privacy norm. Just a
+    // neutral message about the opponent leaving.
+    if (
+      game.state === 'abandoned' &&
+      prev === 'in_progress' &&
+      !opponentLeft
+    ) {
+      setOpponentLeft(true)
+    }
+  }, [game, opponentLeft])
 
   // If the loaded game is in `waiting` state and the caller isn't the host,
   // automatically POST /join — exactly once per `code`.
@@ -145,10 +162,24 @@ export default function MultiplayerGamePage({
     return <ErrorPage message={error ?? 'Could not load game.'} />
   }
 
-  // Cancelled/abandoned games — read-only result panel.
+  // Cancelled/abandoned games — read-only result panel. We split the
+  // copy by which transition got us here:
+  //
+  // - opponentLeft == true → we were in the middle of an in_progress
+  //   game when the other side left (block, timeout, etc.). Neutral
+  //   "Your opponent has left the game" message — we deliberately do
+  //   not reveal a block as the proximate cause.
+  // - otherwise the game was cancelled (host cancel) or expired
+  //   without ever getting joined.
   if (game.state === 'cancelled' || game.state === 'abandoned') {
     return (
-      <ErrorPage message="This invitation was cancelled or expired." />
+      <ErrorPage
+        message={
+          opponentLeft
+            ? 'Your opponent has left the game.'
+            : 'This invitation was cancelled or expired.'
+        }
+      />
     )
   }
 

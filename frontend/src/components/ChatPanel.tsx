@@ -28,26 +28,30 @@ interface ChatPanelProps {
   authToken: string
   // Backend base URL.
   apiBase: string
-  // Fires when a slash command terminated the active multiplayer game
-  // (block always; unfollow when it severed the last link). App.tsx
-  // listens and drops the player back to the idle view.
+  // Fires when a slash command terminated the active multiplayer game.
+  // Today only `/block` triggers this — `/unfollow` is intentionally a
+  // pure social-graph operation that does NOT cascade into game
+  // termination (matches the server-side contract; see
+  // app/routers/social.py module docstring).
   onActiveGameTerminated?: () => void
 }
 
 // Slash commands the chat panel understands. Each one captures the target
 // username (no leading `@`) and dispatches to a different REST endpoint.
 //
-// /invite   @user → POST /chat/invite      (game invite, presence-aware)
+// /invite   @user → POST /chat/invite      (game invite, presence-aware,
+//                                            rate-limited per caller on a
+//                                            rolling window: 7/hour, 15/24h.
+//                                            429 detail is structured —
+//                                            see formatErrorDetail below)
 // /block    @user → POST /social/block     (hard block; if the two are in
 //                                            an active game it terminates
 //                                            immediately and the UI returns
 //                                            to the standard idle view)
 // /follow   @user → POST /social/follow    (one-directional; mutual = friend)
-// /unfollow @user → POST /social/unfollow  (drops the follow; if it leaves
-//                                            both sides without any link AND
-//                                            an active game is running, the
-//                                            game terminates immediately and
-//                                            the UI returns to the idle view)
+// /unfollow @user → POST /social/unfollow  (drops the follow; idempotent;
+//                                            does NOT terminate any active
+//                                            game — only /block does that)
 //
 // The followee can send invites to anyone who follows them even when the
 // follow isn't reciprocal — only mutual follows count as "friends".
@@ -67,7 +71,7 @@ const HELP_RE = /^\s*\/help\s*$/i
 const HELP_TEXT = [
   '/invite @user   — invite the user to a game',
   '/follow @user   — follow them (mutual = friends)',
-  '/unfollow @user — drop the follow (ends an active game)',
+  '/unfollow @user — drop the follow (does not end any game)',
   '/block @user    — block them (ends an active game)',
   '/help           — this list',
 ].join('\n')
@@ -85,11 +89,15 @@ interface SlashResponseBody {
   delivered?: boolean
   target_state?: 'in_game' | 'idle' | 'offline'
   reciprocal?: boolean
-  // True when the action terminated the active multiplayer game (block, or
-  // unfollow that severed the last link). The chat panel surfaces this in
-  // the system caption AND fires onActiveGameTerminated upstream so App.tsx
-  // can drop the user back to the idle view.
+  // True iff `/block` terminated an active multiplayer game between the
+  // two. The chat panel surfaces this in the system caption AND fires
+  // onActiveGameTerminated upstream so App.tsx drops the user back to
+  // the idle view. /unfollow no longer touches games (the field is
+  // never set on its response).
   game_terminated?: boolean
+  // /unfollow always returns this; included here so the SlashResponseBody
+  // type covers all four endpoints' shapes.
+  unfollowed?: boolean
 }
 
 const SLASH_SPECS: Record<SlashAction, SlashSpec> = {
@@ -127,12 +135,44 @@ const SLASH_SPECS: Record<SlashAction, SlashSpec> = {
   },
   unfollow: {
     endpoint: '/social/unfollow',
-    successCaption: (target, body) =>
-      body.game_terminated
-        ? `Unfollowed @${target}. The game with them was ended.`
-        : `Unfollowed @${target}.`,
+    // No game_terminated branch — unfollow is a pure social-graph
+    // operation (see app/routers/social.py). If the user wants to end
+    // a game with someone, /block is the explicit verb.
+    successCaption: target => `Unfollowed @${target}.`,
     errorCaption: (target, msg) => `Could not unfollow @${target}: ${msg}`,
   },
+}
+
+// FastAPI returns errors as `{detail: string | object}`. The /chat/invite
+// 429 returns a structured detail `{error, retry_at}`; render it as a
+// human sentence with a locale-formatted retry time. All other endpoints
+// return a string detail and we pass it through unchanged.
+async function formatErrorDetail (resp: Response): Promise<string> {
+  const raw = await resp.text().catch(() => '')
+  if (!raw) return `HTTP ${resp.status}`
+  try {
+    const parsed = JSON.parse(raw) as { detail?: unknown }
+    const detail = parsed.detail
+    if (typeof detail === 'string') return detail
+    if (
+      detail !== null &&
+      typeof detail === 'object' &&
+      'error' in detail &&
+      typeof (detail as { error: unknown }).error === 'string'
+    ) {
+      const obj = detail as { error: string; retry_at?: string }
+      if (obj.retry_at) {
+        const when = new Date(obj.retry_at)
+        if (!Number.isNaN(when.getTime())) {
+          return `${obj.error} Try again at ${when.toLocaleTimeString()}.`
+        }
+      }
+      return obj.error
+    }
+  } catch {
+    // Body wasn't JSON — fall through and return it as-is.
+  }
+  return raw
 }
 
 export default function ChatPanel ({
@@ -175,8 +215,7 @@ export default function ChatPanel ({
         body: JSON.stringify({ target_username: target }),
       })
       if (!resp.ok) {
-        const detail = await resp.text().catch(() => '')
-        throw new Error(detail || `HTTP ${resp.status}`)
+        throw new Error(await formatErrorDetail(resp))
       }
       const body = (await resp.json().catch(() => ({}))) as SlashResponseBody
       pushMessage({
@@ -358,23 +397,33 @@ function Message ({ m }: { m: ChatMessage }) {
       </pre>
     )
   }
-  // Per spec: current-user bubbles are white-on-blue, left-anchored.
-  // Peer bubbles are neutral, left-anchored too — keeping a single column
-  // reads more like a console transcript than a "two-sided" chat. The
-  // colour difference still tells the speakers apart at a glance.
+  // Convention follows iMessage / WhatsApp / Slack / Discord / Telegram:
+  // the active user's bubbles sit on the RIGHT (white-on-blue), peer
+  // bubbles on the LEFT (neutral). The asymmetric corner radius
+  // ("tail" pointing toward the speaker's side) reinforces the side
+  // mapping at a glance.
   const isMe = m.me
   return (
-    <div className='flex flex-col items-start max-w-[88%]'>
-      <span className='text-[10px] uppercase tracking-[0.14em] text-neutral-500 mb-0.5 ml-2'>
+    <div
+      className={[
+        'flex flex-col max-w-[88%]',
+        isMe ? 'items-end ml-auto' : 'items-start mr-auto',
+      ].join(' ')}
+    >
+      <span
+        className={[
+          'text-[10px] uppercase tracking-[0.14em] text-neutral-500 mb-0.5',
+          isMe ? 'mr-2' : 'ml-2',
+        ].join(' ')}
+      >
         @{m.speaker}
       </span>
       <div
         className={[
-          'rounded-2xl rounded-tl-sm px-3.5 py-1.5 text-sm leading-snug',
-          'shadow-sm shadow-black/40',
+          'rounded-2xl px-3.5 py-1.5 text-sm leading-snug shadow-sm shadow-black/40',
           isMe
-            ? 'bg-blue-600 text-white'
-            : 'bg-neutral-800 text-neutral-100 border border-neutral-700/60',
+            ? 'rounded-tr-sm bg-blue-600 text-white'
+            : 'rounded-tl-sm bg-neutral-800 text-neutral-100 border border-neutral-700/60',
         ].join(' ')}
       >
         {m.body}

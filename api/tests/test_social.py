@@ -122,23 +122,27 @@ async def test_follow_self_is_400(client: AsyncClient, registered_user):
 async def test_unfollow_noop_on_missing(client: AsyncClient, make_user):
     alice = await make_user("alice")
     await make_user("bob")
-    # Never followed — unfollow still returns 200, game_terminated=False.
+    # Never followed — unfollow is idempotent and returns 200.
     resp = await client.post(
         "/social/unfollow",
         headers=alice["headers"],
         json={"target_username": "bob"},
     )
     assert resp.status_code == 200
-    assert resp.json() == {"game_terminated": False}
+    assert resp.json() == {"unfollowed": True}
 
 
 @pytest.mark.asyncio
-async def test_unfollow_terminates_game_only_when_no_link_remains(
+async def test_unfollow_does_not_terminate_active_game(
     client: AsyncClient, make_user
 ):
+    """Unfollow MUST NOT cascade into game termination, even when it
+    severs the last link between the two players. Only /block (or
+    in-game resign / timeout) ends a game.
+    """
     alice = await make_user("alice")
     bob = await make_user("bob")
-    # Both follow each other — mutual.
+    # Mutual follow + active game.
     await client.post(
         "/social/follow", headers=alice["headers"], json={"target_username": "bob"}
     )
@@ -147,25 +151,23 @@ async def test_unfollow_terminates_game_only_when_no_link_remains(
     )
     code = await _start_multiplayer_between(client, alice, bob)
 
-    # Alice unfollows — Bob still follows Alice, link survives, game lives.
+    # Both sides unfollow → no link remains.
     r1 = await client.post(
         "/social/unfollow",
         headers=alice["headers"],
         json={"target_username": "bob"},
     )
-    assert r1.json() == {"game_terminated": False}
-    state = await client.get(f"/multiplayer/{code}", headers=alice["headers"])
-    assert state.json()["state"] == "in_progress"
-
-    # Bob unfollows — last link severed, game must terminate.
+    assert r1.json() == {"unfollowed": True}
     r2 = await client.post(
         "/social/unfollow",
         headers=bob["headers"],
         json={"target_username": "alice"},
     )
-    assert r2.json() == {"game_terminated": True}
+    assert r2.json() == {"unfollowed": True}
+
+    # The game survives — unfollow doesn't touch multiplayer_games.
     state = await client.get(f"/multiplayer/{code}", headers=alice["headers"])
-    assert state.json()["state"] == "abandoned"
+    assert state.json()["state"] == "in_progress"
 
 
 # ---------------------------------------------------------------------------

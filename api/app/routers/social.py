@@ -9,10 +9,9 @@ the contract this router has to satisfy:
     → 404 user_not_found
 
 - POST /social/unfollow { target_username }
-    → 200 { game_terminated: bool }   # true iff dropping the follow
-                                       # severed the LAST link to an
-                                       # active multiplayer opponent
-    → 200 { game_terminated: false } when nothing to unfollow
+    → 200 { unfollowed: true }   # idempotent — true even when nothing
+                                  # was followed in the first place
+    → 404 user_not_found
 
 - POST /social/block { target_username }
     → 200 { game_terminated: bool }   # true iff there was an active
@@ -20,12 +19,12 @@ the contract this router has to satisfy:
                                        # two — block always terminates.
     → 404 user_not_found
 
-"Active link" between A and B = there exists at least one row in
-`friendships` where (A,B) or (B,A). Once that count drops to zero AND
-there's an in-progress / waiting multiplayer game between the two
-users, we mark the multiplayer_games row `cancelled` (waiting) or
-`abandoned` (in_progress) so both clients' polling loops naturally
-return the user to the idle view.
+Game termination on social actions is **block-only**. An unfollow
+deliberately does NOT cascade into game termination, even when it
+severs the last social link between two players: a game's liveness
+shouldn't depend on social-graph state that neither participant can
+see in the game UI. Only an explicit /block (or in-game resign /
+timeout) ends a game.
 """
 
 from __future__ import annotations
@@ -51,7 +50,14 @@ class FollowResponse(BaseModel):
 
 
 class UnfollowResponse(BaseModel):
-    game_terminated: bool
+    """Idempotent — `unfollowed: true` whether or not a row was deleted.
+
+    Deliberately does NOT include a `game_terminated` field. Unfollow
+    is a pure social-graph operation; only /block (or in-game
+    resign / timeout) ends games.
+    """
+
+    unfollowed: bool
 
 
 class BlockResponse(BaseModel):
@@ -110,23 +116,6 @@ async def _terminate_active_game_between(
     return row is not None
 
 
-async def _has_any_link(
-    conn: asyncpg.Connection, user_a: str, user_b: str
-) -> bool:
-    """True iff at least one friendships row exists in either direction."""
-    row = await conn.fetchrow(
-        """
-        SELECT 1 FROM friendships
-        WHERE (user_id = $1::uuid AND friend_id = $2::uuid)
-           OR (user_id = $2::uuid AND friend_id = $1::uuid)
-        LIMIT 1
-        """,
-        user_a,
-        user_b,
-    )
-    return row is not None
-
-
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -174,22 +163,20 @@ async def unfollow(
     async with pool.acquire() as conn:
         target = await _resolve_target(conn, body.target_username, caller_id=caller_id)
         target_id = str(target["id"])
-        async with conn.transaction():
-            await conn.execute(
-                """
-                DELETE FROM friendships
-                WHERE user_id = $1::uuid AND friend_id = $2::uuid
-                """,
-                caller_id,
-                target_id,
-            )
-            # If neither direction remains AND there's an active game, end it.
-            game_terminated = False
-            if not await _has_any_link(conn, caller_id, target_id):
-                game_terminated = await _terminate_active_game_between(
-                    conn, caller_id, target_id
-                )
-    return UnfollowResponse(game_terminated=game_terminated)
+        # Idempotent — DELETE returns affected rows but we don't care;
+        # the result is the same whether anything was actually followed.
+        await conn.execute(
+            """
+            DELETE FROM friendships
+            WHERE user_id = $1::uuid AND friend_id = $2::uuid
+            """,
+            caller_id,
+            target_id,
+        )
+        # Game termination is intentionally NOT triggered here —
+        # see the module docstring. Only /social/block (or explicit
+        # in-game resign / timeout) ends a game.
+    return UnfollowResponse(unfollowed=True)
 
 
 @router.post("/block", response_model=BlockResponse)
