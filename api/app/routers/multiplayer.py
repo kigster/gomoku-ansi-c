@@ -22,11 +22,9 @@ from __future__ import annotations
 import json as json_mod
 from typing import Any, Literal, cast
 
-import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import JSONResponse
 
-from app.config import settings
 from app.database import get_pool
 from app.elo import k_factor
 from app.elo import update as elo_update
@@ -40,13 +38,11 @@ from app.models.multiplayer import (
     PlayerInfo,
     ResignRequest,
 )
-from app.multiplayer.codes import new_code
+from app.multiplayer import allocate_game, game_invite_url
 from app.multiplayer.win_detector import has_winner
 from app.security import get_current_user
 
 router = APIRouter(prefix="/multiplayer", tags=["multiplayer"])
-
-_MAX_CODE_RETRIES = 8
 
 
 # ---------------------------------------------------------------------------
@@ -89,18 +85,6 @@ def _is_participant(row: dict, user_id: str) -> bool:
     return str(row["host_user_id"]) == user_id or (
         row["guest_user_id"] is not None and str(row["guest_user_id"]) == user_id
     )
-
-
-def _invite_url(code: str) -> str:
-    """Public URL the host shares with the guest.
-
-    Uses `settings.effective_domain`, which prefers `$CUSTOM_DOMAIN` when
-    set (typical for local dev / staging / non-default tenants) and falls
-    back to `$PUBLIC_DOMAIN` otherwise.
-    """
-    domain = settings.effective_domain
-    scheme = "http" if domain.startswith("localhost") or domain.startswith("127.") else "https"
-    return f"{scheme}://{domain}/play/{code}"
 
 
 def _build_view(
@@ -147,7 +131,7 @@ def _build_view(
         expires_at=row["expires_at"],
         created_at=row["created_at"],
         finished_at=row["finished_at"],
-        invite_url=_invite_url(row["code"]),
+        invite_url=game_invite_url(row["code"]),
     )
 
 
@@ -220,54 +204,6 @@ async def _fetch_with_usernames(conn, code: str) -> dict | None:
         code,
     )
     return dict(row) if row else None
-
-
-async def _insert_game(
-    conn,
-    *,
-    host_user_id: str,
-    host_color: str | None,
-    color_chosen_by: str,
-    board_size: int,
-) -> dict:
-    """Insert a new multiplayer game with a unique code; returns the row dict.
-
-    Retries up to `_MAX_CODE_RETRIES` on `UniqueViolationError` to handle
-    the (vanishingly unlikely) 6-char-Crockford collision — see
-    `doc/multiplayer-bugs.md` item #4.
-    """
-    last_exc: Exception | None = None
-    for _ in range(_MAX_CODE_RETRIES):
-        code = new_code()
-        try:
-            # Per-attempt savepoint — asyncpg's nested `conn.transaction()`
-            # opens a SAVEPOINT, so a UniqueViolation rolls back only this
-            # attempt and leaves the parent transaction usable for the
-            # next try (or the caller's downstream work).
-            async with conn.transaction():
-                row = await conn.fetchrow(
-                    """
-                    INSERT INTO multiplayer_games (
-                        code, host_user_id, host_color, color_chosen_by, board_size
-                    )
-                    VALUES ($1, $2::uuid, $3, $4, $5)
-                    RETURNING *
-                    """,
-                    code,
-                    host_user_id,
-                    host_color,
-                    color_chosen_by,
-                    board_size,
-                )
-            if row is not None:
-                return dict(row)
-        except asyncpg.UniqueViolationError as exc:
-            last_exc = exc
-            continue
-    raise HTTPException(
-        status.HTTP_503_SERVICE_UNAVAILABLE,
-        f"Failed to allocate a unique multiplayer code: {last_exc}",
-    )
 
 
 async def _write_finished_games_rows(
@@ -431,13 +367,20 @@ async def new_game(
     color_chosen_by = "host" if body.host_color is not None else "guest"
     async with pool.acquire() as conn:
         async with conn.transaction():
-            row = await _insert_game(
-                conn,
-                host_user_id=str(user["id"]),
-                host_color=body.host_color,
-                color_chosen_by=color_chosen_by,
-                board_size=body.board_size,
-            )
+            try:
+                row = await allocate_game(
+                    conn,
+                    host_user_id=str(user["id"]),
+                    host_color=body.host_color,
+                    color_chosen_by=color_chosen_by,
+                    board_size=body.board_size,
+                    created_via="modal",
+                )
+            except RuntimeError as exc:
+                raise HTTPException(
+                    status.HTTP_503_SERVICE_UNAVAILABLE,
+                    str(exc),
+                )
     your_color = body.host_color  # may be None when guest chooses
     return _build_view(
         row,

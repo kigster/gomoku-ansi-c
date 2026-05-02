@@ -14,7 +14,7 @@ from app.database import close_pool, create_pool
 from app.logger import get_logger
 from app.middleware.client_ip import ClientIPMiddleware
 from app.middleware.request_logging import RequestLoggingMiddleware
-from app.routers import auth, game, leaderboard, multiplayer, user
+from app.routers import auth, chat, game, leaderboard, multiplayer, social, user
 from app.telemetry import instrument_app, setup_telemetry
 
 # Initialize tracing before any instrumentable client (httpx, asyncpg) is built.
@@ -78,9 +78,11 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
 
 
 fastapi_app.include_router(auth.router)
+fastapi_app.include_router(chat.router)
 fastapi_app.include_router(game.router)
 fastapi_app.include_router(leaderboard.router)
 fastapi_app.include_router(multiplayer.router)
+fastapi_app.include_router(social.router)
 fastapi_app.include_router(user.router)
 
 instrument_app(fastapi_app)

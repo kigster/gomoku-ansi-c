@@ -73,6 +73,7 @@ node_modules/
 **/.DS_Store
 **/*.log
 nohup.out
+/api/logs/**
 /.rubymate
 /tmp/**
 # 

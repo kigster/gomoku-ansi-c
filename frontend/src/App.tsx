@@ -16,6 +16,8 @@ import {
 import AlertPanel, { showInfo, showError } from './components/AlertPanel'
 import AuthModal from './components/AuthModal'
 import SettingsPanel from './components/SettingsPanel'
+import SidePanelTabs, { type SidePanelTab } from './components/SidePanelTabs'
+import ChatPanel from './components/ChatPanel'
 import Board from './components/Board'
 import GameStatus from './components/GameStatus'
 import ThinkingTimer from './components/ThinkingTimer'
@@ -305,6 +307,20 @@ export default function App () {
     if (!authToken) sawAuthRef.current = null
   }, [authToken])
 
+  // Right-rail tab — Solo holds the AI settings, Multi holds the chat panel.
+  // Default to Solo on load; auto-flip to Multi the moment the user clicks
+  // "New Multiplayer Game" so they immediately see the chat-driven flow
+  // they're opting into. They can manually flip back via the tab header.
+  const [sideTab, setSideTab] = useState<SidePanelTab>('solo')
+
+  // Click handler for "New Multiplayer Game" — opens the modal AND
+  // auto-switches the tab to Multi so the chat is in front of the user
+  // while they're hosting / pasting an opponent's code.
+  const openMultiplayerFlow = useCallback(() => {
+    setShowChooseGameType(true)
+    setSideTab('multi')
+  }, [])
+
   const isActive = phase === 'playing' || phase === 'thinking'
 
   const needsAuth = !playerName || !authToken || hasResetToken
@@ -582,15 +598,39 @@ export default function App () {
                     ].join(' ')}
                   >
                     <div className='overflow-hidden'>
-                      <SettingsPanel
-                        settings={settings}
-                        onChange={setSettings}
-                        disabled={isActive}
+                      <SidePanelTabs
+                        active={sideTab}
+                        onChange={setSideTab}
+                        solo={
+                          <SettingsPanel
+                            settings={settings}
+                            onChange={setSettings}
+                            disabled={isActive}
+                          />
+                        }
+                        multi={
+                          authToken && playerName ? (
+                            <ChatPanel
+                              meUsername={playerName}
+                              peerUsername={null}
+                              authToken={authToken}
+                              apiBase={API_BASE}
+                              onActiveGameTerminated={handleAbort}
+                            />
+                          ) : (
+                            <p className='text-center text-sm text-neutral-500 py-6'>
+                              Sign in to use chat.
+                            </p>
+                          )
+                        }
                       />
                     </div>
                   </div>
 
-                  {/* Start / New Game Button */}
+                  {/* Start / New Game Button — both primary actions share
+                      identical typography and dimensions (text-lg /
+                      font-semibold = 600 / py-3) so neither visually
+                      dominates the other. */}
                   <div className='mt-5'>
                     {phase === 'idle' && (
                       <button
@@ -606,18 +646,18 @@ export default function App () {
                           startGame()
                           scrollToBottom()
                         }}
-                        className='w-full py-4 rounded-xl text-xl font-bold font-heading
+                        className='w-full py-3 rounded-xl text-lg font-semibold font-heading
                                bg-amber-600 hover:bg-amber-500 active:bg-amber-700
                                ring-1 ring-amber-500/30 shadow-lg shadow-amber-900/40
                                transition-all duration-200 hover:shadow-amber-600/25
                                hover:shadow-xl hover:scale-[1.01]'
                       >
-                        Start Game
+                        Start Game with AI
                       </button>
                     )}
                     {phase === 'idle' && (
                       <button
-                        onClick={() => setShowChooseGameType(true)}
+                        onClick={openMultiplayerFlow}
                         className='w-full mt-3 py-3 rounded-xl text-lg font-semibold font-heading
                                bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700
                                text-white shadow-md shadow-emerald-900/40
@@ -645,7 +685,7 @@ export default function App () {
                         <button
                           onClick={handleUndo}
                           disabled={phase !== 'playing' || moveCount < 2}
-                          className='w-full py-3 rounded-xl text-lg font-bold font-heading
+                          className='w-full py-3 rounded-xl text-lg font-semibold font-heading
                                  bg-sky-700 hover:bg-sky-600 active:bg-sky-800
                                  text-white shadow-md shadow-sky-900/40 transition-all duration-200
                                  hover:scale-[1.01] disabled:opacity-30 disabled:cursor-not-allowed'
@@ -656,7 +696,7 @@ export default function App () {
                       <ThinkingTimer phase={phase} playerName={playerName} />
                       <button
                         onClick={handleAbort}
-                        className='w-full mt-3 py-3 rounded-xl text-lg font-bold font-heading
+                        className='w-full mt-3 py-3 rounded-xl text-lg font-semibold font-heading
                                bg-red-700 hover:bg-red-600 active:bg-red-800
                                text-white shadow-md shadow-red-900/40 transition-all duration-200 hover:scale-[1.01]'
                       >

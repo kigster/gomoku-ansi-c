@@ -1138,16 +1138,17 @@ async def test_new_code_collision_retries_until_unique(
 ):
     """Mock new_code() to return a colliding value once, then a fresh one.
 
-    The router must retry on UniqueViolationError without raising 500.
+    The shared `allocate_game` helper must retry on
+    UniqueViolationError without raising 500.
     """
-    from app.routers import multiplayer as mp_router
+    from app.multiplayer import allocate as allocate_mod
 
     real_codes = ["AAAAAA", "AAAAAA", "BBBBBB"]
 
     def fake_new_code() -> str:
         return real_codes.pop(0)
 
-    monkeypatch.setattr(mp_router, "new_code", fake_new_code)
+    monkeypatch.setattr(allocate_mod, "new_code", fake_new_code)
 
     first = await client.post("/multiplayer/new", headers=auth_headers, json={})
     second = await client.post("/multiplayer/new", headers=auth_headers, json={})

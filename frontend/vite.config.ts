@@ -18,9 +18,11 @@ export default defineConfig({
     ],
     proxy: {
       '/auth': { target: API, changeOrigin: true },
+      '/chat': { target: API, changeOrigin: true },
       '/game': { target: API, changeOrigin: true },
       '/leaderboard': { target: API, changeOrigin: true },
       '/multiplayer': { target: API, changeOrigin: true },
+      '/social': { target: API, changeOrigin: true },
       '/user': { target: API, changeOrigin: true },
       '/health': { target: API, changeOrigin: true },
     },
