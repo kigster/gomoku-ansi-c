@@ -49,6 +49,9 @@ install-frontend: build-frontend
     cp -r frontend/dist api/public
     touch api/public/.gitkeep
 
+clean-start: clean build
+    SECRET=$(cat .secret) bin/gctl start
+
 # ─── Test ─────────────────────────────────────────────────────────────────────
 
 # Run C engine unit tests (game + daemon)
