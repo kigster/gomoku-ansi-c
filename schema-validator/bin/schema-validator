@@ -46,7 +46,7 @@ module CLI
       option :schema,
         aliases: ["-s"],
         required: true,
-        default: DEFAULT_SCHEMA.relative_path_from(PROJECT_ROOT).to_s, desc: "Path to JSON Schema file"
+        default: DEFAULT_SCHEMA.to_s, desc: "Path to JSON Schema file"
 
       def call(schema:, files: [], **)
         if files.nil? || files.empty?
@@ -55,7 +55,7 @@ module CLI
         end
 
         schema_path = Pathname.new(schema)
-        schema_path = PROJECT_ROOT.join(schema_path) unless schema_path.absolute?
+        schema_path = schema_path.expand_path unless schema_path.absolute?
         unless schema_path.exist?
           error "Schema file not found: #{schema_path}"
           exit 1

@@ -29,5 +29,4 @@ jobs:
     - name: Validate sample game against JSON schema
       run: |
         TERM=xterm-256color bundle exec bin/schema-validator validate-json \
-          --schema ../config/gomoku-json-schema.json \
-          --file ../config/sample-game.json
+          --schema ../config/gomoku-json-schema.json ../gomoku-c/games
