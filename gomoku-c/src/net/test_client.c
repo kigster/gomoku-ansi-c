@@ -465,18 +465,18 @@ static void print_timing_lines(int padding, const char *x_name,
 
   // Header.
   if (named) {
-    printf("%*s%sPlayer     \xe2\x94\x83  Wait \xe2\x94\x83 Server "
+    printf("%*s%sPlayer     \xe2\x94\x83 Spent \xe2\x94\x83 Server "
            "\xe2\x94\x83 Queue \xe2\x94\x83%s\033[K\n",
            padding, "", COLOR_BOLD_GREEN, COLOR_RESET);
   } else {
-    printf("%*s%sPlayer \xe2\x94\x83  Wait \xe2\x94\x83 Server "
+    printf("%*s%sPlayer \xe2\x94\x83 Spent \xe2\x94\x83 Server "
            "\xe2\x94\x83 Queue \xe2\x94\x83%s\033[K\n",
            padding, "", COLOR_BOLD_GREEN, COLOR_RESET);
   }
 
   // Separator. Each \xe2\x94\x81 is heavy ━; ╋ is \xe2\x95\x8b; ┫ is
-  // \xe2\x94\xab. Cells after column 1 (Wait/Server/Queue) keep the
-  // original 7/8/8 widths.
+  // \xe2\x94\xab. Cells after column 1 (Spent/Server/Queue) are 7/8/7
+  // chars, matching the data rows below.
   printf("%*s%s", padding, "", COLOR_BOLD_GREEN);
   for (int i = 0; i < (named ? 11 : 7); i++) printf("\xe2\x94\x81");
   printf("\xe2\x95\x8b");
@@ -484,7 +484,7 @@ static void print_timing_lines(int padding, const char *x_name,
   printf("\xe2\x95\x8b");
   for (int i = 0; i < 8; i++) printf("\xe2\x94\x81");
   printf("\xe2\x95\x8b");
-  for (int i = 0; i < 8; i++) printf("\xe2\x94\x81");
+  for (int i = 0; i < 7; i++) printf("\xe2\x94\x81");
   printf("\xe2\x94\xab%s\033[K\n", COLOR_RESET);
 
   // Rows. "X (%7.7s)" / "O (%7.7s)" is exactly 11 chars (no trailing
