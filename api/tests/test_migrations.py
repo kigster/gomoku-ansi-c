@@ -54,9 +54,7 @@ async def fresh_db():
         # this dynamically means new migrations don't need to update a
         # hard-coded list (the previous static list missed multiplayer_games
         # and forced a defensive DROP inside that migration's upgrade()).
-        rows = await conn.fetch(
-            "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
-        )
+        rows = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
         table_names = [r["tablename"] for r in rows]
         if table_names:
             quoted = ", ".join(f'"{name}"' for name in table_names)

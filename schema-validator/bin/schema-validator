@@ -7,22 +7,30 @@ require "json"
 require "json_schemer"
 require "pathname"
 require "tty-box"
+require "colored2"
 require "stringio"
 
 module CLI
   module Commands
     extend Dry::CLI::Registry
 
+    PROJECT_ROOT = Pathname.new(File.expand_path('../../', __dir__)).freeze
+    DEFAULT_SCHEMA = Pathname.new(File.expand_path('../../config/gomoku-json-schema.json', __dir__))
+
     module Output
       class << self
         attr_accessor :quiet
         def included(base)
-          base.class_eval do 
-            def info(msg);    output TTY::Box.info(msg); end
-            def error(msg);   output TTY::Box.error(msg); end
-            def warn(msg);    output TTY::Box.warn(msg); end
-            def success(msg); output TTY::Box.success(msg); end
-            def output(msg);  ::CLI::Commands::Output.quiet ? puts('') : puts(msg); end
+          base.class_eval do
+            def info(msg);    box(:info, msg); end
+            def error(msg);   box(:error, msg, align: :left); end
+            def warn(msg);    box(:warn, msg); end
+            def success(msg); box(:success, msg); end
+            def output(msg);  puts(msg) unless ::CLI::Commands::Output.quiet; end
+            def box(type, msg, **opts)
+              default_opts = { width: 80, padding: [0,1,0,1], left: 5, border: :light, align: :center }
+              output TTY::Box.send(type, msg, **default_opts.merge(opts))
+            end
           end
         end
       end
@@ -31,42 +39,136 @@ module CLI
     class ValidateJson < Dry::CLI::Command
       include Output
 
-      desc "Validate a JSON file against a JSON Schema"
+      desc "Validate a JSON file or a directory against a JSON Schema"
 
-      option :schema, aliases: ["-s"], required: true, default: 'config/gomoku-json-schema.json', desc: "Path to JSON Schema file"
-      option :file, aliases: ["-f"], required: true, default: 'config/sample-game.json', desc: "Path to JSON file to validate"
+      argument :files, type: :array, desc: "A folder of files or list of files"
 
-      def call(schema:, file:, **)
+      option :schema,
+        aliases: ["-s"],
+        required: true,
+        default: DEFAULT_SCHEMA.to_s, desc: "Path to JSON Schema file"
+
+      def call(schema:, files: [], **)
+        if files.nil? || files.empty?
+          error "No files or directories passed as arguments"
+          exit 1
+        end
+
         schema_path = Pathname.new(schema)
-        file_path = Pathname.new(file)
-
+        schema_path = schema_path.expand_path unless schema_path.absolute?
         unless schema_path.exist?
           error "Schema file not found: #{schema_path}"
           exit 1
         end
 
-        unless file_path.exist?
-          error "JSON file not found: #{file_path}"
-          exit 1
-        end
-
-        schemer = JSONSchemer.schema(schema_path)
-        data = JSON.parse(file_path.read)
-
-        if schemer.valid?(data)
-          success "File #{file} is valid. Schema file used: #{schema_path}"
+        files = expand_inputs(files)
+        if files.empty?
+          warn "No JSON files found in the supplied paths."
           exit 0
         end
 
-        msg = StringIO.new
-        schemer.validate(data).each do |error|
-          msg.puts " • #{error["data_pointer"]}: #{error["type"]} - #{error["details"]}"
+        schemer = JSONSchemer.schema(schema_path)
+        invalid_files = {}
+
+        files.each do |file_path|
+          display_path = file_path.absolute? ? file_path.relative_path_from(PROJECT_ROOT) : file_path
+          $stdout.printf("file: [%-60s]  ".cyan, display_path)
+          result, validation_error = validate_one_file(schemer, file_path)
+          if result.zero?
+            ok!("———▶  ")
+          else
+            not_ok!("———▶  ")
+            validation_error == "issue unknown" if validation_error.nil? or validation_error.empty?
+            invalid_files[file_path.to_s] = validation_error
+          end
         end
-        error msg.string
-        exit 1
+        puts
+        handle_results(invalid_files, files.size)
+      end
+
+      def handle_results(invalid_files, size)
+        invalid_counter = invalid_files.size
+
+        if invalid_counter.zero?
+          success "All #{size} file(s) passed validation."
+          exit 0
+        end
+
+        if invalid_counter == size
+          error "Not a single file is valid out of #{size} files."
+          report_errors(invalid_files)
+          exit invalid_counter
+        end
+
+        passed = size - invalid_counter
+        percentage = format("%.2f%%", (passed * 100.0) / size)
+        warn "#{passed} out of #{size} files passed validation (#{percentage})."
+
+        report_errors(invalid_files)
+        exit invalid_counter
+      end
+
+      def report_errors(invalid_files)
+        errors = []
+        invalid_files.each { |file, msg| errors.push("#{file}:\n\t#{msg}") }
+        error(errors.join("\n"))
+        pp errors
+      end
+
+      def not_ok!(msg = "")
+        puts (msg + ' 𐄂 ').black.on.red
+      end
+
+      def ok!(msg = "")
+        puts (msg + ' ✔ ').white.on.green
+      end
+
+      private
+
+      # Expands a list of file/directory arguments into a flat, de-duplicated,
+      # sorted list of Pathname objects pointing at *.json files. Directories
+      # are searched recursively. Non-existent paths and unsupported file types
+      # are reported and skipped (the caller decides what to do with the
+      # resulting list).
+      def expand_inputs(inputs)
+        seen = {}
+        inputs.each do |raw|
+          path = Pathname.new(raw.to_s.strip)
+          unless path.exist?
+            warn "Path not found: #{path}"
+            next
+          end
+
+          if path.directory?
+            matches = Pathname.glob(path.join("**", "*.json")).select(&:file?)
+            if matches.empty?
+              warn "No *.json files found under directory: #{path}"
+            end
+            matches.sort.each { |p| seen[p.expand_path.to_s] ||= p }
+          elsif path.file?
+            seen[path.expand_path.to_s] ||= path
+          else
+            warn "Skipping unsupported path (not a file or directory): #{path}"
+          end
+        end
+        seen.values
+      end
+
+      def validate_one_file(schemer, file_path)
+        return 1, "JSON file not found: #{file_path}" unless file_path.exist?
+
+        data = JSON.parse(file_path.read)
+        return 0, nil if schemer.valid?(data)
+
+        msg = StringIO.new
+        lines = 0
+        schemer.validate(data).each do |error|
+          msg.puts " • #{error['data_pointer']}: #{error['type']} - #{error['details']}\n"
+          lines += 1
+        end
+        [lines, msg.string]
       rescue JSON::ParserError => e
-        error "Invalid JSON in #{file_path}: #{e.message}" "#{e.inspect}"
-        exit 1
+        [1, "invalid JSON in #{file_path}: #{e.message}".red]
       end
     end
   end
@@ -75,4 +177,11 @@ end
 CLI::Commands.register "validate-json", CLI::Commands::ValidateJson
 CLI::Commands::Output.quiet = false
 
-Dry::CLI.new(CLI::Commands).call
+include CLI::Commands::Output
+
+begin
+  Dry::CLI.new(CLI::Commands).call
+rescue StandardError => e
+  error e.message
+  exit 1
+end

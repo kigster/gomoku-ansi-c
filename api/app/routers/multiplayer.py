@@ -99,13 +99,9 @@ def _build_view(
     host_color = row["host_color"]
     next_to_move = row["next_to_move"]
     your_turn = (
-        your_color is not None
-        and row["state"] == "in_progress"
-        and your_color == next_to_move
+        your_color is not None and row["state"] == "in_progress" and your_color == next_to_move
     )
-    guest_color = (
-        _opposite_color(host_color) if (host_color and guest_username) else None
-    )
+    guest_color = _opposite_color(host_color) if (host_color and guest_username) else None
     # The DB schema constrains host_color / guest_color to ('X','O') but
     # asyncpg returns plain ``str``; the casts here narrow the type for
     # Pydantic without affecting runtime behaviour.
@@ -142,9 +138,7 @@ def _build_preview(
     guest_username: str | None,
 ) -> MultiplayerGamePreview:
     host_color = row["host_color"]
-    guest_color = (
-        _opposite_color(host_color) if (host_color and guest_username) else None
-    )
+    guest_color = _opposite_color(host_color) if (host_color and guest_username) else None
     _Color = Literal["X", "O"]
     return MultiplayerGamePreview(
         code=row["code"],
@@ -444,28 +438,18 @@ async def join_game(
                 code,
             )
             if existing_rec is None:
-                raise HTTPException(
-                    status.HTTP_404_NOT_FOUND, "multiplayer_game_not_found"
-                )
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "multiplayer_game_not_found")
             existing = dict(existing_rec)
 
             # Pre-flight checks before mutating.
             if str(existing["host_user_id"]) == user_id:
-                raise HTTPException(
-                    status.HTTP_409_CONFLICT, "cannot_join_own_game"
-                )
+                raise HTTPException(status.HTTP_409_CONFLICT, "cannot_join_own_game")
             if existing["state"] == "cancelled":
-                raise HTTPException(
-                    status.HTTP_409_CONFLICT, "game_cancelled"
-                )
+                raise HTTPException(status.HTTP_409_CONFLICT, "game_cancelled")
             if existing["guest_user_id"] is not None:
-                raise HTTPException(
-                    status.HTTP_409_CONFLICT, "game_already_full"
-                )
+                raise HTTPException(status.HTTP_409_CONFLICT, "game_already_full")
             if existing["state"] != "waiting":
-                raise HTTPException(
-                    status.HTTP_409_CONFLICT, "game_not_in_waiting_state"
-                )
+                raise HTTPException(status.HTTP_409_CONFLICT, "game_not_in_waiting_state")
 
             color_chosen_by = existing["color_chosen_by"]
             chosen = body.chosen_color
@@ -540,15 +524,11 @@ async def cancel_game(
                 code,
             )
             if row_rec is None:
-                raise HTTPException(
-                    status.HTTP_404_NOT_FOUND, "multiplayer_game_not_found"
-                )
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "multiplayer_game_not_found")
             row = dict(row_rec)
 
             if str(row["host_user_id"]) != user_id:
-                raise HTTPException(
-                    status.HTTP_403_FORBIDDEN, "not_the_host"
-                )
+                raise HTTPException(status.HTTP_403_FORBIDDEN, "not_the_host")
             if row["state"] != "waiting":
                 raise HTTPException(
                     status.HTTP_409_CONFLICT,
@@ -596,9 +576,7 @@ async def get_game(
 
     user_id = str(user["id"])
     is_host = str(row["host_user_id"]) == user_id
-    is_guest = (
-        row["guest_user_id"] is not None and str(row["guest_user_id"]) == user_id
-    )
+    is_guest = row["guest_user_id"] is not None and str(row["guest_user_id"]) == user_id
 
     if not (is_host or is_guest):
         preview = _build_preview(
@@ -640,21 +618,15 @@ async def make_move(
                 code,
             )
             if row_rec is None:
-                raise HTTPException(
-                    status.HTTP_404_NOT_FOUND, "multiplayer_game_not_found"
-                )
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "multiplayer_game_not_found")
             row = dict(row_rec)
 
             your_color = _participant_color(row, user_id)
             if your_color is None:
-                raise HTTPException(
-                    status.HTTP_403_FORBIDDEN, "not_a_participant"
-                )
+                raise HTTPException(status.HTTP_403_FORBIDDEN, "not_a_participant")
 
             if row["state"] != "in_progress":
-                raise HTTPException(
-                    status.HTTP_409_CONFLICT, "game_not_in_progress"
-                )
+                raise HTTPException(status.HTTP_409_CONFLICT, "game_not_in_progress")
 
             x, y = int(body.x), int(body.y)
             board_size = row["board_size"]
@@ -663,36 +635,24 @@ async def make_move(
             # would also fail a Pydantic upper bound (see
             # doc/multiplayer-bugs.md item #7).
             if not (0 <= x < board_size and 0 <= y < board_size):
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST, "out_of_bounds"
-                )
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "out_of_bounds")
 
             if body.expected_version != row["version"]:
-                raise HTTPException(
-                    status.HTTP_409_CONFLICT, "version_conflict"
-                )
+                raise HTTPException(status.HTTP_409_CONFLICT, "version_conflict")
 
             if your_color != row["next_to_move"]:
-                raise HTTPException(
-                    status.HTTP_409_CONFLICT, "not_your_turn"
-                )
+                raise HTTPException(status.HTTP_409_CONFLICT, "not_your_turn")
 
             moves = _coerce_moves(row["moves"])
             if (x, y) in {(mx, my) for mx, my in moves}:
-                raise HTTPException(
-                    status.HTTP_409_CONFLICT, "square_occupied"
-                )
+                raise HTTPException(status.HTTP_409_CONFLICT, "square_occupied")
 
             moves.append((x, y))
 
             won = has_winner(moves, x, y, your_color, board_size)
             new_state = "finished" if won else "in_progress"
             new_winner = your_color if won else None
-            next_to_move = (
-                row["next_to_move"]
-                if won
-                else _opposite_color(row["next_to_move"])
-            )
+            next_to_move = row["next_to_move"] if won else _opposite_color(row["next_to_move"])
 
             new_moves_json = json_mod.dumps([list(m) for m in moves])
 
@@ -763,20 +723,14 @@ async def resign_game(
                 code,
             )
             if row_rec is None:
-                raise HTTPException(
-                    status.HTTP_404_NOT_FOUND, "multiplayer_game_not_found"
-                )
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "multiplayer_game_not_found")
             row = dict(row_rec)
 
             your_color = _participant_color(row, user_id)
             if your_color is None:
-                raise HTTPException(
-                    status.HTTP_403_FORBIDDEN, "not_a_participant"
-                )
+                raise HTTPException(status.HTTP_403_FORBIDDEN, "not_a_participant")
             if row["state"] != "in_progress":
-                raise HTTPException(
-                    status.HTTP_409_CONFLICT, "game_not_in_progress"
-                )
+                raise HTTPException(status.HTTP_409_CONFLICT, "game_not_in_progress")
 
             winner = _opposite_color(your_color)
             updated = await conn.fetchrow(

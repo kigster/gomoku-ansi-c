@@ -99,18 +99,23 @@ describe('extractInviteCode', () => {
 
 describe('ChooseGameTypeModal', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    // Full reset (not just clear) so that previous tests' Once-queues and
+    // implementations don't leak into later tests' fresh setups.
+    vi.resetAllMocks()
   })
 
-  it('renders the title and AI/Another-Player radios with AI selected by default', () => {
+  it('renders the title with Another Player selected by default and the form expanded', () => {
+    mockNewGame.mockResolvedValue(FAKE_GAME)
     renderModal()
     expect(screen.getByText('Choose Game Type')).toBeInTheDocument()
     const ai = screen.getByLabelText(/AI/i, { selector: 'input' })
     const human = screen.getByLabelText(/Another Player/i, { selector: 'input' })
-    expect(ai).toBeChecked()
-    expect(human).not.toBeChecked()
-    // Sub-questions are hidden until Another Player is picked.
-    expect(screen.queryByText(/Who chooses the playing color/)).toBeNull()
+    expect(human).toBeChecked()
+    expect(ai).not.toBeChecked()
+    // Default is human → sub-questions and the join-by-code section are
+    // visible without any extra click.
+    expect(screen.getByText(/Who chooses the playing color/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Invitation code or link/i)).toBeInTheDocument()
   })
 
   it('reveals the color-chooser sub-radios when Another Player is picked', async () => {
@@ -133,13 +138,24 @@ describe('ChooseGameTypeModal', () => {
     expect(screen.queryByText(/Your color/)).toBeNull()
   })
 
-  it('Start with AI selection fires onAIChosen and does not POST', async () => {
+  it('switching to AI then Start fires onAIChosen and cancels the auto-issued invite', async () => {
     const user = userEvent.setup()
     const onAIChosen = vi.fn()
+    mockNewGame.mockResolvedValue(FAKE_GAME)
+    mockCancelGame.mockResolvedValue({ ...FAKE_GAME, state: 'cancelled' })
     renderModal({ onAIChosen })
+    // Modal mounts with "Another Player" → POST fires once on mount.
+    await waitFor(() => expect(mockNewGame).toHaveBeenCalledTimes(1))
+    // Wait for setGame(FAKE_GAME) to commit so the cancel branch in the
+    // toggle handler has a code to cancel.
+    await screen.findByDisplayValue(FAKE_GAME.invite_url)
+    // Flip to AI: the auto-issued invite is cancelled; Start dispatches AI.
+    await user.click(screen.getByLabelText(/AI/i, { selector: 'input' }))
+    await waitFor(() =>
+      expect(mockCancelGame).toHaveBeenCalledWith('test-token', FAKE_GAME.code),
+    )
     await user.click(screen.getByRole('button', { name: /^Start$/ }))
     expect(onAIChosen).toHaveBeenCalledTimes(1)
-    expect(mockNewGame).not.toHaveBeenCalled()
   })
 
   it('picking Another Player auto-POSTs /multiplayer/new and shows the invite link', async () => {
@@ -204,43 +220,64 @@ describe('ChooseGameTypeModal', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('shows the join-by-code section when Another Player is picked', async () => {
+  it('shows the join-by-code section by default; hides it when AI is picked', async () => {
     const user = userEvent.setup()
+    mockNewGame.mockResolvedValue(FAKE_GAME)
+    mockCancelGame.mockResolvedValue({ ...FAKE_GAME, state: 'cancelled' })
     renderModal()
-    expect(screen.queryByLabelText(/Invitation code or link/i)).toBeNull()
-    await user.click(screen.getByLabelText(/Another Player/i, { selector: 'input' }))
+    // Default = Another Player → join-by-code section is mounted.
     expect(screen.getByLabelText(/Invitation code or link/i)).toBeInTheDocument()
+    // Wait for the auto-create POST to settle before flipping to AI so the
+    // toggle handler's "cancel previous invite" branch has a code to cancel.
+    await waitFor(() => expect(mockNewGame).toHaveBeenCalledTimes(1))
+    // Flip to AI → join-by-code section is unmounted.
+    await user.click(screen.getByLabelText(/AI/i, { selector: 'input' }))
+    await waitFor(() =>
+      expect(screen.queryByLabelText(/Invitation code or link/i)).toBeNull(),
+    )
   })
 
   it('joining via pasted bare code calls onGuestJoined with the code', async () => {
     const user = userEvent.setup()
     const onGuestJoined = vi.fn()
+    mockNewGame.mockResolvedValue(FAKE_GAME)
+    mockCancelGame.mockResolvedValue({ ...FAKE_GAME, state: 'cancelled' })
     renderModal({ onGuestJoined })
-    await user.click(screen.getByLabelText(/Another Player/i, { selector: 'input' }))
-    await user.type(screen.getByLabelText(/Invitation code or link/i), 'ab7k3x')
+    // Wait for the auto-create to settle so the input is enabled
+    // (`disabled={creating}` on JoinByCodeSection).
+    await waitFor(() => expect(mockNewGame).toHaveBeenCalledTimes(1))
+    const input = await screen.findByLabelText(/Invitation code or link/i)
+    await waitFor(() => expect(input).not.toBeDisabled())
+    // Pick a code that differs from FAKE_GAME.code — otherwise the
+    // self-paste guard rejects with "That's your own invitation".
+    await user.type(input, 'CD9P4Y')
     await user.click(screen.getByRole('button', { name: 'Join' }))
-    expect(onGuestJoined).toHaveBeenCalledWith('AB7K3X')
+    await waitFor(() => expect(onGuestJoined).toHaveBeenCalledWith('CD9P4Y'))
   })
 
   it('joining via a full /play URL extracts and uppercases the code', async () => {
     const user = userEvent.setup()
     const onGuestJoined = vi.fn()
+    mockNewGame.mockResolvedValue(FAKE_GAME)
+    mockCancelGame.mockResolvedValue({ ...FAKE_GAME, state: 'cancelled' })
     renderModal({ onGuestJoined })
-    await user.click(screen.getByLabelText(/Another Player/i, { selector: 'input' }))
-    await user.type(
-      screen.getByLabelText(/Invitation code or link/i),
-      'https://dev.gomoku.games/play/abcdef',
-    )
+    await waitFor(() => expect(mockNewGame).toHaveBeenCalledTimes(1))
+    const input = await screen.findByLabelText(/Invitation code or link/i)
+    await waitFor(() => expect(input).not.toBeDisabled())
+    await user.type(input, 'https://dev.gomoku.games/play/abcdef')
     await user.click(screen.getByRole('button', { name: 'Join' }))
-    expect(onGuestJoined).toHaveBeenCalledWith('ABCDEF')
+    await waitFor(() => expect(onGuestJoined).toHaveBeenCalledWith('ABCDEF'))
   })
 
   it('rejects garbage input with an inline error', async () => {
     const user = userEvent.setup()
     const onGuestJoined = vi.fn()
+    mockNewGame.mockResolvedValue(FAKE_GAME)
     renderModal({ onGuestJoined })
-    await user.click(screen.getByLabelText(/Another Player/i, { selector: 'input' }))
-    await user.type(screen.getByLabelText(/Invitation code or link/i), 'NOPE!!')
+    await waitFor(() => expect(mockNewGame).toHaveBeenCalledTimes(1))
+    const input = await screen.findByLabelText(/Invitation code or link/i)
+    await waitFor(() => expect(input).not.toBeDisabled())
+    await user.type(input, 'NOPE!!')
     await user.click(screen.getByRole('button', { name: 'Join' }))
     expect(onGuestJoined).not.toHaveBeenCalled()
     expect(screen.getByText(/Enter a 6-character code/)).toBeInTheDocument()

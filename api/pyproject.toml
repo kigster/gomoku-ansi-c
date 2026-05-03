@@ -31,6 +31,7 @@ dependencies = [
     "opentelemetry-instrumentation-urllib>=0.60b1",
     "rich>=14.3.3",
     "typer>=0.24.1",
+    "gibberish_detector"
 ]
 [dependency-groups]
 dev = [

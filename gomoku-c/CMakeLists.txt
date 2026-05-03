@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.10)
-project(gomoku VERSION 1.2.0 LANGUAGES C CXX)
+cmake_minimum_required(VERSION 4.3.0)
+project(gomoku VERSION 2.1.0 LANGUAGES C CXX)
 
 # Set C standard
 set(CMAKE_C_STANDARD 99)

@@ -29,14 +29,22 @@ timeout) ends a game.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.database import get_pool
 from app.security import get_current_user
 
 router = APIRouter(prefix="/social", tags=["social"])
+
+# /social/who's "currently connected" window. Matches the chat-panel
+# polling cadence (300 ms while active) — anyone last-seen within the
+# minute is treated as present. Wider windows would surface ghost
+# users; narrower would miss real ones across a single network blip.
+WHO_PRESENCE_WINDOW_SECONDS = 60
 
 
 class TargetUsernameRequest(BaseModel):
@@ -62,6 +70,18 @@ class UnfollowResponse(BaseModel):
 
 class BlockResponse(BaseModel):
     game_terminated: bool
+
+
+class WhoEntry(BaseModel):
+    """One row in /social/who. `is_friend` = mutual follow."""
+
+    username: str
+    last_seen_at: datetime
+    is_friend: bool
+
+
+class WhoResponse(BaseModel):
+    users: list[WhoEntry]
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +233,60 @@ async def block(
                 target_id,
             )
             # Always terminate any active game between the two.
-            game_terminated = await _terminate_active_game_between(
-                conn, caller_id, target_id
-            )
+            game_terminated = await _terminate_active_game_between(conn, caller_id, target_id)
     return BlockResponse(game_terminated=game_terminated)
+
+
+@router.get("/who", response_model=WhoResponse)
+async def who(
+    window_seconds: int = Query(default=WHO_PRESENCE_WINDOW_SECONDS, ge=10, le=600),
+    user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+) -> WhoResponse:
+    """List users active within the presence window, newest activity first.
+
+    `is_friend` is true iff the relationship is **mutual** — both rows
+    of the friendships pair exist. Users who have blocked the caller
+    or whom the caller has blocked are excluded entirely (no leak).
+
+    The caller themselves is excluded; you can't /invite yourself, so
+    surfacing yourself would just be noise.
+    """
+    caller_id = str(user["id"])
+    rows = await pool.fetch(
+        """
+        SELECT
+            u.username,
+            u.last_seen_at,
+            EXISTS (
+                SELECT 1 FROM friendships f1
+                WHERE f1.user_id = $1::uuid AND f1.friend_id = u.id
+            )
+            AND EXISTS (
+                SELECT 1 FROM friendships f2
+                WHERE f2.user_id = u.id AND f2.friend_id = $1::uuid
+            ) AS is_friend
+        FROM users u
+        WHERE u.id <> $1::uuid
+          AND u.last_seen_at > NOW() - ($2 || ' seconds')::interval
+          AND NOT EXISTS (
+              SELECT 1 FROM blocks b
+              WHERE (b.blocker_id = $1::uuid AND b.blocked_id = u.id)
+                 OR (b.blocker_id = u.id AND b.blocked_id = $1::uuid)
+          )
+        ORDER BY u.last_seen_at DESC
+        LIMIT 200
+        """,
+        caller_id,
+        str(window_seconds),
+    )
+    return WhoResponse(
+        users=[
+            WhoEntry(
+                username=r["username"],
+                last_seen_at=r["last_seen_at"],
+                is_friend=r["is_friend"],
+            )
+            for r in rows
+        ]
+    )

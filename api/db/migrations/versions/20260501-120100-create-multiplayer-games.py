@@ -71,10 +71,7 @@ def upgrade() -> None:
         "CREATE INDEX multiplayer_games_active_idx   "
         "ON multiplayer_games (state) WHERE state IN ('waiting','in_progress')"
     )
-    op.execute(
-        "CREATE INDEX multiplayer_games_updated_idx  "
-        "ON multiplayer_games (updated_at DESC)"
-    )
+    op.execute("CREATE INDEX multiplayer_games_updated_idx  ON multiplayer_games (updated_at DESC)")
     op.execute(
         "CREATE INDEX multiplayer_games_expiry_idx   "
         "ON multiplayer_games (expires_at) WHERE state = 'waiting'"
@@ -121,18 +118,9 @@ def downgrade() -> None:
     op.execute("ALTER TABLE games DROP CONSTRAINT IF EXISTS games_depth_check")
     op.execute("DELETE FROM games WHERE game_type = 'multiplayer'")
     op.execute("ALTER TABLE games DROP COLUMN IF EXISTS game_type")
-    op.execute(
-        "ALTER TABLE games ADD CONSTRAINT games_depth_check "
-        "CHECK (depth BETWEEN 1 AND 10)"
-    )
-    op.execute(
-        "ALTER TABLE games ADD CONSTRAINT games_radius_check "
-        "CHECK (radius BETWEEN 1 AND 5)"
-    )
-    op.execute(
-        "ALTER TABLE games ADD CONSTRAINT games_total_moves_check "
-        "CHECK (total_moves > 0)"
-    )
+    op.execute("ALTER TABLE games ADD CONSTRAINT games_depth_check CHECK (depth BETWEEN 1 AND 10)")
+    op.execute("ALTER TABLE games ADD CONSTRAINT games_radius_check CHECK (radius BETWEEN 1 AND 5)")
+    op.execute("ALTER TABLE games ADD CONSTRAINT games_total_moves_check CHECK (total_moves > 0)")
 
     op.execute("DROP INDEX IF EXISTS multiplayer_games_expiry_idx")
     op.execute("DROP INDEX IF EXISTS multiplayer_games_updated_idx")

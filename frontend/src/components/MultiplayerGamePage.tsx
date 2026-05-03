@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Board from './Board'
+import ChatPanel from './ChatPanel'
 import WaitingForOpponent from './WaitingForOpponent'
 import {
   joinGame,
@@ -10,6 +11,8 @@ import {
 } from '../lib/multiplayerClient'
 import { useMultiplayerPolling } from '../hooks/useMultiplayerPolling'
 import type { CellValue } from '../types'
+
+const API_BASE = (import.meta.env.VITE_API_BASE as string) || ''
 
 interface MultiplayerGamePageProps {
   token: string
@@ -234,54 +237,95 @@ export default function MultiplayerGamePage({
     ? `${game.host.username} vs ${game.guest.username}`
     : `Game ${game.code}`
 
+  // Opponent username drives the in-game chat panel header. Pick whichever
+  // side of the pairing isn't us. Falls back to null while the guest hasn't
+  // joined yet (chat panel will show its "no conversation" placeholder).
+  const opponentUsername =
+    game.guest && game.host.username === username
+      ? game.guest.username
+      : game.guest && game.guest.username === username
+        ? game.host.username
+        : null
+
+  // Game-in-progress view uses a two-column layout: chat panel on the left,
+  // board + controls on the right. Anything that pre-dates a started game
+  // (waiting, color-pick, etc.) keeps the previous centred layout.
+  const showInGameLayout = game.state === 'in_progress' || game.state === 'finished'
+
+  if (showInGameLayout) {
+    return (
+      <div className='min-h-screen px-4 py-6 text-neutral-100'>
+        <div className='max-w-6xl mx-auto'>
+          <h1 className='font-heading text-3xl font-bold text-amber-400 text-center mb-6'>
+            Gomoku — {titleLabel}
+          </h1>
+          <div className='grid grid-cols-1 lg:grid-cols-[20rem_minmax(0,1fr)] gap-6 items-start'>
+            {/* Left column: chat panel (light variant, fills column height) */}
+            <div className='h-[34rem] lg:h-[38rem]'>
+              <ChatPanel
+                meUsername={username}
+                peerUsername={opponentUsername}
+                authToken={token}
+                apiBase={API_BASE}
+                variant='light'
+                height='fill'
+              />
+            </div>
+
+            {/* Right column: board + controls */}
+            <div className='flex flex-col items-center gap-4'>
+              <PlayerHeader game={game as MultiplayerGameView} />
+              {board && (
+                <Board
+                  board={board}
+                  boardSize={game.board_size === 19 ? 19 : 15}
+                  displayMode='stones'
+                  interactive={interactive}
+                  lastMove={lastMove}
+                  onCellClick={handleCellClick}
+                />
+              )}
+              {isParticipantView(game) && game.state === 'in_progress' && (
+                <div className='flex flex-col items-center gap-2 mt-2'>
+                  <p className='text-neutral-300'>
+                    {game.your_turn ? 'Your move.' : 'Waiting for opponent…'}
+                  </p>
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Resign this game?')) void sendResign()
+                    }}
+                    className='px-4 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white font-semibold'
+                  >
+                    Resign
+                  </button>
+                </div>
+              )}
+              {game.state === 'finished' && isParticipantView(game) && (
+                <GameOverPanel game={game} username={username} />
+              )}
+              {error && (
+                <p className='text-red-400 text-sm mt-2 max-w-md text-center'>
+                  {error}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen px-4 py-6 text-neutral-100">
-      <div className="max-w-3xl mx-auto flex flex-col items-center gap-4">
-        <h1 className="font-heading text-3xl font-bold text-amber-400">
+    <div className='min-h-screen px-4 py-6 text-neutral-100'>
+      <div className='max-w-3xl mx-auto flex flex-col items-center gap-4'>
+        <h1 className='font-heading text-3xl font-bold text-amber-400'>
           Gomoku — {titleLabel}
         </h1>
 
         {game.state === 'waiting' && <WaitingForOpponent code={game.code} />}
 
-        {(game.state === 'in_progress' || game.state === 'finished') && (
-          <>
-            <PlayerHeader game={game as MultiplayerGameView} />
-            {board && (
-              <Board
-                board={board}
-                boardSize={game.board_size === 19 ? 19 : 15}
-                displayMode="stones"
-                interactive={interactive}
-                lastMove={lastMove}
-                onCellClick={handleCellClick}
-              />
-            )}
-            {isParticipantView(game) && game.state === 'in_progress' && (
-              <div className="flex flex-col items-center gap-2 mt-2">
-                <p className="text-neutral-300">
-                  {game.your_turn ? 'Your move.' : 'Waiting for opponent…'}
-                </p>
-                <button
-                  onClick={() => {
-                    if (window.confirm('Resign this game?')) void sendResign()
-                  }}
-                  className="px-4 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white font-semibold"
-                >
-                  Resign
-                </button>
-              </div>
-            )}
-          </>
-        )}
-
-        {game.state === 'finished' && isParticipantView(game) && (
-          <GameOverPanel game={game} username={username} />
-        )}
-
         {error && (
-          <p className="text-red-400 text-sm mt-2 max-w-md text-center">
-            {error}
-          </p>
+          <p className='text-red-400 text-sm mt-2 max-w-md text-center'>{error}</p>
         )}
       </div>
     </div>

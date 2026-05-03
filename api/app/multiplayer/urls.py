@@ -23,9 +23,5 @@ def game_invite_url(code: str) -> str:
     always speak HTTPS without explicit configuration.
     """
     domain = settings.effective_domain
-    scheme = (
-        "http"
-        if domain.startswith("localhost") or domain.startswith("127.")
-        else "https"
-    )
+    scheme = "http" if domain.startswith("localhost") or domain.startswith("127.") else "https"
     return f"{scheme}://{domain}/play/{code}"

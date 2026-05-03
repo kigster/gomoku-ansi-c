@@ -88,12 +88,18 @@ typedef struct {
   int is_o_turn;
   struct timespec start;
   int padding;
+  // Optional display labels for the X/O rows in the timing table. NULL
+  // (or empty) keeps the original narrow "X      " / "O      " form;
+  // otherwise the column widens to "X (%7.7s)" / "O (%7.7s)".
+  const char *x_name;
+  const char *o_name;
 } tick_context_t;
 
 // Forward declarations
 static void print_board_with_padding(const char *json, int padding, int red_bg);
-static void print_timing_lines(int padding, double x_waited, double x_server,
-                               double x_queued, double o_waited,
+static void print_timing_lines(int padding, const char *x_name,
+                               const char *o_name, double x_waited,
+                               double x_server, double x_queued, double o_waited,
                                double o_server, double o_queued);
 static void timer_tick_fn(void *ctx);
 
@@ -268,9 +274,9 @@ static char *http_post_with_retry(const char *host, int port, const char *path,
             tick_ctx->timing_o->waited_total - tick_ctx->timing_o->server_total;
 
         printf("\n");
-        print_timing_lines(padding, x_waited, tick_ctx->timing_x->server_total,
-                           x_queued, o_waited, tick_ctx->timing_o->server_total,
-                           o_queued);
+        print_timing_lines(padding, tick_ctx->x_name, tick_ctx->o_name,
+                           x_waited, tick_ctx->timing_x->server_total, x_queued,
+                           o_waited, tick_ctx->timing_o->server_total, o_queued);
       }
     }
 
@@ -435,31 +441,71 @@ static void parse_server_times(const char *json, double *x_time_ms,
  * Print the player timing table (header + separator + 2 data rows = 4 lines).
  * Header/separator: bold green.  X row: red.  O row: yellow.
  */
-static void print_timing_lines(int padding, double x_waited, double x_server,
-                               double x_queued, double o_waited,
-                               double o_server, double o_queued) {
+static void print_timing_lines(int padding, const char *x_name,
+                               const char *o_name, double x_waited,
+                               double x_server, double x_queued,
+                               double o_waited, double o_server,
+                               double o_queued) {
   if (x_queued < 0)
     x_queued = 0;
   if (o_queued < 0)
     o_queued = 0;
 
-  printf("%*s%sPlayer \xe2\x94\x83  Wait \xe2\x94\x83 Server "
-         "\xe2\x94\x83 Queue \xe2\x94\x83%s\033[K\n",
-         padding, "", COLOR_BOLD_GREEN, COLOR_RESET);
-  printf("%*s%s\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81"
-         "\xe2\x94\x81\xe2\x94\x81\xe2\x95\x8b\xe2\x94\x81\xe2\x94\x81"
-         "\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81"
-         "\xe2\x95\x8b\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81"
-         "\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x95\x8b"
-         "\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81"
-         "\xe2\x94\x81\xe2\x94\x81\xe2\x94\xab%s\033[K\n",
-         padding, "", COLOR_BOLD_GREEN, COLOR_RESET);
-  printf("%*s%sX      \xe2\x94\x83 %4.0fs \xe2\x94\x83  %4.0fs "
-         "\xe2\x94\x83 %4.0fs \xe2\x94\x83%s\033[K\n",
-         padding, "", COLOR_RED, x_waited, x_server, x_queued, COLOR_RESET);
-  printf("%*s%sO      \xe2\x94\x83 %4.0fs \xe2\x94\x83  %4.0fs "
-         "\xe2\x94\x83 %4.0fs \xe2\x94\x83%s\033[K\n",
-         padding, "", COLOR_YELLOW, o_waited, o_server, o_queued, COLOR_RESET);
+  // Column-1 layout. With names, the row reads "X (%7.7s)" / "O (%7.7s)"
+  // (11 chars). Without, the original 7-char "X      " / "O      ".
+  // The header and the separator widen in lockstep.
+  const int named = (x_name && *x_name) || (o_name && *o_name);
+  const char *xn = (x_name && *x_name) ? x_name : "";
+  const char *on = (o_name && *o_name) ? o_name : "";
+
+  // Column-1 widths:
+  //   unnamed → 7  ("Player " / "X      " / "O      ")
+  //   named   → 11 ("Player     " / "X (%7.7s)" / "O (%7.7s)")
+  // The number of ━ between the column 1 cell and the first ╋ matches.
+
+  // Header.
+  if (named) {
+    printf("%*s%sPlayer     \xe2\x94\x83 Spent \xe2\x94\x83 Server "
+           "\xe2\x94\x83 Queue \xe2\x94\x83%s\033[K\n",
+           padding, "", COLOR_BOLD_GREEN, COLOR_RESET);
+  } else {
+    printf("%*s%sPlayer \xe2\x94\x83 Spent \xe2\x94\x83 Server "
+           "\xe2\x94\x83 Queue \xe2\x94\x83%s\033[K\n",
+           padding, "", COLOR_BOLD_GREEN, COLOR_RESET);
+  }
+
+  // Separator. Each \xe2\x94\x81 is heavy ━; ╋ is \xe2\x95\x8b; ┫ is
+  // \xe2\x94\xab. Cells after column 1 (Spent/Server/Queue) are 7/8/7
+  // chars, matching the data rows below.
+  printf("%*s%s", padding, "", COLOR_BOLD_GREEN);
+  for (int i = 0; i < (named ? 11 : 7); i++) printf("\xe2\x94\x81");
+  printf("\xe2\x95\x8b");
+  for (int i = 0; i < 7; i++) printf("\xe2\x94\x81");
+  printf("\xe2\x95\x8b");
+  for (int i = 0; i < 8; i++) printf("\xe2\x94\x81");
+  printf("\xe2\x95\x8b");
+  for (int i = 0; i < 7; i++) printf("\xe2\x94\x81");
+  printf("\xe2\x94\xab%s\033[K\n", COLOR_RESET);
+
+  // Rows. "X (%7.7s)" / "O (%7.7s)" is exactly 11 chars (no trailing
+  // space) so it lines up against the 11-wide separator above.
+  if (named) {
+    printf("%*s%sX (%7.7s)\xe2\x94\x83 %4.0fs \xe2\x94\x83  %4.0fs "
+           "\xe2\x94\x83 %4.0fs \xe2\x94\x83%s\033[K\n",
+           padding, "", COLOR_RED, xn, x_waited, x_server, x_queued,
+           COLOR_RESET);
+    printf("%*s%sO (%7.7s)\xe2\x94\x83 %4.0fs \xe2\x94\x83  %4.0fs "
+           "\xe2\x94\x83 %4.0fs \xe2\x94\x83%s\033[K\n",
+           padding, "", COLOR_YELLOW, on, o_waited, o_server, o_queued,
+           COLOR_RESET);
+  } else {
+    printf("%*s%sX      \xe2\x94\x83 %4.0fs \xe2\x94\x83  %4.0fs "
+           "\xe2\x94\x83 %4.0fs \xe2\x94\x83%s\033[K\n",
+           padding, "", COLOR_RED, x_waited, x_server, x_queued, COLOR_RESET);
+    printf("%*s%sO      \xe2\x94\x83 %4.0fs \xe2\x94\x83  %4.0fs "
+           "\xe2\x94\x83 %4.0fs \xe2\x94\x83%s\033[K\n",
+           padding, "", COLOR_YELLOW, o_waited, o_server, o_queued, COLOR_RESET);
+  }
 }
 
 /**
@@ -488,8 +534,9 @@ static void timer_tick_fn(void *ctx) {
 
   // Move cursor up 4 lines to overwrite the timing table in-place
   printf("\033[4F");
-  print_timing_lines(tc->padding, x_waited, tc->timing_x->server_total,
-                     x_queued, o_waited, tc->timing_o->server_total, o_queued);
+  print_timing_lines(tc->padding, tc->x_name, tc->o_name, x_waited,
+                     tc->timing_x->server_total, x_queued, o_waited,
+                     tc->timing_o->server_total, o_queued);
   fflush(stdout);
 }
 
@@ -545,7 +592,12 @@ static void print_usage(const char *program) {
   printf("  %s [options]\n\n", program);
   printf("OPTIONS:\n");
   printf("  -h, --host <host>     Server host (default: %s)\n", DEFAULT_HOST);
-  printf("  -p, --port <port>     Server port (default: %d)\n", DEFAULT_PORT);
+  printf("  -p, --port <p[:p]>    Server port, or X:O to talk to two\n");
+  printf("                        daemons (X plays X, O plays O).\n");
+  printf("                        Default: %d\n", DEFAULT_PORT);
+  printf("      --reverse         Swap the two -p ports: M plays X, N plays O\n");
+  printf("  -X, --x-name <name>   Display name for X in the timing table\n");
+  printf("  -O, --o-name <name>   Display name for O in the timing table\n");
   printf(
       "  -d, --depth <n[:n]>   AI depth 1-6, or X:Y for X vs O (default: 2)\n");
   printf("  -r, --radius <n>      Search radius 1-4 (default: 2)\n");
@@ -555,8 +607,14 @@ static void print_usage(const char *program) {
   printf("  -q, --quiet           No terminal output (for batch/tournament)\n");
   printf("  -v, --verbose         Show game state after each move\n");
   printf("  --help                Show this help message\n\n");
-  printf("EXAMPLE:\n");
+  printf("EXAMPLES:\n");
   printf("  %s -p 10000 -d 2:3 -r 3 -b 15 -t 300 -q -j game.json\n", program);
+  printf("  # Two daemons; X is served by 9514, O by 9515:\n");
+  printf("  %s -p 9514:9515 -d 3 -r 3\n", program);
+  printf("  # Same two daemons, sides swapped (9515 plays X):\n");
+  printf("  %s -p 9514:9515 --reverse -d 3 -r 3\n", program);
+  printf("  # Two daemons named in the timing table:\n");
+  printf("  %s -p 9514:9515 -X rust -O c99\n", program);
 }
 
 static int parse_depth_arg(const char *optarg, int *depth_x, int *depth_o) {
@@ -573,9 +631,35 @@ static int parse_depth_arg(const char *optarg, int *depth_x, int *depth_o) {
   return 0;
 }
 
+// Parse "N" or "N:M" port spec.
+// Returns 0 on success, -1 on parse failure (invalid digits, out of range, or
+// trailing junk). On success, *port_x and *port_o both contain the port:
+//   "N"   → both = N (single-daemon mode)
+//   "N:M" → x = N, o = M
+static int parse_port_arg(const char *optarg, int *port_x, int *port_o) {
+  if (!optarg || !*optarg) return -1;
+  char *end = NULL;
+  long n = strtol(optarg, &end, 10);
+  if (end == optarg || n <= 0 || n > 65535) return -1;
+  if (*end == '\0') {
+    *port_x = (int)n;
+    *port_o = (int)n;
+    return 0;
+  }
+  if (*end != ':') return -1;
+  const char *second = end + 1;
+  long m = strtol(second, &end, 10);
+  if (end == second || *end != '\0' || m <= 0 || m > 65535) return -1;
+  *port_x = (int)n;
+  *port_o = (int)m;
+  return 0;
+}
+
 int main(int argc, char *argv[]) {
   const char *host = DEFAULT_HOST;
-  int port = DEFAULT_PORT;
+  int port_x = DEFAULT_PORT;
+  int port_o = DEFAULT_PORT;
+  int reverse_ports = 0;
   int depth_x = 2, depth_o = 2;
   int radius = 2;
   int board_size = 15;
@@ -583,9 +667,20 @@ int main(int argc, char *argv[]) {
   const char *json_file = NULL;
   int verbose = 0;
   int quiet = 0;
+  // Display names for X / O in the timing table; NULL keeps the original
+  // narrow column form. -X/-O / --x-name/--o-name set them.
+  const char *x_name = NULL;
+  const char *o_name = NULL;
+
+  // Long-only flags get sentinel values >0xFF (outside the ASCII range)
+  // so the getopt_long switch can distinguish them from short flags.
+  enum { OPT_REVERSE = 0x100 };
 
   static struct option long_options[] = {{"host", required_argument, 0, 'h'},
                                          {"port", required_argument, 0, 'p'},
+                                         {"reverse", no_argument, 0, OPT_REVERSE},
+                                         {"x-name", required_argument, 0, 'X'},
+                                         {"o-name", required_argument, 0, 'O'},
                                          {"depth", required_argument, 0, 'd'},
                                          {"radius", required_argument, 0, 'r'},
                                          {"board", required_argument, 0, 'b'},
@@ -597,18 +692,28 @@ int main(int argc, char *argv[]) {
                                          {0, 0, 0, 0}};
 
   int c;
-  while ((c = getopt_long(argc, argv, "h:p:d:r:b:t:j:qv", long_options,
+  while ((c = getopt_long(argc, argv, "h:p:X:O:d:r:b:t:j:qv", long_options,
                           NULL)) != -1) {
     switch (c) {
     case 'h':
       host = optarg;
       break;
     case 'p':
-      port = atoi(optarg);
-      if (port <= 0 || port > 65535) {
-        fprintf(stderr, "Error: Invalid port number\n");
+      if (parse_port_arg(optarg, &port_x, &port_o) != 0) {
+        fprintf(stderr,
+                "Error: -p expects PORT or X:O (each port 1..65535), got %s\n",
+                optarg);
         return 1;
       }
+      break;
+    case OPT_REVERSE:
+      reverse_ports = 1;
+      break;
+    case 'X':
+      x_name = optarg;
+      break;
+    case 'O':
+      o_name = optarg;
       break;
     case 'd':
       if (parse_depth_arg(optarg, &depth_x, &depth_o) != 0) {
@@ -653,14 +758,32 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  // Apply --reverse AFTER parsing so the user can pass -r in any order
+  // relative to -p. With "-p N:M -r" the X-port becomes M and the O-port N.
+  if (reverse_ports) {
+    int tmp = port_x;
+    port_x = port_o;
+    port_o = tmp;
+  }
+
   // Disable output buffering for real-time display
   setvbuf(stdout, NULL, _IONBF, 0);
 
   if (!quiet) {
-    printf("Connecting to gomoku-http-daemon at %s:%d\n", host, port);
-    printf("Server plays both sides (X depth=%d, O depth=%d, radius=%d, "
-           "board=%d)\n\n",
-           depth_x, depth_o, radius, board_size);
+    if (port_x == port_o) {
+      printf("Connecting to gomoku-http-daemon at %s:%d\n", host, port_x);
+      printf("Server plays both sides (X depth=%d, O depth=%d, radius=%d, "
+             "board=%d)\n\n",
+             depth_x, depth_o, radius, board_size);
+    } else {
+      printf("Connecting to two gomoku-http-daemons at %s:%d (X) and %s:%d "
+             "(O)%s\n",
+             host, port_x, host, port_o,
+             reverse_ports ? " [reversed]" : "");
+      printf("Each daemon plays one side (X depth=%d, O depth=%d, radius=%d, "
+             "board=%d)\n\n",
+             depth_x, depth_o, radius, board_size);
+    }
   }
 
   // Start with initial game state (AI vs AI with optional timeout)
@@ -686,7 +809,7 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < 3; i++)
       printf("\n"); // Padding
     printf("\n");   // Blank line before timing
-    print_timing_lines(3, 0, 0, 0, 0, 0, 0);
+    print_timing_lines(3, x_name, o_name, 0, 0, 0, 0, 0, 0);
   }
 
   while (strcmp(winner, "none") == 0) {
@@ -697,14 +820,19 @@ int main(int argc, char *argv[]) {
     tick_context_t tick_ctx = {.timing_x = &timing_x,
                                .timing_o = &timing_o,
                                .is_o_turn = is_o_turn,
-                               .padding = 3};
+                               .padding = 3,
+                               .x_name = x_name,
+                               .o_name = o_name};
     clock_gettime(CLOCK_MONOTONIC, &tick_ctx.start);
 
-    // Send to server (with retry on 503 errors; board turns red during retries)
+    // Send to server (with retry on 503 errors; board turns red during
+    // retries). Pick the daemon for whichever side is moving — collapses to
+    // the same port when -p was a single value (port_x == port_o).
     tick_context_t *tick_ptr = quiet ? NULL : &tick_ctx;
+    int turn_port = is_o_turn ? port_o : port_x;
     char *response =
-        http_post_with_retry(host, port, "/gomoku/play", game_state, 0, &errors,
-                             game_state, 3, tick_ptr);
+        http_post_with_retry(host, turn_port, "/gomoku/play", game_state, 0,
+                             &errors, game_state, 3, tick_ptr);
     if (!response) {
       fprintf(stderr, "Error: Failed to communicate with server\n");
       free(game_state);
@@ -745,8 +873,9 @@ int main(int argc, char *argv[]) {
       double x_queued = timing_x.waited_total - timing_x.server_total;
       double o_queued = timing_o.waited_total - timing_o.server_total;
       printf("\n");
-      print_timing_lines(3, timing_x.waited_total, timing_x.server_total,
-                         x_queued, timing_o.waited_total, timing_o.server_total,
+      print_timing_lines(3, x_name, o_name, timing_x.waited_total,
+                         timing_x.server_total, x_queued,
+                         timing_o.waited_total, timing_o.server_total,
                          o_queued);
     }
 
@@ -764,9 +893,9 @@ int main(int argc, char *argv[]) {
     double x_queued = timing_x.waited_total - timing_x.server_total;
     double o_queued = timing_o.waited_total - timing_o.server_total;
     printf("\n");
-    print_timing_lines(3, timing_x.waited_total, timing_x.server_total,
-                       x_queued, timing_o.waited_total, timing_o.server_total,
-                       o_queued);
+    print_timing_lines(3, x_name, o_name, timing_x.waited_total,
+                       timing_x.server_total, x_queued, timing_o.waited_total,
+                       timing_o.server_total, o_queued);
     printf("\n");
     if (strcmp(winner, "X") == 0) {
       printf("%*sGame over: X wins!\n", 3, "");
