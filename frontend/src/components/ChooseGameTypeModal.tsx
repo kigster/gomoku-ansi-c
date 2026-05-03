@@ -52,7 +52,10 @@ export default function ChooseGameTypeModal ({
   onGuestJoined,
   onClose,
 }: Props) {
-  const [gameType, setGameType] = useState<GameType>('ai')
+  // Default to "Another Player" so the modal opens already expanded with a
+  // ready-to-share invite link/code. AI is one click away — picking it
+  // cancels any in-flight invite (see the createdKeyRef effect below).
+  const [gameType, setGameType] = useState<GameType>('human')
   const [chooser, setChooser] = useState<ColorChooser>('host')
   const [hostColor, setHostColor] = useState<Color>('X')
   const [creating, setCreating] = useState(false)
@@ -196,19 +199,26 @@ export default function ChooseGameTypeModal ({
         <fieldset>
           <legend className='sr-only'>Game type</legend>
           <div className='grid grid-cols-2 gap-3'>
-            <RadioCard
-              checked={gameType === 'ai'}
-              onChange={() => setGameType('ai')}
-              label='AI'
-              hint='Default — play against the engine'
-              disabled={inWaitingPhase || creating}
-            />
+            {/*
+             * Game-type radios stay enabled while an invite is in flight —
+             * the auto-create useEffect on the human side opens an invite
+             * the moment the modal mounts, so disabling on `inWaitingPhase`
+             * would mean the user could never flip back to AI. The cancel
+             * branch in the same effect cleans up the orphaned invite.
+             */}
             <RadioCard
               checked={gameType === 'human'}
               onChange={() => setGameType('human')}
               label='Another Player'
-              hint='Send a link to a friend'
-              disabled={inWaitingPhase || creating}
+              hint='Default — share a link with a friend'
+              disabled={creating}
+            />
+            <RadioCard
+              checked={gameType === 'ai'}
+              onChange={() => setGameType('ai')}
+              label='AI'
+              hint='Play against the engine'
+              disabled={creating}
             />
           </div>
         </fieldset>

@@ -34,6 +34,16 @@ interface ChatPanelProps {
   // termination (matches the server-side contract; see
   // app/routers/social.py module docstring).
   onActiveGameTerminated?: () => void
+  // 'dark' (default) — right-rail panel on the dark home page.
+  // 'light' — in-game panel embedded in the multiplayer board view.
+  //          White card, blue-on-white own bubbles right, gray-on-white
+  //          peer bubbles left, per the spec.
+  variant?: 'dark' | 'light'
+  // 'card' (default) — fixed height card with internal scroll, suitable
+  // for the right rail. 'fill' — stretch to the parent's full height,
+  // used when the chat panel replaces the full left column during a
+  // multiplayer game.
+  height?: 'card' | 'fill'
 }
 
 // Slash commands the chat panel understands. Each one captures the target
@@ -181,7 +191,13 @@ export default function ChatPanel ({
   authToken,
   apiBase,
   onActiveGameTerminated,
+  variant = 'dark',
+  height = 'card',
 }: ChatPanelProps) {
+  const isLight = variant === 'light'
+  const sizeClass = height === 'fill'
+    ? 'h-full min-h-[20rem]'
+    : 'h-[22rem] lg:h-[26rem]'
   const [draft, setDraft] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [pending, setPending] = useState(false)
@@ -288,28 +304,75 @@ export default function ChatPanel ({
     return 'No conversation'
   }, [peerUsername])
 
+  // Tailwind classes per variant. Kept inline (vs CVA / className helper)
+  // because there are only two variants and the diff between them is small
+  // enough that a single colour palette per role is the clearest read.
+  const styles = isLight
+    ? {
+        shell: 'bg-white border-neutral-300 shadow-sm',
+        header: 'bg-neutral-50 border-b border-neutral-200',
+        headerEyebrow: 'text-neutral-500',
+        headerName: peerUsername ? 'text-blue-700' : 'text-neutral-400',
+        messages: 'scrollbar-thin scrollbar-thumb-neutral-300',
+        emptyState: 'text-neutral-500',
+        emptyAccent: 'text-blue-700',
+        inputRow: 'bg-neutral-50 border-t border-neutral-200',
+        input:
+          'bg-white border border-neutral-300 text-neutral-900 placeholder:text-neutral-400 ' +
+          'focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-300/60',
+        button:
+          'bg-blue-600 text-white hover:bg-blue-500 ' +
+          'disabled:cursor-not-allowed disabled:opacity-50 ' +
+          'focus:outline-none focus:ring-2 focus:ring-blue-300/60',
+      }
+    : {
+        shell: 'bg-neutral-900/70 border-neutral-700/80 shadow-inner shadow-black/30',
+        header: 'bg-neutral-950 border-b border-neutral-800',
+        headerEyebrow: 'text-neutral-500',
+        headerName: peerUsername ? 'text-amber-300' : 'text-neutral-500',
+        messages: 'scrollbar-thin scrollbar-thumb-neutral-700',
+        emptyState: 'text-neutral-500',
+        emptyAccent: 'text-amber-300/90',
+        inputRow: 'bg-neutral-900 border-t border-neutral-800',
+        input:
+          'bg-neutral-800 border border-neutral-700 text-neutral-100 placeholder:text-neutral-500 ' +
+          'focus:outline-none focus:border-amber-500/70 focus:ring-1 focus:ring-amber-500/40',
+        button:
+          'bg-amber-600 text-neutral-900 hover:bg-amber-500 ' +
+          'disabled:cursor-not-allowed disabled:opacity-50 ' +
+          'focus:outline-none focus:ring-2 focus:ring-amber-300/50',
+      }
+
   return (
-    // The whole panel is a fixed-height column so the message list scrolls
-    // independently of the input. Height ~22rem mirrors the SettingsPanel
-    // body so swapping tabs doesn't reflow the layout.
+    // Fixed-height column when used as the right-rail card; stretch-to-fill
+    // when it replaces the entire left column during an in-game session.
     <div
-      className='flex flex-col rounded-xl border border-neutral-700/80
-                 bg-neutral-900/70 shadow-inner shadow-black/30
-                 h-[22rem] lg:h-[26rem] overflow-hidden'
+      className={[
+        'flex flex-col rounded-xl border overflow-hidden',
+        sizeClass,
+        styles.shell,
+      ].join(' ')}
     >
-      {/* Header: dark band with yellow @peer name. */}
+      {/* Header */}
       <header
-        className='flex items-center justify-between gap-3 px-4 py-2.5
-                   bg-neutral-950 border-b border-neutral-800'
+        className={[
+          'flex items-center justify-between gap-3 px-4 py-2.5',
+          styles.header,
+        ].join(' ')}
       >
         <div className='flex flex-col min-w-0'>
-          <span className='text-[10px] uppercase tracking-[0.18em] text-neutral-500 font-semibold'>
+          <span
+            className={[
+              'text-[10px] uppercase tracking-[0.18em] font-semibold',
+              styles.headerEyebrow,
+            ].join(' ')}
+          >
             Chat with
           </span>
           <span
             className={[
               'truncate font-heading text-base font-semibold',
-              peerUsername ? 'text-amber-300' : 'text-neutral-500',
+              styles.headerName,
             ].join(' ')}
           >
             {peerLabel}
@@ -321,28 +384,31 @@ export default function ChatPanel ({
       {/* Messages — scrolls. */}
       <div
         ref={messagesRef}
-        className='flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2
-                   scrollbar-thin scrollbar-thumb-neutral-700'
+        className={[
+          'flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2',
+          styles.messages,
+        ].join(' ')}
       >
         {messages.length === 0 && (
-          <p className='text-center text-xs text-neutral-500 italic mt-4'>
+          <p className={['text-center text-xs italic mt-4', styles.emptyState].join(' ')}>
             No messages yet. Say hi, type{' '}
-            <code className='font-mono text-amber-300/90'>/invite @username</code>{' '}
+            <code className={['font-mono', styles.emptyAccent].join(' ')}>
+              /invite @username
+            </code>{' '}
             to start a multiplayer game, or{' '}
-            <code className='font-mono text-amber-300/90'>/help</code>{' '}
+            <code className={['font-mono', styles.emptyAccent].join(' ')}>/help</code>{' '}
             for the command list.
           </p>
         )}
         {messages.map(m => (
-          <Message key={m.id} m={m} />
+          <Message key={m.id} m={m} variant={variant} />
         ))}
       </div>
 
       {/* Input row. */}
       <form
         onSubmit={handleSubmit}
-        className='flex items-stretch gap-2 px-3 py-2.5
-                   bg-neutral-900 border-t border-neutral-800'
+        className={['flex items-stretch gap-2 px-3 py-2.5', styles.inputRow].join(' ')}
       >
         <input
           type='text'
@@ -355,20 +421,18 @@ export default function ChatPanel ({
           }
           disabled={pending}
           aria-label='Chat message'
-          className='flex-1 min-w-0 rounded-lg bg-neutral-800 border border-neutral-700
-                     px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-500
-                     focus:outline-none focus:border-amber-500/70
-                     focus:ring-1 focus:ring-amber-500/40
-                     disabled:opacity-60'
+          className={[
+            'flex-1 min-w-0 rounded-lg px-3 py-2 text-sm disabled:opacity-60',
+            styles.input,
+          ].join(' ')}
         />
         <button
           type='submit'
           disabled={pending || draft.trim().length === 0}
-          className='rounded-lg px-4 py-2 text-sm font-semibold font-heading
-                     bg-amber-600 text-neutral-900 hover:bg-amber-500
-                     disabled:cursor-not-allowed disabled:opacity-50
-                     focus:outline-none focus:ring-2 focus:ring-amber-300/50
-                     transition-colors'
+          className={[
+            'rounded-lg px-4 py-2 text-sm font-semibold font-heading transition-colors',
+            styles.button,
+          ].join(' ')}
         >
           Send
         </button>
@@ -377,20 +441,26 @@ export default function ChatPanel ({
   )
 }
 
-function Message ({ m }: { m: ChatMessage }) {
+function Message ({ m, variant }: { m: ChatMessage; variant: 'dark' | 'light' }) {
+  const isLight = variant === 'light'
   if (m.system) {
     // Multi-line system output (e.g. /help) is rendered in a monospaced
     // block so the column-aligned command list stays legible. Single-line
     // captions still look like the centred italic notes used elsewhere.
     const isMultiline = m.body.includes('\n')
+    const bgBlock = isLight
+      ? 'bg-neutral-100 border border-neutral-200'
+      : 'bg-neutral-800/60 border border-neutral-700/60'
+    const errColor = isLight ? 'text-red-700' : 'text-red-400'
+    const infoColor = isLight ? 'text-blue-700' : 'text-sky-300'
     return (
       <pre
         className={[
           'whitespace-pre-wrap text-xs px-3 py-2 rounded-md mx-2',
           isMultiline
-            ? 'font-mono text-left bg-neutral-800/60 border border-neutral-700/60'
+            ? `font-mono text-left ${bgBlock}`
             : 'italic text-center font-sans bg-transparent border-0',
-          m.systemKind === 'error' ? 'text-red-400' : 'text-sky-300',
+          m.systemKind === 'error' ? errColor : infoColor,
         ].join(' ')}
       >
         {m.body}
@@ -403,6 +473,14 @@ function Message ({ m }: { m: ChatMessage }) {
   // ("tail" pointing toward the speaker's side) reinforces the side
   // mapping at a glance.
   const isMe = m.me
+  const speakerColor = isLight ? 'text-neutral-500' : 'text-neutral-500'
+  const meBubble = isLight
+    ? 'rounded-tr-sm bg-blue-600 text-white'
+    : 'rounded-tr-sm bg-blue-600 text-white'
+  const peerBubble = isLight
+    ? 'rounded-tl-sm bg-neutral-200 text-neutral-900 border border-neutral-300'
+    : 'rounded-tl-sm bg-neutral-800 text-neutral-100 border border-neutral-700/60'
+  const shadow = isLight ? 'shadow-sm shadow-neutral-300/40' : 'shadow-sm shadow-black/40'
   return (
     <div
       className={[
@@ -412,7 +490,8 @@ function Message ({ m }: { m: ChatMessage }) {
     >
       <span
         className={[
-          'text-[10px] uppercase tracking-[0.14em] text-neutral-500 mb-0.5',
+          'text-[10px] uppercase tracking-[0.14em] mb-0.5',
+          speakerColor,
           isMe ? 'mr-2' : 'ml-2',
         ].join(' ')}
       >
@@ -420,10 +499,9 @@ function Message ({ m }: { m: ChatMessage }) {
       </span>
       <div
         className={[
-          'rounded-2xl px-3.5 py-1.5 text-sm leading-snug shadow-sm shadow-black/40',
-          isMe
-            ? 'rounded-tr-sm bg-blue-600 text-white'
-            : 'rounded-tl-sm bg-neutral-800 text-neutral-100 border border-neutral-700/60',
+          'rounded-2xl px-3.5 py-1.5 text-sm leading-snug',
+          shadow,
+          isMe ? meBubble : peerBubble,
         ].join(' ')}
       >
         {m.body}
