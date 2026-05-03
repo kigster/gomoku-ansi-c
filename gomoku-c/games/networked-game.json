@@ -10,7 +10,7 @@
     "time_ms":0.000
   },
   "board_size":15,
-  "radius":4,
+  "radius":3,
   "timeout":"none",
   "undo":true,
   "undo_limit":5,

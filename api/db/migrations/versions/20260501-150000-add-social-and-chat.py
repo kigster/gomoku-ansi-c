@@ -58,8 +58,7 @@ def upgrade() -> None:
     # back) wants newest-first, so the index physical order matches the
     # query order and Postgres can stream rows without an explicit sort.
     op.execute(
-        "CREATE INDEX chat_messages_chat_created_idx "
-        "ON chat_messages (chat_id, created_at DESC)"
+        "CREATE INDEX chat_messages_chat_created_idx ON chat_messages (chat_id, created_at DESC)"
     )
 
     op.execute(

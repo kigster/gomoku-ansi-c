@@ -87,6 +87,11 @@ test-cypress:
 
 alias test-e2d := test-cypress
 
+# Runs JSON schema validator on any games stored under gomoku-c/games folder.
+validate-games: 
+    @cd schema-validator && bundle check || bundle install >/dev/null
+    @cd schema-validator && bundle exec bin/schema-validator validate-json ../gomoku-c/games
+
 # Run all tests across the monorepo
 test-all: test test-api test-frontend
 
@@ -116,11 +121,6 @@ format:
     find gomoku-c/src/gomoku gomoku-c/src/net -maxdepth 1 -name '*.c**' | xargs clang-format -i
     find gomoku-c/tests -maxdepth 1 -name '*.c**' | xargs clang-format -i
     find bin -type f -exec bash -c 'file {} | grep -Eqvi ruby' \; -print | xargs shfmt -i 2 -w
-
-# Validate config/sample-game.json against the JSON schema
-validate-json:
-    cd schema-validator && bundle check >/dev/null || bundle install -j 8
-    cd schema-validator && TERM=xterm-256color bundle exec bin/schema-validator validate-json
 
 # ─── AI Evaluations ──────────────────────────────────────────────────────────
 

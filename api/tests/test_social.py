@@ -15,9 +15,7 @@ from httpx import AsyncClient
 # ---------------------------------------------------------------------------
 
 
-async def _start_multiplayer_between(
-    client: AsyncClient, host: dict, guest: dict
-) -> str:
+async def _start_multiplayer_between(client: AsyncClient, host: dict, guest: dict) -> str:
     """Open a fresh multiplayer game with `host`, have `guest` join, and
     return the game code. Resulting game state is `in_progress` (no moves
     yet — both players are sitting at version=1 waiting for X to move)."""
@@ -71,9 +69,7 @@ async def test_follow_is_idempotent(client: AsyncClient, make_user):
 
 
 @pytest.mark.asyncio
-async def test_follow_returns_reciprocal_true_when_mutual(
-    client: AsyncClient, make_user
-):
+async def test_follow_returns_reciprocal_true_when_mutual(client: AsyncClient, make_user):
     alice = await make_user("alice")
     bob = await make_user("bob")
     # First follow direction: not yet reciprocal.
@@ -133,9 +129,7 @@ async def test_unfollow_noop_on_missing(client: AsyncClient, make_user):
 
 
 @pytest.mark.asyncio
-async def test_unfollow_does_not_terminate_active_game(
-    client: AsyncClient, make_user
-):
+async def test_unfollow_does_not_terminate_active_game(client: AsyncClient, make_user):
     """Unfollow MUST NOT cascade into game termination, even when it
     severs the last link between the two players. Only /block (or
     in-game resign / timeout) ends a game.
@@ -143,12 +137,8 @@ async def test_unfollow_does_not_terminate_active_game(
     alice = await make_user("alice")
     bob = await make_user("bob")
     # Mutual follow + active game.
-    await client.post(
-        "/social/follow", headers=alice["headers"], json={"target_username": "bob"}
-    )
-    await client.post(
-        "/social/follow", headers=bob["headers"], json={"target_username": "alice"}
-    )
+    await client.post("/social/follow", headers=alice["headers"], json={"target_username": "bob"})
+    await client.post("/social/follow", headers=bob["headers"], json={"target_username": "alice"})
     code = await _start_multiplayer_between(client, alice, bob)
 
     # Both sides unfollow → no link remains.
@@ -176,9 +166,7 @@ async def test_unfollow_does_not_terminate_active_game(
 
 
 @pytest.mark.asyncio
-async def test_block_inserts_and_returns_no_game_when_none(
-    client: AsyncClient, make_user
-):
+async def test_block_inserts_and_returns_no_game_when_none(client: AsyncClient, make_user):
     alice = await make_user("alice")
     await make_user("bob")
     resp = await client.post(
@@ -191,18 +179,12 @@ async def test_block_inserts_and_returns_no_game_when_none(
 
 
 @pytest.mark.asyncio
-async def test_block_terminates_active_game_and_wipes_friendships(
-    client: AsyncClient, make_user
-):
+async def test_block_terminates_active_game_and_wipes_friendships(client: AsyncClient, make_user):
     alice = await make_user("alice")
     bob = await make_user("bob")
     # Mutual follow + active game.
-    await client.post(
-        "/social/follow", headers=alice["headers"], json={"target_username": "bob"}
-    )
-    await client.post(
-        "/social/follow", headers=bob["headers"], json={"target_username": "alice"}
-    )
+    await client.post("/social/follow", headers=alice["headers"], json={"target_username": "bob"})
+    await client.post("/social/follow", headers=bob["headers"], json={"target_username": "alice"})
     code = await _start_multiplayer_between(client, alice, bob)
 
     resp = await client.post(
@@ -249,3 +231,69 @@ async def test_block_terminates_waiting_game(client: AsyncClient, make_user):
         json={"target_username": "bob"},
     )
     assert resp.json() == {"game_terminated": False}
+
+
+# ---------------------------------------------------------------------------
+# /social/who
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_who_lists_active_users_excluding_caller(client: AsyncClient, make_user):
+    alice = await make_user("alice")
+    await make_user("bob")
+    await make_user("carol")
+    resp = await client.get("/social/who", headers=alice["headers"])
+    assert resp.status_code == 200
+    usernames = {u["username"] for u in resp.json()["users"]}
+    assert usernames == {"bob", "carol"}  # caller excluded
+
+
+@pytest.mark.asyncio
+async def test_who_marks_mutual_followers_as_friends(client: AsyncClient, make_user):
+    alice = await make_user("alice")
+    bob = await make_user("bob")
+    await make_user("carol")
+    await client.post("/social/follow", headers=alice["headers"], json={"target_username": "bob"})
+    await client.post("/social/follow", headers=bob["headers"], json={"target_username": "alice"})
+    resp = await client.get("/social/who", headers=alice["headers"])
+    by_name = {u["username"]: u for u in resp.json()["users"]}
+    assert by_name["bob"]["is_friend"] is True
+    assert by_name["carol"]["is_friend"] is False
+
+
+@pytest.mark.asyncio
+async def test_who_excludes_blocked_pair(client: AsyncClient, make_user):
+    alice = await make_user("alice")
+    await make_user("bob")
+    await make_user("carol")
+    await client.post("/social/block", headers=alice["headers"], json={"target_username": "bob"})
+    resp = await client.get("/social/who", headers=alice["headers"])
+    usernames = {u["username"] for u in resp.json()["users"]}
+    assert "bob" not in usernames
+    assert "carol" in usernames
+
+
+@pytest.mark.asyncio
+async def test_who_excludes_users_outside_window(client: AsyncClient, make_user):
+    """Backdate bob's last_seen_at so he's stale — he should drop out
+    of the default-window /who response."""
+    import asyncpg
+
+    from app.config import settings
+
+    alice = await make_user("alice")
+    await make_user("bob")
+    conn = await asyncpg.connect(settings.database_url)
+    try:
+        await conn.execute(
+            """
+            UPDATE users SET last_seen_at = NOW() - INTERVAL '10 minutes'
+            WHERE username = 'bob'
+            """
+        )
+    finally:
+        await conn.close()
+    resp = await client.get("/social/who", headers=alice["headers"])
+    usernames = {u["username"] for u in resp.json()["users"]}
+    assert "bob" not in usernames

@@ -11,6 +11,10 @@ from app.session import get_session
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
+# Presence-bump throttle: don't refresh users.last_seen_at more than
+# once per this many seconds per user. See get_current_user.
+PRESENCE_BUMP_THROTTLE_SEC = 10
+
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
@@ -59,12 +63,27 @@ async def get_current_user(
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """SELECT id, username, email, first_name, last_name,
-                      created_at, last_logged_in_at, logins_count
+                      created_at, last_logged_in_at, logins_count,
+                      last_seen_at
                FROM users WHERE id = $1::uuid""",
             user_id,
         )
-    if row is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found")
+        if row is None:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found")
+        # Throttled presence bump. An active player polls
+        # /multiplayer/{code} every 300 ms; if we wrote on every call
+        # we'd produce 3 dead tuples/sec/user (Postgres doesn't
+        # deduplicate value-equal UPDATEs — a new row version is
+        # created regardless). Throttling to one write per
+        # PRESENCE_BUMP_THROTTLE_SEC collapses bursts into a single
+        # row-version per window. The presence window is 60 s, so
+        # 10-second resolution is plenty.
+        last_seen = row["last_seen_at"]
+        if (datetime.now(UTC) - last_seen).total_seconds() >= PRESENCE_BUMP_THROTTLE_SEC:
+            await conn.execute(
+                "UPDATE users SET last_seen_at = now() WHERE id = $1::uuid",
+                user_id,
+            )
     return dict(row)
 
 

@@ -37,8 +37,7 @@ def upgrade() -> None:
             ADD COLUMN opponent_id UUID REFERENCES users(id) ON DELETE SET NULL
     """)
     op.execute(
-        "CREATE INDEX games_opponent_id_idx ON games (opponent_id) "
-        "WHERE opponent_id IS NOT NULL"
+        "CREATE INDEX games_opponent_id_idx ON games (opponent_id) WHERE opponent_id IS NOT NULL"
     )
     # AI rows must always have opponent_id NULL; multiplayer rows MAY have
     # it NULL (only after the opponent's user is deleted via SET NULL).

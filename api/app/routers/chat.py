@@ -79,12 +79,18 @@ class InviteResponse(BaseModel):
     delivered: bool
 
 
+# Presence: a user is "offline" if their last authenticated request
+# was longer ago than this. Matches the /social/who window so all
+# presence-aware UI stays consistent.
+TARGET_PRESENCE_WINDOW_SECONDS = 60
+
+
 async def _target_state(conn: asyncpg.Connection, target_id: str) -> TargetState:
-    """'in_game' if the target has a waiting/in_progress multiplayer row,
-    otherwise 'idle'. We don't have a presence layer yet — when we do,
-    the 'offline' branch will look at last_seen_at < now() - 60s.
-    """
-    row = await conn.fetchrow(
+    """`in_game` if the target has an active multiplayer row, else
+    `idle` if they were last seen within the presence window, else
+    `offline`. Reads `users.last_seen_at` (kept fresh by the
+    `get_current_user` dependency on every authed request)."""
+    in_game = await conn.fetchrow(
         """
         SELECT 1 FROM multiplayer_games
         WHERE state IN ('waiting', 'in_progress')
@@ -93,12 +99,20 @@ async def _target_state(conn: asyncpg.Connection, target_id: str) -> TargetState
         """,
         target_id,
     )
-    return "in_game" if row is not None else "idle"
+    if in_game is not None:
+        return "in_game"
+    is_present = await conn.fetchval(
+        """
+        SELECT last_seen_at > NOW() - ($2 || ' seconds')::interval
+        FROM users WHERE id = $1::uuid
+        """,
+        target_id,
+        str(TARGET_PRESENCE_WINDOW_SECONDS),
+    )
+    return "idle" if is_present else "offline"
 
 
-async def _check_invite_rate_limit(
-    conn: asyncpg.Connection, host_id: str
-) -> datetime | None:
+async def _check_invite_rate_limit(conn: asyncpg.Connection, host_id: str) -> datetime | None:
     """Return None if the caller may send another invite.
 
     Otherwise return the earliest UTC timestamp at which the next
@@ -194,19 +208,82 @@ async def invite(
                 conn,
                 host_user_id=caller_id,
                 created_via="invite",
+                intended_guest_id=target_id,
             )
         except RuntimeError as exc:
-            raise HTTPException(
-                status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)
-            ) from exc
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
         code = row["code"]
 
     return InviteResponse(
         invited_code=code,
         invite_url=game_invite_url(code),
         target_state=target_state,
-        # `delivered` will become true once we add the push/notification
-        # layer — for now the inviter copies + sends the URL out-of-band
-        # (or the invitee opens the chat tab and gets a poll-based hint).
-        delivered=False,
+        # `delivered` is true when the invite is in a state where the
+        # target's polling client will surface it: there's an
+        # intended_guest_id and a non-offline target. Offline targets
+        # still get the row (and may pick it up on next login) but
+        # we don't claim live delivery.
+        delivered=target_state != "offline",
+    )
+
+
+class IncomingInvite(BaseModel):
+    """One pending invite addressed to the caller."""
+
+    code: str
+    invite_url: str
+    host_username: str
+    board_size: int
+    created_at: datetime
+    expires_at: datetime
+
+
+class IncomingInvitesResponse(BaseModel):
+    invites: list[IncomingInvite]
+
+
+@router.get("/incoming", response_model=IncomingInvitesResponse)
+async def incoming(
+    user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+) -> IncomingInvitesResponse:
+    """List pending invites addressed to the caller, newest first.
+
+    Driven by the partial index
+    `multiplayer_games_intended_guest_active_idx` so this is cheap to
+    poll. Filters: state='waiting' (untaken), expires_at>NOW() (not
+    stale), and intended_guest_id=caller. Stale rows are NOT lazily
+    expired here — that's the per-code endpoints' job; we just hide
+    them.
+    """
+    caller_id = str(user["id"])
+    rows = await pool.fetch(
+        """
+        SELECT mg.code,
+               mg.board_size,
+               mg.created_at,
+               mg.expires_at,
+               u.username AS host_username
+        FROM multiplayer_games mg
+        JOIN users u ON u.id = mg.host_user_id
+        WHERE mg.intended_guest_id = $1::uuid
+          AND mg.state = 'waiting'
+          AND mg.expires_at > NOW()
+        ORDER BY mg.created_at DESC
+        LIMIT 50
+        """,
+        caller_id,
+    )
+    return IncomingInvitesResponse(
+        invites=[
+            IncomingInvite(
+                code=r["code"],
+                invite_url=game_invite_url(r["code"]),
+                host_username=r["host_username"],
+                board_size=r["board_size"],
+                created_at=r["created_at"],
+                expires_at=r["expires_at"],
+            )
+            for r in rows
+        ]
     )

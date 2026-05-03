@@ -12,9 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-State = Literal[
-    "waiting", "in_progress", "finished", "abandoned", "cancelled"
-]
+State = Literal["waiting", "in_progress", "finished", "abandoned", "cancelled"]
 
 # --- Request bodies ---------------------------------------------------------
 

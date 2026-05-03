@@ -43,6 +43,7 @@ async def allocate_game(
     host_color: Literal["X", "O"] | None = "X",
     board_size: int = 15,
     color_chosen_by: str = "host",
+    intended_guest_id: str | None = None,
 ) -> dict:
     """Insert a new multiplayer_games row with a unique code.
 
@@ -50,6 +51,10 @@ async def allocate_game(
     code take `row["code"]`). Retries up to MAX_RETRIES times on
     UniqueViolationError. Each attempt uses a savepoint so a
     collision doesn't poison the caller's transaction.
+
+    `intended_guest_id` is set by /chat/invite so the recipient can
+    poll GET /chat/incoming and see the invite. Modal-created games
+    leave it NULL — the host hands out the URL ad-hoc.
 
     Raises RuntimeError if all attempts fail (astronomically unlikely
     with the ~729M codespace).
@@ -63,8 +68,8 @@ async def allocate_game(
                     """
                     INSERT INTO multiplayer_games
                         (code, host_user_id, host_color, board_size,
-                         color_chosen_by, created_via)
-                    VALUES ($1, $2::uuid, $3, $4, $5, $6)
+                         color_chosen_by, created_via, intended_guest_id)
+                    VALUES ($1, $2::uuid, $3, $4, $5, $6, $7::uuid)
                     RETURNING *
                     """,
                     candidate,
@@ -73,12 +78,11 @@ async def allocate_game(
                     board_size,
                     color_chosen_by,
                     created_via,
+                    intended_guest_id,
                 )
             if row is not None:
                 return dict(row)
         except asyncpg.UniqueViolationError as exc:
             last_exc = exc
             continue
-    raise RuntimeError(
-        f"Failed to allocate game code after {MAX_RETRIES} attempts: {last_exc}"
-    )
+    raise RuntimeError(f"Failed to allocate game code after {MAX_RETRIES} attempts: {last_exc}")

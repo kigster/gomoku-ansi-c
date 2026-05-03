@@ -11,9 +11,7 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_invite_idle_target_returns_idle_state_and_code(
-    client: AsyncClient, make_user
-):
+async def test_invite_idle_target_returns_idle_state_and_code(client: AsyncClient, make_user):
     alice = await make_user("alice")
     await make_user("bob")
     resp = await client.post(
@@ -24,7 +22,9 @@ async def test_invite_idle_target_returns_idle_state_and_code(
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["target_state"] == "idle"
-    assert body["delivered"] is False
+    # bob just signed up (last_seen_at fresh), so he's not offline →
+    # the invite is treated as delivered to a polling client.
+    assert body["delivered"] is True
     assert len(body["invited_code"]) == 6
     assert body["invite_url"].endswith(f"/play/{body['invited_code']}")
 
@@ -101,9 +101,7 @@ async def test_invite_when_blocked_returns_403(client: AsyncClient, make_user):
 
 
 @pytest.mark.asyncio
-async def test_invite_creates_real_game_target_can_join(
-    client: AsyncClient, make_user
-):
+async def test_invite_creates_real_game_target_can_join(client: AsyncClient, make_user):
     alice = await make_user("alice")
     bob = await make_user("bob")
     invite_resp = await client.post(
@@ -183,9 +181,7 @@ async def test_invite_at_hourly_cap_returns_429(client: AsyncClient, make_user):
     from app.routers.chat import INVITE_HOURLY_CAP, RATE_LIMIT_ERROR
 
     alice = await make_user("alice")
-    targets = [
-        await make_user(f"target{i}") for i in range(INVITE_HOURLY_CAP + 1)
-    ]
+    targets = [await make_user(f"target{i}") for i in range(INVITE_HOURLY_CAP + 1)]
     for t in targets[:INVITE_HOURLY_CAP]:
         ok = await client.post(
             "/chat/invite",
@@ -204,22 +200,19 @@ async def test_invite_at_hourly_cap_returns_429(client: AsyncClient, make_user):
     assert detail["error"] == RATE_LIMIT_ERROR
     # retry_at must be a valid ISO timestamp in the near future.
     from datetime import datetime
+
     parsed = datetime.fromisoformat(detail["retry_at"])
     assert parsed is not None
 
 
 @pytest.mark.asyncio
-async def test_invite_count_includes_joined_invites(
-    client: AsyncClient, make_user
-):
+async def test_invite_count_includes_joined_invites(client: AsyncClient, make_user):
     """Joining an invite does NOT free a quota slot — the rolling
     window is purely time-based, not state-based."""
     from app.routers.chat import INVITE_HOURLY_CAP
 
     alice = await make_user("alice")
-    others = [
-        await make_user(f"other{i}") for i in range(INVITE_HOURLY_CAP + 1)
-    ]
+    others = [await make_user(f"other{i}") for i in range(INVITE_HOURLY_CAP + 1)]
     codes: list[str] = []
     for t in others[:INVITE_HOURLY_CAP]:
         r = await client.post(
@@ -271,16 +264,12 @@ async def test_invite_count_excludes_modal_rooms(client: AsyncClient, make_user)
 
 
 @pytest.mark.asyncio
-async def test_invite_recovers_after_hourly_window_passes(
-    client: AsyncClient, make_user
-):
+async def test_invite_recovers_after_hourly_window_passes(client: AsyncClient, make_user):
     """Once an invite ages out of the 1-hour window, a new invite lands."""
     from app.routers.chat import INVITE_HOURLY_CAP
 
     alice = await make_user("alice")
-    targets = [
-        await make_user(f"target{i}") for i in range(INVITE_HOURLY_CAP + 1)
-    ]
+    targets = [await make_user(f"target{i}") for i in range(INVITE_HOURLY_CAP + 1)]
     for t in targets[:INVITE_HOURLY_CAP]:
         r = await client.post(
             "/chat/invite",
@@ -337,3 +326,85 @@ async def test_invite_at_daily_cap_returns_429(client: AsyncClient, make_user):
     )
     assert over.status_code == 429
     assert over.json()["detail"]["error"] == RATE_LIMIT_ERROR
+
+
+# ---------------------------------------------------------------------------
+# GET /chat/incoming — pending invites addressed to the caller
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_incoming_lists_invite_for_target(client: AsyncClient, make_user):
+    """Alice invites bob → bob's /chat/incoming surfaces the invite
+    with the invite URL and host username."""
+    alice = await make_user("alice")
+    bob = await make_user("bob")
+    inv = await client.post(
+        "/chat/invite",
+        headers=alice["headers"],
+        json={"target_username": "bob"},
+    )
+    assert inv.status_code == 200
+    code = inv.json()["invited_code"]
+
+    inbox = await client.get("/chat/incoming", headers=bob["headers"])
+    assert inbox.status_code == 200
+    invites = inbox.json()["invites"]
+    assert len(invites) == 1
+    assert invites[0]["code"] == code
+    assert invites[0]["host_username"] == "alice"
+    assert invites[0]["invite_url"].endswith(f"/play/{code}")
+
+
+@pytest.mark.asyncio
+async def test_incoming_excludes_invites_to_other_users(client: AsyncClient, make_user):
+    """Alice's invite to carol must not appear in bob's inbox."""
+    alice = await make_user("alice")
+    bob = await make_user("bob")
+    await make_user("carol")
+    await client.post(
+        "/chat/invite",
+        headers=alice["headers"],
+        json={"target_username": "carol"},
+    )
+    inbox = await client.get("/chat/incoming", headers=bob["headers"])
+    assert inbox.json()["invites"] == []
+
+
+@pytest.mark.asyncio
+async def test_incoming_excludes_modal_games(client: AsyncClient, make_user):
+    """Modal-created games (no intended_guest_id) never appear in any
+    inbox, even if there are tons of them."""
+    alice = await make_user("alice")
+    bob = await make_user("bob")
+    for _ in range(3):
+        r = await client.post(
+            "/multiplayer/new",
+            headers=alice["headers"],
+            json={"host_color": "X", "board_size": 15},
+        )
+        assert r.status_code == 200
+    inbox = await client.get("/chat/incoming", headers=bob["headers"])
+    assert inbox.json()["invites"] == []
+
+
+@pytest.mark.asyncio
+async def test_incoming_excludes_joined_invites(client: AsyncClient, make_user):
+    """Once bob joins the invite, it's no longer 'waiting' and drops
+    out of his inbox."""
+    alice = await make_user("alice")
+    bob = await make_user("bob")
+    inv = await client.post(
+        "/chat/invite",
+        headers=alice["headers"],
+        json={"target_username": "bob"},
+    )
+    code = inv.json()["invited_code"]
+    join = await client.post(
+        f"/multiplayer/{code}/join",
+        headers=bob["headers"],
+        json={},
+    )
+    assert join.status_code == 200
+    inbox = await client.get("/chat/incoming", headers=bob["headers"])
+    assert inbox.json()["invites"] == []

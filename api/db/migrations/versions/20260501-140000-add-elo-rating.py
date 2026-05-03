@@ -54,9 +54,7 @@ def upgrade() -> None:
             ADD COLUMN opponent_elo_before INTEGER
         """
     )
-    op.execute(
-        "CREATE INDEX users_elo_rating_idx ON users (elo_rating DESC, elo_games_count DESC)"
-    )
+    op.execute("CREATE INDEX users_elo_rating_idx ON users (elo_rating DESC, elo_games_count DESC)")
 
 
 def downgrade() -> None:
